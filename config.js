@@ -5,7 +5,7 @@ window.CNMI_CONFIG = {
   ALLOWED_DOMAIN: 'mahidol.ac.th',
 
   // Supabase Project Settings > API
-  SUPABASE_URL: 'https://tpjhwmtctejhehutpzov.supabase.co/rest/v1/',
+  SUPABASE_URL: 'https://tpjhwmtctejhehutpzov.supabase.co',
   SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwamh3bXRjdGVqaGVodXRwem92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2OTY0OTMsImV4cCI6MjA5NjI3MjQ5M30.WG7PO2xbp_11VhZRPaEgFTQaV5lIdi1D4_-zqRiQETQ',
 
   // Apps Script Web App URL ใช้เฉพาะงาน admin/backup ที่ต้องถือ secret ฝั่ง server
