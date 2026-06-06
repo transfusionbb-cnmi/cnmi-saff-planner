@@ -108,7 +108,7 @@ function debounce(fn, wait=250) { let t; return (...args) => { clearTimeout(t); 
 // Capture recovery intent BEFORE Supabase reads/cleans the URL hash.
 // This fixes password reset links that otherwise jump straight into Dashboard.
 const INITIAL_AUTH_URL = `${window.location.search || ''}${window.location.hash || ''}`;
-const RECOVERY_INTENT = /(^|[?#&])type=(recovery|password_recovery|invite)(&|$)/.test(INITIAL_AUTH_URL)
+let RECOVERY_INTENT = /(^|[?#&])type=(recovery|password_recovery|invite)(&|$)/.test(INITIAL_AUTH_URL)
   || /(^|[?#&])mode=(recovery|set-password)(&|$)/.test(INITIAL_AUTH_URL);
 
 function authRedirectUrl(mode='') {
@@ -196,16 +196,20 @@ async function init() {
   sb.auth.onAuthStateChange(async (event, session) => {
     state.session = session;
 
-    // Supabase may emit PASSWORD_RECOVERY, SIGNED_IN, or clean the URL very quickly.
-    // If the page was opened from a recovery link, always show reset form first.
-    if (event === 'PASSWORD_RECOVERY' || recoveryAtPageOpen || isPasswordRecoveryUrl()) {
-      showResetPasswordPanel();
+    // Sign out must win even if this tab was originally opened from a recovery link.
+    // Otherwise logging out after setting a password can show the reset form again.
+    if (event === 'SIGNED_OUT') {
+      RECOVERY_INTENT = false;
+      exitApp();
       setBusy(false);
       return;
     }
 
-    if (event === 'SIGNED_OUT') {
-      exitApp();
+    // Supabase may emit PASSWORD_RECOVERY, SIGNED_IN, or clean the URL very quickly.
+    // If the page was opened from a recovery link, always show reset form first.
+    if (event === 'PASSWORD_RECOVERY' || RECOVERY_INTENT || isPasswordRecoveryUrl()) {
+      showResetPasswordPanel();
+      setBusy(false);
       return;
     }
 
@@ -215,7 +219,7 @@ async function init() {
   const { data } = await sb.auth.getSession();
   state.session = data.session;
 
-  if (recoveryAtPageOpen || isPasswordRecoveryUrl()) {
+  if (RECOVERY_INTENT || isPasswordRecoveryUrl()) {
     showResetPasswordPanel();
     setBusy(false);
     return;
@@ -269,10 +273,15 @@ function bindGlobalEvents() {
     e.preventDefault();
     const password = $('newPassword').value;
     if (password.length < 8) return showToast('รหัสผ่านต้องอย่างน้อย 8 ตัวอักษร');
-    const { error } = await sb.auth.updateUser({ password });
-    if (error) return showToast(error.message);
-    $('resetPasswordForm').classList.add('hidden');
+    // Consume recovery mode before updateUser emits USER_UPDATED, otherwise this tab may keep showing the reset form.
+    RECOVERY_INTENT = false;
     if (window.history?.replaceState) window.history.replaceState({}, document.title, authRedirectUrl());
+    const { error } = await sb.auth.updateUser({ password });
+    if (error) {
+      RECOVERY_INTENT = true;
+      return showToast(error.message);
+    }
+    $('resetPasswordForm').classList.add('hidden');
     const { data } = await sb.auth.getSession();
     state.session = data.session;
     showToast('เปลี่ยนรหัสผ่านแล้ว');
@@ -327,7 +336,20 @@ async function enterApp() {
 function exitApp() {
   state.profile = null;
   $('appView').classList.add('hidden');
+  showLoginPanel();
   $('authView').classList.remove('hidden');
+}
+
+function showLoginPanel() {
+  document.querySelectorAll('.auth-panel').forEach(p => {
+    p.classList.remove('active');
+    if (p.id === 'resetPasswordForm') p.classList.add('hidden');
+  });
+  document.querySelectorAll('.auth-tab').forEach(b => b.classList.remove('active'));
+  const loginForm = $('loginForm');
+  if (loginForm) loginForm.classList.add('active');
+  const loginTab = document.querySelector('.auth-tab[data-auth-tab="login"]');
+  if (loginTab) loginTab.classList.add('active');
 }
 async function loadProfile() {
   const user = state.session?.user;
