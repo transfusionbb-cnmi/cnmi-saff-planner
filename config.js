@@ -9,7 +9,7 @@ window.CNMI_CONFIG = {
   SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwamh3bXRjdGVqaGVodXRwem92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2OTY0OTMsImV4cCI6MjA5NjI3MjQ5M30.WG7PO2xbp_11VhZRPaEgFTQaV5lIdi1D4_-zqRiQETQ',
 
   // Apps Script Web App URL ใช้เฉพาะงาน admin/backup ที่ต้องถือ secret ฝั่ง server
-  APP_SCRIPT_URL: '',
+  APP_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbz6VKNkIM4vf0XbjebrBSNXun_WTyA0qOyNO6OphGCb3NQ7V3_ORrDMN-100taNSfFUsw/exec',
 
   // ปรับพิกัดหน่วยงานจริงหลังติดตั้ง เพื่อใช้ Check-In / OT geofence
   GEOFENCE: {
