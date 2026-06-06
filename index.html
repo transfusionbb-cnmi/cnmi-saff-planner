@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CNMI Duty Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="setupWarning" class="setup-warning hidden">
+    <b>ยังไม่ได้ตั้งค่า config.js</b>
+    <span>กรุณาใส่ SUPABASE_URL และ SUPABASE_ANON_KEY ก่อนใช้งานจริง</span>
+  </div>
+
+  <section id="authView" class="auth-view">
+    <div class="auth-card">
+      <div class="brand-mark">CNMI</div>
+      <h1>ระบบเวรและกิจกรรมหน่วยงาน</h1>
+      <p class="muted">Login ด้วย Mahidol email / Google และจัดการเวร ลา กิจกรรม OT ในระบบเดียว</p>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth-tab="login">เข้าสู่ระบบ</button>
+        <button class="auth-tab" data-auth-tab="signup">ตั้งรหัสผ่านครั้งแรก</button>
+        <button class="auth-tab" data-auth-tab="forgot">ลืมรหัสผ่าน</button>
+      </div>
+
+      <form id="loginForm" class="auth-panel active">
+        <label>อีเมล Mahidol
+          <input id="loginEmail" type="email" placeholder="name@mahidol.ac.th" autocomplete="username" required>
+        </label>
+        <label>รหัสผ่าน
+          <input id="loginPassword" type="password" placeholder="รหัสผ่าน" autocomplete="current-password" required>
+        </label>
+        <button class="primary-btn full-btn" type="submit">เข้าสู่ระบบ</button>
+        <button id="googleLoginBtn" class="ghost-btn full-btn" type="button">เข้าสู่ระบบด้วย Google Mahidol</button>
+      </form>
+
+      <form id="signupForm" class="auth-panel">
+        <label>อีเมล Mahidol
+          <input id="signupEmail" type="email" placeholder="name@mahidol.ac.th" autocomplete="username" required>
+        </label>
+        <label>ตั้งรหัสผ่าน
+          <input id="signupPassword" type="password" placeholder="อย่างน้อย 8 ตัวอักษร" autocomplete="new-password" minlength="8" required>
+        </label>
+        <button class="primary-btn full-btn" type="submit">สมัคร / ตั้งรหัสผ่าน</button>
+        <p class="hint">หลังสมัครครั้งแรก ระบบจะให้ยืนยันอีเมลตามการตั้งค่าใน Supabase</p>
+      </form>
+
+      <form id="forgotForm" class="auth-panel">
+        <label>อีเมล Mahidol
+          <input id="forgotEmail" type="email" placeholder="name@mahidol.ac.th" required>
+        </label>
+        <button class="primary-btn full-btn" type="submit">ส่งลิงก์รีเซ็ตรหัสผ่าน</button>
+      </form>
+
+      <form id="resetPasswordForm" class="auth-panel reset-panel hidden">
+        <label>รหัสผ่านใหม่
+          <input id="newPassword" type="password" placeholder="รหัสผ่านใหม่" minlength="8">
+        </label>
+        <button class="primary-btn full-btn" type="submit">บันทึกรหัสผ่านใหม่</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="appView" class="app-view hidden">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-head">
+        <div class="brand-icon">CNMI</div>
+        <div>
+          <div class="app-title">Duty Hub</div>
+          <div class="app-subtitle">Blood Bank Unit</div>
+        </div>
+      </div>
+      <nav id="mainNav" class="main-nav"></nav>
+      <div class="sidebar-foot">
+        <div id="userMini" class="user-mini"></div>
+        <button id="logoutBtn" class="danger-ghost full-btn">Log Out</button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <button id="mobileMenuBtn" class="icon-btn">☰</button>
+        <div>
+          <h2 id="pageTitle">Dashboard</h2>
+          <p id="pageSubtitle" class="muted">ภาพรวมวันนี้</p>
+        </div>
+        <div class="topbar-actions">
+          <span id="syncStatus" class="sync-status">พร้อมใช้งาน</span>
+          <button id="reloadBtn" class="ghost-btn">รีเฟรช</button>
+        </div>
+      </header>
+      <div id="pageContent" class="page-content"></div>
+    </main>
+  </section>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button id="modalClose" class="modal-close">×</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
