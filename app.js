@@ -1192,7 +1192,7 @@ function renderPositionMonthPage() {
     </div>
     <div class="notice soft-notice">หลักการ: เสาร์-อาทิตย์และวันหยุดราชการขึ้น WEEKEND/HOLIDAY และไม่จัดตำแหน่ง ส่วนวันที่มีออกหน่วยจะใช้ชุดตำแหน่งออกหน่วยแทนตำแหน่งปกติจากรายชื่อผู้เข้าร่วมกิจกรรม และวันทำงานห้ามปล่อยคนพร้อมทำงานเป็น “-”</div>
     <div class="notice soft-notice">BB-Report และ DR-Processing จะพยายามฟิคเป็นรายสัปดาห์เพื่อเก็บ QC ต่อเนื่อง ถ้าเกลี่ยแล้วคนนั้นยังไม่มีตำแหน่ง ระบบจะแสดง “รอตรวจสอบ” ให้ Admin ปรับเอง ไม่ใส่ตำแหน่งเสริมปลอม</div>
-    ${renderMonthPositionSummary(rows, dates)}${renderMonthPositionMatrix(rows, dates)}
+    ${renderMonthPositionSummaryHint(rows, dates)}${renderMonthPositionMatrix(rows, dates)}
   </div>`;
 }
 
@@ -1211,28 +1211,70 @@ function renderPositionMonthViewPage() {
       <span>${badge('อ่านอย่างเดียว', 'blue')}</span>
     </div>
     <div class="notice soft-notice">หน้านี้ให้ทุกคนเห็นแผนรายเดือนเหมือนตารางที่ Admin จัดไว้ แต่แก้ไขไม่ได้ หากมีเปลี่ยนจริงตอนเช้า ให้ดูเมนูตารางตำแหน่งรายวันหลังอินชาร์จประกาศ</div>
-    ${renderMonthPositionSummary(rows, dates)}${renderMonthPositionMatrix(rows, dates)}
+    ${renderMonthPositionSummaryHint(rows, dates)}${renderMonthPositionMatrix(rows, dates)}
   </div>`;
 }
-function renderMonthPositionSummary(rows, dates) {
+function renderMonthPositionSummaryHint(rows, dates) {
   if (!rows.length) return '';
+  const stats = buildMonthPositionSummary(rows, dates);
+  const staffCount = Object.keys(stats).length;
+  return `<div class="month-position-summary-hint card-lite">
+    <b>สรุปรายคนถูกย้ายไปอยู่ใน Pop-up แล้ว</b>
+    <span class="hint">กดชื่อเจ้าหน้าที่ด้านซ้ายของตาราง เพื่อดูว่าเดือนนี้อยู่โซนไหนกี่วัน และขึ้นตำแหน่งอะไรบ้าง ระบบจะคำนวณจากตารางล่าสุด และไม่นับวันที่คนนั้นลา/ไม่รับเวร หรือวันที่ไม่มีการจัดตำแหน่ง</span>
+    <span>${badge(`มีสรุป ${staffCount} คน`, staffCount ? 'blue' : 'black')}</span>
+  </div>`;
+}
+function buildMonthPositionSummary(rows, dates) {
   const dateSet = new Set(dates || []);
   const summary = {};
   rows.forEach(r => {
     if (!r.staff_id || !r.work_date || (dateSet.size && !dateSet.has(r.work_date))) return;
+    if (isNoPositionDay(r.work_date)) return;
+    if (isActiveLeaveOn(r.staff_id, r.work_date)) return;
     const st = state.staff.find(s => s.id === r.staff_id);
     if (!st || !isDailyPositionEnabled(st)) return;
-    summary[r.staff_id] = summary[r.staff_id] || { zones:{}, positions:{}, total:0 };
+    summary[r.staff_id] = summary[r.staff_id] || { zones:{}, positions:{}, dates:new Set(), rows:[] };
     const zone = r.zone || 'ไม่ระบุห้อง';
     const code = r.position_code || 'ไม่ระบุตำแหน่ง';
     summary[r.staff_id].zones[zone] = (summary[r.staff_id].zones[zone] || 0) + 1;
     summary[r.staff_id].positions[code] = (summary[r.staff_id].positions[code] || 0) + 1;
-    summary[r.staff_id].total++;
+    summary[r.staff_id].dates.add(r.work_date);
+    summary[r.staff_id].rows.push(r);
   });
-  const staffRows = orderedStaff(Object.keys(summary).map(id => state.staff.find(s => s.id === id)).filter(Boolean));
-  if (!staffRows.length) return '';
-  const line = obj => Object.entries(obj).sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0], 'th')).map(([k,v]) => `${escapeHtml(k)} ${v} วัน`).join(' · ');
-  return `<div class="month-position-summary card-lite"><h4>สรุปจำนวนตำแหน่งรายเดือน</h4><p class="hint">ใช้เช็กว่าแต่ละคนกระจายอยู่ห้องไหน และขึ้นตำแหน่งอะไรบ่อยแค่ไหน</p><div class="table-wrap"><table><thead><tr><th>เจ้าหน้าที่</th><th>รวม</th><th>แยกตามห้อง/โซน</th><th>แยกตามตำแหน่ง</th></tr></thead><tbody>${staffRows.map(st => { const r = summary[st.id]; return `<tr><td>${staffPill(st)}</td><td>${r.total} วัน</td><td>${line(r.zones) || '-'}</td><td>${line(r.positions) || '-'}</td></tr>`; }).join('')}</tbody></table></div></div>`;
+  return summary;
+}
+function currentMonthPositionContext() {
+  const key = state.page === 'positionMonthView' ? (state.positionMonthViewKey || state.monthKey) : (state.positionMonthKey || state.monthKey);
+  const { y, m } = getMonthRange(key);
+  const last = new Date(y, m, 0).getDate();
+  const dates = Array.from({length:last}, (_,i)=>`${y}-${pad(m)}-${pad(i+1)}`);
+  const rows = state.monthPositionDraft?.monthKey === key ? state.monthPositionDraft.rows : state.positions.filter(x => x.work_date?.startsWith(key));
+  return { key, rows, dates };
+}
+function showMonthPositionStaffSummary(staffId) {
+  const { key, rows, dates } = currentMonthPositionContext();
+  const st = state.staff.find(s => s.id === staffId);
+  if (!st) return;
+  const stats = buildMonthPositionSummary(rows, dates)[staffId] || { zones:{}, positions:{}, dates:new Set(), rows:[] };
+  const line = obj => Object.entries(obj).sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0], 'th'));
+  const zoneRows = line(stats.zones);
+  const positionRows = line(stats.positions);
+  const leaveDays = dates.filter(d => isActiveLeaveOn(staffId, d)).length;
+  const noPositionDays = dates.filter(d => isNoPositionDay(d)).length;
+  const detailRows = stats.rows.slice().sort((a,b)=>a.work_date.localeCompare(b.work_date)).map(r => `<tr><td>${formatThaiDate(r.work_date)}</td><td>${escapeHtml(r.zone || '-')}</td><td>${escapeHtml(r.position_code || '-')}</td></tr>`).join('');
+  showModal(`<h2>สรุปตำแหน่งรายเดือน ${key}</h2>
+    <div class="staff-summary-head">${staffPill(st)}<span class="muted">คำนวณจากตารางล่าสุด และหักวันที่ลา/ไม่รับเวรแล้ว</span></div>
+    <div class="grid grid-3 modal-stat-grid">
+      ${statCard('วันที่มีตำแหน่ง', stats.dates.size || 0)}
+      ${statCard('จำนวนตำแหน่งรวม', stats.rows.length || 0)}
+      ${statCard('วันที่ลา/ไม่รับเวร', leaveDays || 0)}
+    </div>
+    <div class="grid grid-2 modal-summary-grid">
+      <div class="card-lite"><h4>แยกตามห้อง/โซน</h4>${zoneRows.length ? `<table><tbody>${zoneRows.map(([k,v]) => `<tr><td>${escapeHtml(k)}</td><td>${v} วัน</td></tr>`).join('')}</tbody></table>` : empty('ยังไม่มีตำแหน่งในเดือนนี้')}</div>
+      <div class="card-lite"><h4>แยกตามตำแหน่ง</h4>${positionRows.length ? `<table><tbody>${positionRows.map(([k,v]) => `<tr><td>${escapeHtml(k)}</td><td>${v} วัน</td></tr>`).join('')}</tbody></table>` : empty('ยังไม่มีตำแหน่งในเดือนนี้')}</div>
+    </div>
+    <div class="card-lite"><h4>รายละเอียดรายวัน</h4>${detailRows ? `<div class="table-wrap compact-detail-table"><table><thead><tr><th>วันที่</th><th>โซน</th><th>ตำแหน่ง</th></tr></thead><tbody>${detailRows}</tbody></table></div>` : empty('ไม่มีรายการตำแหน่งหลังหักวันลา/วันหยุด')}</div>
+    <p class="hint">หมายเหตุ: เดือนนี้มีวัน WEEKEND/HOLIDAY ${noPositionDays} วัน ไม่นับในจำนวนตำแหน่งรายเดือน</p>`);
 }
 function positionDisplayMap(rows) {
   const map = {};
@@ -1255,7 +1297,7 @@ function renderMonthPositionMatrix(rows, dates) {
       const cls = isHolidayDate(date) ? 'holiday-head' : isWeekend(date) ? 'weekend-head' : hasOuting(date) ? 'outing-head' : '';
       return `<th class="date-head ${cls}"><b>${d.getDate()}</b><br><span>${d.toLocaleDateString('th-TH', { weekday:'short' })}</span></th>`;
     }).join('')}</tr></thead><tbody>
-      ${displayStaff.map(st => `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${staffColor(st)};color:${textColorFor(staffColor(st))}"><b>${escapeHtml(st.nickname || st.full_name)}</b><br><small>${escapeHtml(st.staff_type || '')}</small></td>${dates.map(date => renderMonthPositionCell(st, date, map[`${st.id}|${date}`] || [])).join('')}</tr>`).join('')}
+      ${displayStaff.map(st => `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${staffColor(st)};color:${textColorFor(staffColor(st))}"><button class="staff-summary-trigger" data-month-position-stat="${st.id}" type="button" title="ดูสรุปตำแหน่งรายเดือนของ ${escapeHtml(st.nickname || st.full_name)}"><b>${escapeHtml(st.nickname || st.full_name)}</b><br><small>${escapeHtml(st.staff_type || '')}</small><span>ดูสรุป</span></button></td>${dates.map(date => renderMonthPositionCell(st, date, map[`${st.id}|${date}`] || [])).join('')}</tr>`).join('')}
     </tbody></table></div>
   </div>`;
 }
@@ -1534,6 +1576,7 @@ async function handleClick(e) {
   if (t.dataset.toggleLockSlot) { const slot = findDraftSlot(t.dataset.toggleLockSlot); updateDraftSlot(t.dataset.toggleLockSlot, { is_locked: !slot?.is_locked }); renderPage(); return; }
   if (t.hasAttribute('data-show-fairness')) { showFairness(); return; }
   if (t.dataset.staffStat) { showStaffStats(t.dataset.staffStat); return; }
+  if (t.dataset.monthPositionStat) { showMonthPositionStaffSummary(t.dataset.monthPositionStat); return; }
   if (t.dataset.tradeDuty) { showTradeModal(t.dataset.tradeDuty); return; }
   if (t.dataset.tradeStatus) { const [id,status] = t.dataset.tradeStatus.split('|'); await updateTradeStatus(id,status); return; }
   if (t.dataset.tradeApply) { await applyTradeRequest(t.dataset.tradeApply); return; }
