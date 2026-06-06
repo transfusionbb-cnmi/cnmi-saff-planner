@@ -239,3 +239,28 @@ details summary { cursor: pointer; font-weight: 900; color: var(--primary-dark);
   .nav-section-title { padding-left: 8px; }
   .staff-color-pill { padding: 6px 10px; min-width: 36px; }
 }
+
+/* V13 duty rules + readable schedule + monthly position planning */
+.event-leave-vacation { background: #e5f7ed; color: #19774b; }
+.event-leave-personal { background: #f0eaff; color: #6750b8; }
+.event-leave-sick { background: #fff7d8; color: #806000; }
+.event-leave-other { background: #e6f4ff; color: #2370a5; }
+.event-standard { background: #f0eaff; color: #6750b8; }
+.event-code { background: #fff7d8; color: #806000; }
+.schedule-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 8px; margin: 12px 0 16px; }
+.summary-chip { border-radius: 16px; padding: 10px 12px; background: var(--staff-bg); color: var(--staff-fg); border: 1px solid rgba(31,50,69,.12); display: grid; gap: 2px; box-shadow: 0 1px 0 rgba(255,255,255,.5) inset; }
+.summary-chip span { font-size: 12px; font-weight: 800; opacity: .86; }
+.schedule-readable { min-width: 980px; font-size: 14px; }
+.schedule-readable th { top: 0; z-index: 2; text-align: center; }
+.schedule-readable td { text-align: center; vertical-align: middle; }
+.schedule-readable .date-cell { text-align: left; min-width: 98px; background: #fbfdff; position: sticky; left: 0; z-index: 1; box-shadow: 8px 0 18px rgba(15, 35, 52, .04); }
+.schedule-readable tr.weekend-row td { background: #fcfbff; }
+.schedule-readable tr.holiday-row td { background: #fffaf0; }
+.month-position-preview table { min-width: 760px; }
+.month-position-preview td, .month-position-preview th { vertical-align: middle; }
+.monthly-position-page .notice { margin: 12px 0; }
+@media (max-width: 820px) {
+  .schedule-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .schedule-readable { font-size: 12px; }
+  .schedule-readable .staff-color-pill { min-width: 34px; padding: 5px 8px; }
+}
