@@ -1,4 +1,4 @@
-/* CNMI Duty Hub V30 - mobile UX + leave/trade fixes */
+/* CNMI Duty Hub V32 - mobile modal, leave admin, trade, GPS polish */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'Dashboard', subtitle: 'ภาพรวมทั้งหมดของวันนี้', group: 'staff' },
@@ -165,6 +165,12 @@ let state = {
   busy: false
 };
 
+
+function isMobileView() { return window.matchMedia && window.matchMedia('(max-width: 820px)').matches; }
+function niceRoleRateLabel(value) {
+  return ({ mt:'เรท MT', kerk:'เรทเคิก', custom:'ตกลงกันเอง', receiver:'ตามเรทคนรับเวร', owner:'ตามเรทเจ้าของเวรเดิม' }[value] || value || '-');
+}
+
 function $(id) { return document.getElementById(id); }
 function pad(n) { return String(n).padStart(2, '0'); }
 function todayStr() { return toDateInput(new Date()); }
@@ -230,11 +236,11 @@ function friendlyDbError(error) {
   if (msg.includes('null value') && msg.includes('roster_assignments') && msg.includes('id')) return 'บันทึกตารางเวรไม่สำเร็จ เพราะระบบกำลังส่งรหัสรายการเวรว่างอยู่ กรุณารีเฟรชหน้าแล้วกดสร้างร่าง/บันทึกใหม่อีกครั้ง';
   if (msg.includes('violates not-null constraint')) return 'บันทึกไม่สำเร็จ เพราะมีข้อมูลจำเป็นบางช่องว่างอยู่ กรุณาตรวจช่องที่ยังไม่ได้เลือก';
   if (msg.includes('duplicate key')) return 'บันทึกซ้ำกับข้อมูลเดิม กรุณารีเฟรชแล้วลองใหม่';
-  if (msg.includes('roster_trade_requests_rate_mode_check') || msg.includes('rate_mode_check')) return 'ยังส่งคำขอแลก/ขายเวรไม่ได้ เพราะฐานข้อมูลยังไม่รองรับเรท MT/เรทเคิก กรุณา Run SQL Patch V30 ก่อน';
+  if (msg.includes('roster_trade_requests_rate_mode_check') || msg.includes('rate_mode_check') || msg.includes('roster_trade_requests_t_mode_check') || msg.includes('trade_type_check')) return 'ยังส่งคำขอแลก/ขายเวรไม่ได้ เพราะฐานข้อมูลยังไม่รองรับรูปแบบคำขอ/เรทที่เลือก กรุณา Run SQL Patch V32 ก่อน';
   if (msg.includes('row-level security')) return 'สิทธิ์ไม่พอสำหรับบันทึกข้อมูลนี้ กรุณาใช้บัญชี Admin หรืออินชาร์จที่ได้รับสิทธิ์';
-  if (msg.includes('admin_upsert_leave_v30') || msg.includes('function public.admin_upsert_leave_v30')) return 'ยังบันทึกลาแทนไม่ได้ เพราะยังไม่ได้ Run SQL Patch V30 ใน Supabase';
-  if (msg.includes('admin_save_leave') || msg.includes('function public.admin_save_leave') || msg.includes('Could not find the function')) return 'ยังบันทึกลาแทนไม่ได้ เพราะยังไม่ได้ Run SQL Patch V30 ใน Supabase';
-  if (msg.includes('admin_record_reason') || msg.includes('recorded_by_admin')) return 'ยังบันทึกลาแทนไม่ได้ เพราะฐานข้อมูลยังไม่มีช่องสำหรับ Admin บันทึกแทน กรุณา Run SQL Patch V30';
+  if (msg.includes('admin_upsert_leave_v32') || msg.includes('admin_upsert_leave_v31') || msg.includes('function public.admin_upsert_leave_v32') || msg.includes('function public.admin_upsert_leave_v31')) return 'ยังบันทึกลาแทนไม่ได้ เพราะยังไม่ได้ Run SQL Patch V32 ใน Supabase';
+  if (msg.includes('admin_save_leave') || msg.includes('function public.admin_save_leave') || msg.includes('Could not find the function')) return 'ยังบันทึกลาแทนไม่ได้ เพราะยังไม่ได้ Run SQL Patch V32 ใน Supabase';
+  if (msg.includes('admin_record_reason') || msg.includes('recorded_by_admin')) return 'ยังบันทึกลาแทนไม่ได้ เพราะฐานข้อมูลยังไม่มีช่องสำหรับ Admin บันทึกแทน กรุณา Run SQL Patch V32';
   return msg || 'เกิดข้อผิดพลาดขณะบันทึกข้อมูล';
 }
 function setBusy(on, msg='กำลังโหลด') {
@@ -242,11 +248,32 @@ function setBusy(on, msg='กำลังโหลด') {
   const sync = $('syncStatus');
   if (sync) sync.textContent = on ? msg : 'พร้อมใช้งาน';
 }
-function showModal(html) {
-  $('modalBody').innerHTML = html;
-  $('modal').classList.remove('hidden');
+function showModal(html, opts={}) {
+  const modal = $('modal');
+  const body = $('modalBody');
+  body.innerHTML = html;
+  modal.classList.toggle('modal-sm', !!opts.small);
+  modal.classList.toggle('modal-lg', !!opts.large);
+  modal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+  requestAnimationFrame(() => {
+    const card = modal.querySelector('.modal-card');
+    if (card) card.scrollTop = 0;
+  });
 }
-function closeModal() { $('modal').classList.add('hidden'); $('modalBody').innerHTML = ''; }
+function closeModal() { $('modal').classList.add('hidden'); $('modal').classList.remove('modal-sm','modal-lg'); $('modalBody').innerHTML = ''; document.body.classList.remove('modal-open'); }
+function confirmDialog(message, title='ยืนยันการทำรายการ') {
+  return new Promise(resolve => {
+    showModal(`<div class="confirm-box"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p><div class="confirm-actions"><button class="ghost-btn" data-confirm-no>ยกเลิก</button><button class="primary-btn" data-confirm-yes>ตกลง</button></div></div>`, { small:true });
+    const modal = $('modal');
+    const cleanup = (answer) => { modal.removeEventListener('click', onClick); closeModal(); resolve(answer); };
+    const onClick = (e) => {
+      if (e.target.closest('[data-confirm-yes]')) cleanup(true);
+      if (e.target.closest('[data-confirm-no]') || e.target.id === 'modalClose') cleanup(false);
+    };
+    modal.addEventListener('click', onClick);
+  });
+}
 function configReady() {
   return CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && !CFG.SUPABASE_URL.includes('YOUR_PROJECT_REF') && !CFG.SUPABASE_ANON_KEY.includes('YOUR_SUPABASE');
 }
@@ -1015,12 +1042,12 @@ function renderLeavePage() {
 }
 function renderLeaveTable(rows) {
   if (!rows.length) return empty('ยังไม่มีรายการ');
-  const table = `<div class="table-wrap desktop-table"><table><thead><tr><th>ชื่อ</th><th>ประเภท</th><th>ช่วงวันที่</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
+  const table = `<div class="table-wrap desktop-table leave-desktop-table"><table><thead><tr><th>ชื่อ</th><th>ประเภท</th><th>ช่วงวันที่</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
     ${rows.map(r => `<tr><td>${escapeHtml(staffNick(r.staff_id))}${r.recorded_by_admin ? '<br><span class="badge purple">Admin บันทึกแทน</span>' : ''}</td><td>${badge(r.type, leaveBadgeClass(r.type))}</td><td>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}<br><span class="badge blue">${escapeHtml(r.leave_period || 'เต็มวัน')}</span><br><span class="muted">${escapeHtml(r.note || '')}</span>${r.admin_record_reason ? `<br><span class="muted">เหตุผล Admin: ${escapeHtml(r.admin_record_reason)}</span>` : ''}</td><td>${badge(r.status || 'active', r.status==='cancelled'?'red':'green')}</td><td><div class="actions">
-      ${canEditOwn(r) ? `<button class="tiny-btn" data-edit-leave="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-cancel-leave="${r.id}">ยกเลิก</button>` : '<span class="muted">แก้ไม่ได้</span>'}
+      ${canEditOwn(r) ? `<button class="tiny-btn" data-edit-leave="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-cancel-leave="${r.id}">ยกเลิก</button>${isAdmin() ? `<button class="tiny-btn danger" data-delete-leave="${r.id}">ลบทิ้ง</button>` : ''}` : '<span class="muted">แก้ไม่ได้</span>'}
     </div></td></tr>`).join('')}
   </tbody></table></div>`;
-  const cards = `<div class="mobile-cards">${rows.map(r => `<div class="mobile-card"><div class="section-title"><h3>${escapeHtml(staffNick(r.staff_id))}</h3>${badge(r.type, leaveBadgeClass(r.type))}</div><div><b>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}</b><br>${badge(r.leave_period || 'เต็มวัน','blue')} ${badge(r.status || 'active', r.status==='cancelled'?'red':'green')}</div>${r.recorded_by_admin ? '<span class="badge purple">Admin บันทึกแทน</span>' : ''}<span class="muted">${escapeHtml(r.note || '')}</span><div class="actions">${canEditOwn(r) ? `<button class="tiny-btn" data-edit-leave="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-cancel-leave="${r.id}">ยกเลิก</button>` : '<span class="muted">แก้ไม่ได้</span>'}</div></div>`).join('')}</div>`;
+  const cards = `<div class="mobile-cards">${rows.map(r => `<div class="mobile-card"><div class="section-title"><h3>${escapeHtml(staffNick(r.staff_id))}</h3>${badge(r.type, leaveBadgeClass(r.type))}</div><div><b>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}</b><br>${badge(r.leave_period || 'เต็มวัน','blue')} ${badge(r.status || 'active', r.status==='cancelled'?'red':'green')}</div>${r.recorded_by_admin ? '<span class="badge purple">Admin บันทึกแทน</span>' : ''}<span class="muted">${escapeHtml(r.note || '')}</span><div class="actions">${canEditOwn(r) ? `<button class="tiny-btn" data-edit-leave="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-cancel-leave="${r.id}">ยกเลิก</button>${isAdmin() ? `<button class="tiny-btn danger" data-delete-leave="${r.id}">ลบทิ้ง</button>` : ''}` : '<span class="muted">แก้ไม่ได้</span>'}</div></div>`).join('')}</div>`;
   return table + cards;
 }
 function canEditOwn(row) {
@@ -1178,7 +1205,7 @@ function renderRosterGrid(assignments) {
   if (!assignments.length) return empty('กด “สร้างร่าง” เพื่อเริ่มจัดเวร');
   const { y, m } = getMonthRange(state.monthKey);
   const last = new Date(y, m, 0).getDate();
-  return `<div class="table-wrap"><table class="roster-table"><thead><tr><th>วันที่</th>${DUTY_COLUMNS.map(c => `<th>${escapeHtml(DUTY_LABEL[c] || c)}</th>`).join('')}</tr></thead><tbody>
+  const desktopTable = `<div class="table-wrap roster-table-wrap"><table class="roster-table"><thead><tr><th>วันที่</th>${DUTY_COLUMNS.map(c => `<th>${escapeHtml(DUTY_LABEL[c] || c)}</th>`).join('')}</tr></thead><tbody>
     ${Array.from({length:last}, (_,i)=>i+1).map(day => {
       const date = `${y}-${pad(m)}-${pad(day)}`;
       const dow = parseDate(date).toLocaleDateString('th-TH', { weekday:'short' });
@@ -1190,11 +1217,24 @@ function renderRosterGrid(assignments) {
         return `<td><div class="roster-slot ${slot.is_locked?'locked':''}" data-drop-slot="${id}">
           <div class="assigned-name">${slot.staff_id ? staffPill(slot.staff_id) : 'ยังไม่จัด'}</div>
           <div class="slot-meta">${escapeHtml(slot.required_role)} ${slot.is_locked?'• locked':''}</div>
+          <select class="mobile-roster-select" data-roster-slot-select="${id}" ${slot.is_locked?'disabled':''}><option value="">ยังไม่จัด</option>${staffOptionList(slot.staff_id, st => canStaffWorkSlot(st.id, slot))}</select>
           <div class="actions"><button class="tiny-btn" data-clear-slot="${id}">ล้าง</button><button class="tiny-btn" data-toggle-lock-slot="${id}">${slot.is_locked?'ปลดล็อก':'ล็อก'}</button></div>
         </div></td>`;
       }).join('')}</tr>`;
     }).join('')}
   </tbody></table></div>`;
+  return desktopTable + renderRosterMobileGrid(assignments, y, m, last);
+}
+function renderRosterMobileGrid(assignments, y, m, last) {
+  return `<div class="mobile-roster-cards">${Array.from({length:last}, (_,i)=>i+1).map(day => {
+    const date = `${y}-${pad(m)}-${pad(day)}`;
+    const dow = parseDate(date).toLocaleDateString('th-TH', { weekday:'short' });
+    const slots = DUTY_COLUMNS.filter(code => allowedDutyCodesForDate(date).includes(code)).map(code => assignments.find(a => a.duty_date === date && a.duty_code === code)).filter(Boolean);
+    return `<div class="mobile-card roster-day-card"><div class="mobile-day-head"><b>${day}</b><span>${dow}</span>${isHolidayDate(date) ? `<span class="badge yellow">${escapeHtml(holidayName(date))}</span>` : ''}</div>${slots.map(slot => {
+      const id = slot.id || slot._temp_id;
+      return `<div class="mobile-roster-slot"><div><b>${escapeHtml(DUTY_LABEL[slot.duty_code] || slot.duty_code)}</b><br><span class="muted">${escapeHtml(slot.required_role)} ${slot.is_locked?'• locked':''}</span></div><select data-roster-slot-select="${id}" ${slot.is_locked?'disabled':''}><option value="">ยังไม่จัด</option>${staffOptionList(slot.staff_id, st => canStaffWorkSlot(st.id, slot))}</select><div class="actions"><button class="tiny-btn" data-clear-slot="${id}">ล้าง</button><button class="tiny-btn" data-toggle-lock-slot="${id}">${slot.is_locked?'ปลดล็อก':'ล็อก'}</button></div></div>`;
+    }).join('')}</div>`;
+  }).join('')}</div>`;
 }
 function showFairness() {
   const assignments = getAssignmentsForMonth(state.monthKey).filter(x => x.staff_id);
@@ -1290,7 +1330,7 @@ function renderTradeRow(r, assignments) {
   const to = assignments.find(a => a.id === r.to_assignment_id) || null;
   const receiverActions = r.status === 'pending' && r.receiver_id === currentStaffId();
   const adminActions = r.status === 'confirmed' && isAdmin();
-  return `<tr><td>${staffPill(r.requester_id)}</td><td>${staffPill(r.receiver_id)}</td><td>${escapeHtml(r.trade_type)}<br><span class="muted">${formatThaiDate(from.duty_date)} ${DUTY_LABEL[from.duty_code] || from.duty_code || ''}${to ? ` ↔ ${formatThaiDate(to.duty_date)} ${DUTY_LABEL[to.duty_code] || to.duty_code}` : ''}</span></td><td>${Number(r.amount_from || 0).toLocaleString()} บ.${r.amount_diff ? `<br><span class="muted">ส่วนต่าง ${Number(r.amount_diff).toLocaleString()} บ.</span>` : ''}</td><td>${badge(tradeStatusLabel(r.status), r.status==='confirmed'?'green':r.status==='rejected'?'red':r.status==='completed'?'blue':'orange')}</td><td>${receiverActions ? `<button class="tiny-btn" data-trade-status="${r.id}|confirmed">ยืนยัน</button><button class="tiny-btn danger" data-trade-status="${r.id}|rejected">ปฏิเสธ</button>` : adminActions ? `<button class="tiny-btn" data-trade-apply="${r.id}">Admin บันทึกเปลี่ยนเวร</button>` : '-'}</td></tr>`;
+  return `<tr><td>${staffPill(r.requester_id)}</td><td>${staffPill(r.receiver_id)}</td><td>${escapeHtml(r.trade_type)} • ${escapeHtml(niceRoleRateLabel(r.rate_mode))}<br><span class="muted">${formatThaiDate(from.duty_date)} ${DUTY_LABEL[from.duty_code] || from.duty_code || ''}${to ? ` ↔ ${formatThaiDate(to.duty_date)} ${DUTY_LABEL[to.duty_code] || to.duty_code}` : ''}</span></td><td>${Number(r.amount_from || 0).toLocaleString()} บ.${r.amount_diff ? `<br><span class="muted">ส่วนต่าง ${Number(r.amount_diff).toLocaleString()} บ.</span>` : ''}</td><td>${badge(tradeStatusLabel(r.status), r.status==='confirmed'?'green':r.status==='rejected'?'red':r.status==='completed'?'blue':'orange')}</td><td>${receiverActions ? `<button class="tiny-btn" data-trade-status="${r.id}|confirmed">ยืนยัน</button><button class="tiny-btn danger" data-trade-status="${r.id}|rejected">ปฏิเสธ</button>` : adminActions ? `<button class="tiny-btn" data-trade-apply="${r.id}">Admin บันทึกเปลี่ยนเวร</button>` : '-'}</td></tr>`;
 }
 function tradeStatusLabel(status) { return ({ pending:'รออีกฝ่ายยืนยัน', confirmed:'ยืนยันแล้ว รอ Admin บันทึก', rejected:'ปฏิเสธ', completed:'เปลี่ยนตารางแล้ว' }[status] || status || '-'); }
 function renderReadOnlySchedule(assignments) {
@@ -1638,20 +1678,23 @@ function renderOtPage() {
   const myDuty = state.rosterAssignments.some(x => x.duty_date === todayStr() && x.staff_id === currentStaffId());
   const mine = state.otRequests.filter(x => x.staff_id === currentStaffId());
   const rows = isAdmin() ? state.otRequests : mine;
-  return `<div class="grid grid-2">
-    <div class="card">
-      <h3>ส่วนที่ 1 ลงชื่อเข้าเวร</h3>
-      <p class="muted">${myDuty ? 'วันนี้มีชื่อคุณในตารางเวร กด Check-In ได้' : 'วันนี้ยังไม่พบชื่อคุณในตารางเวร ถ้าต้องลงจริงให้ Admin ตรวจตารางก่อน'}</p>
-      <button class="primary-btn" data-check-in ${(!myDuty && !isAdmin()) ? 'disabled' : ''}>Check-In ด้วย GPS</button>
+  const geo = CFG.GEOFENCE || {};
+  return `<div class="grid grid-2 ot-page">
+    <div class="card ot-card">
+      <h3>ส่วนที่ 1 ยืนยันวันอยู่เวร</h3>
+      <p class="muted">${myDuty ? 'วันนี้มีชื่อคุณในตารางเวร กดยืนยันวันอยู่เวรได้' : 'วันนี้ยังไม่พบชื่อคุณในตารางเวร ถ้าต้องลงจริงให้ Admin ตรวจตารางก่อน'}</p>
+      <button class="primary-btn" data-check-in ${(!myDuty && !isAdmin()) ? 'disabled' : ''}>ยืนยันวันอยู่เวร</button>
+      <div class="notice soft-notice gps-help"><b>การตั้งค่า GPS:</b> ใน config.js ให้ตั้ง GEOFENCE.enabled = true แล้วใส่ lat/lng จุดกลางของหน่วย และ radiusMeters เช่น 300–500 เมตร ช่วงทดสอบเปิดเป็น false ได้</div>
+      <p class="hint">ค่าปัจจุบัน: ${geo.enabled ? `เปิดใช้ GPS (${geo.lat || '-'}, ${geo.lng || '-'}) รัศมี ${geo.radiusMeters || 500} ม.` : 'ยังไม่บังคับพื้นที่ GPS'}<br>ถ้า iPhone ขึ้น User denied Geolocation ให้เข้า Safari > Website Settings > Location > Allow หรือเปิด Location Services ใน Settings</p>
     </div>
-    <div class="card">
-      <h3>ส่วนที่ 2 ขอ OT เพิ่มเติม</h3>
+    <div class="card ot-card">
+      <h3>ส่วนที่ 2 ยืนยันขอ OT เพิ่ม</h3>
       <form id="otForm" class="form-grid">
         <label>วันที่ <input name="work_date" type="date" value="${todayStr()}" required></label>
         <label>เวลาสิ้นสุด <input name="end_time" type="time" required></label>
         <label>เหตุผล <select name="reason">${OT_REASONS.map(r => `<option>${r}</option>`).join('')}</select></label>
         <label>หมายเหตุ <input name="note"></label>
-        <button class="primary-btn wide" type="submit">ส่งคำขอ OT พร้อม Check-Out GPS</button>
+        <button class="primary-btn wide" type="submit">ยืนยันขอ OT เพิ่ม</button>
       </form>
     </div>
     <div class="card wide-card" style="grid-column:1/-1;">
@@ -1665,9 +1708,11 @@ function renderOtPage() {
 }
 function renderOtTable(rows) {
   if (!rows.length) return empty('ยังไม่มีรายการ OT');
-  return `<div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>วันที่</th><th>เหตุผล</th><th>ชั่วโมง</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
+  const table = `<div class="table-wrap ot-desktop-table"><table><thead><tr><th>ชื่อ</th><th>วันที่</th><th>เหตุผล</th><th>ชั่วโมง</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
     ${rows.map(r => `<tr><td>${staffPill(r.staff_id)}</td><td>${formatThaiDate(r.work_date)}<br><span class="muted">${formatThaiDateTime(r.check_out_at)}</span></td><td>${escapeHtml(r.reason)}<br><span class="muted">${escapeHtml(r.note || '')}</span></td><td>${calcOtHours(r).toFixed(1)}</td><td>${badge(r.status, r.status==='อนุมัติ'?'green':r.status==='ไม่อนุมัติ'?'red':r.status==='ส่งกลับแก้ไข'?'orange':'black')}</td><td>${isAdmin() ? `<div class="actions">${OT_STATUSES.map(s => `<button class="tiny-btn" data-ot-status="${r.id}|${s}">${s}</button>`).join('')}</div>` : '-'}</td></tr>`).join('')}
   </tbody></table></div>`;
+  const cards = `<div class="mobile-cards ot-mobile-cards">${rows.map(r => `<div class="mobile-card"><div class="mobile-day-head">${staffPill(r.staff_id)}${badge(r.status, r.status==='อนุมัติ'?'green':r.status==='ไม่อนุมัติ'?'red':r.status==='ส่งกลับแก้ไข'?'orange':'black')}</div><div><b>${formatThaiDate(r.work_date)}</b><br><span class="muted">${formatThaiDateTime(r.check_out_at)}</span></div><div><b>เหตุผล:</b> ${escapeHtml(r.reason)}<br><span class="muted">${escapeHtml(r.note || '')}</span></div><div><b>ชั่วโมง:</b> ${calcOtHours(r).toFixed(1)}</div>${isAdmin() ? `<div class="actions">${OT_STATUSES.map(s => `<button class="tiny-btn" data-ot-status="${r.id}|${s}">${s}</button>`).join('')}</div>` : ''}</div>`).join('')}</div>`;
+  return table + cards;
 }
 function renderOtSummary() {
   const key = state.monthKey;
@@ -1691,16 +1736,18 @@ function getFilteredAuditLogs() {
 }
 function renderAuditPage() {
   const rows = getFilteredAuditLogs();
-  return `<div class="card">
+  const table = rows.length ? `<div class="table-wrap audit-desktop-table"><table><thead><tr><th>เวลา</th><th>ผู้ทำ</th><th>เหตุการณ์</th><th>รายละเอียด</th></tr></thead><tbody>
+      ${rows.map(a => `<tr><td>${formatThaiDateTime(a.created_at)}</td><td>${a.actor_id ? staffPill(a.actor_id) : '-'}</td><td>${badge(auditActionLabel(a), auditBadge(a))}</td><td>${escapeHtml(auditSummary(a))}<br><button class="tiny-btn" data-audit-detail="${a.id}">ดูรายละเอียด</button></td></tr>`).join('')}
+    </tbody></table></div>` : empty('ยังไม่มี Audit Log ในวันที่เลือก');
+  const cards = rows.length ? `<div class="mobile-cards audit-mobile-cards">${rows.map(a => `<div class="mobile-card audit-mobile-card"><div class="mobile-day-head"><b>${formatThaiDateTime(a.created_at)}</b>${badge(auditActionLabel(a), auditBadge(a))}</div><div><b>ผู้ทำ:</b> ${a.actor_id ? staffPill(a.actor_id) : '-'}</div><p>${escapeHtml(auditSummary(a))}</p><button class="tiny-btn" data-audit-detail="${a.id}">ดูรายละเอียด</button></div>`).join('')}</div>` : '';
+  return `<div class="card audit-page-card">
     <div class="section-title"><div><h3>Audit Log ล่าสุด</h3><p class="hint">กรองเป็นรายวัน อ่านเป็นภาษาหน้างาน ไม่โชว์ข้อมูลหลังบ้านยาว ๆ ในตารางหลัก</p></div><button class="ghost-btn" data-export-audit-excel>Export Excel</button></div>
-    <div class="toolbar">
+    <div class="toolbar audit-toolbar">
       <label>วันที่ <input type="date" id="auditDateInput" value="${state.auditDate || ''}"></label>
       <button class="soft-btn" data-audit-today>วันนี้</button>
       <button class="ghost-btn" data-audit-all>แสดงทั้งหมด</button>
     </div>
-    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>เวลา</th><th>ผู้ทำ</th><th>เหตุการณ์</th><th>รายละเอียด</th></tr></thead><tbody>
-      ${rows.map(a => `<tr><td>${formatThaiDateTime(a.created_at)}</td><td>${a.actor_id ? staffPill(a.actor_id) : '-'}</td><td>${badge(auditActionLabel(a), auditBadge(a))}</td><td>${escapeHtml(auditSummary(a))}<br><button class="tiny-btn" data-audit-detail="${a.id}">ดูรายละเอียด</button></td></tr>`).join('')}
-    </tbody></table></div>` : empty('ยังไม่มี Audit Log ในวันที่เลือก')}
+    ${table}${cards}
   </div>`;
 }
 
@@ -1723,7 +1770,7 @@ function renderUsersPage() {
     </div>
     <div class="card">
       <div class="section-title"><div><h3>ผู้ใช้งานและสิทธิ์</h3><p class="hint">ข้อมูลบัญชี / สิทธิ์ระบบ / สีประจำตัว</p></div><button class="primary-btn" data-save-staff-users>บันทึกข้อมูลผู้ใช้งาน</button></div>
-      <div class="table-wrap"><table><thead><tr><th>สี</th><th>ชื่อเล่น</th><th>ชื่อ-สกุล</th><th>Email</th><th>รหัสพนักงาน</th><th>ประเภท</th><th>ตำแหน่ง</th><th>Role</th><th>Active</th><th>ลาคลอด</th><th>จัดเวร</th><th>สถานะตำแหน่งรายวัน</th><th>Auto ตำแหน่ง</th><th>Reset</th></tr></thead><tbody>
+      <div class="table-wrap users-desktop-table"><table><thead><tr><th>สี</th><th>ชื่อเล่น</th><th>ชื่อ-สกุล</th><th>Email</th><th>รหัสพนักงาน</th><th>ประเภท</th><th>ตำแหน่ง</th><th>Role</th><th>Active</th><th>ลาคลอด</th><th>จัดเวร</th><th>สถานะตำแหน่งรายวัน</th><th>Auto ตำแหน่ง</th><th>Reset</th></tr></thead><tbody>
         ${orderedStaff(state.staff).map(s => `<tr data-staff-row="${s.id}">
           <td><input class="color-input" type="color" data-field="staff_color" value="${escapeHtml(staffColor(s))}"><br>${staffPill(s)}</td>
           <td><input data-field="nickname" value="${escapeHtml(s.nickname || '')}"></td>
@@ -1741,6 +1788,7 @@ function renderUsersPage() {
           <td><button class="tiny-btn" data-reset-user-email="${escapeHtml(s.email || '')}">ส่ง reset</button></td>
         </tr>`).join('')}
       </tbody></table></div>
+      <div class="mobile-cards users-mobile-cards">${orderedStaff(state.staff).map(s => `<div class="mobile-card user-mobile-card" data-staff-row="${s.id}"><div class="mobile-day-head">${staffPill(s)}${badge(s.role || 'staff', s.role==='admin'?'purple':'black')}</div><label>ชื่อเล่น <input data-field="nickname" value="${escapeHtml(s.nickname || '')}"></label><label>ชื่อ-สกุล <input data-field="full_name" value="${escapeHtml(s.full_name || '')}"></label><label>Email <input data-field="email" value="${escapeHtml(s.email || '')}"></label><label>รหัสพนักงาน <input data-field="employee_code" value="${escapeHtml(s.employee_code || '')}"></label><div class="grid grid-2"><label>ประเภท <select data-field="staff_type"><option value="">-</option><option ${s.staff_type==='MT'?'selected':''}>MT</option><option ${s.staff_type==='เคิก'?'selected':''}>เคิก</option><option ${s.staff_type==='แพทย์'?'selected':''}>แพทย์</option></select></label><label>Role <select data-field="role"><option ${s.role==='staff'?'selected':''}>staff</option><option ${s.role==='admin'?'selected':''}>admin</option></select></label></div></div>`).join('')}</div>
       <p class="hint">สิทธิ์ตำแหน่งรายวันแยกไปที่เมนู Admin → สิทธิ์ตำแหน่งรายวัน เพื่อให้ใช้ง่ายขึ้นและไม่ยาวเกินหน้า</p>
     </div>
   </div>`;
@@ -1787,6 +1835,16 @@ function renderEligibilityPage() {
 }
 function renderPositionEligibilityMatrix() { return renderEligibilityPage(); }
 
+function handleGlobalChromeClick(e) {
+  if (isMobileView() && document.body.classList.contains('sidebar-open')) {
+    const sidebar = $('sidebar');
+    const btn = $('mobileMenuBtn');
+    if (sidebar && !sidebar.contains(e.target) && btn && !btn.contains(e.target)) {
+      sidebar.classList.remove('open');
+      document.body.classList.remove('sidebar-open');
+    }
+  }
+}
 async function handleSubmit(e) {
   if (e.target.id === 'leaveForm') { e.preventDefault(); await saveLeave(e.target); }
   if (e.target.id === 'activityForm') { e.preventDefault(); await saveActivity(e.target); }
@@ -1807,6 +1865,7 @@ async function handleClick(e) {
   if (t.dataset.editLeave) { state.editingLeaveId = t.dataset.editLeave; renderPage(); return; }
   if (t.hasAttribute('data-cancel-edit-leave')) { state.editingLeaveId = null; renderPage(); return; }
   if (t.dataset.cancelLeave) { await cancelLeave(t.dataset.cancelLeave); return; }
+  if (t.dataset.deleteLeave) { await deleteLeave(t.dataset.deleteLeave); return; }
   if (t.dataset.editActivity) { state.editingActivityId = t.dataset.editActivity; renderPage(); return; }
   if (t.hasAttribute('data-cancel-edit-activity')) { state.editingActivityId = null; renderPage(); return; }
   if (t.dataset.deleteActivity) { await deleteActivity(t.dataset.deleteActivity); return; }
@@ -1854,6 +1913,21 @@ function handleChange(e) {
     const sel = document.getElementById('tradeSwapSelect');
     if (sel) Array.from(sel.options).forEach(opt => { if (!opt.value) return; opt.hidden = opt.dataset.owner !== e.target.value; });
     if (sel) sel.value = '';
+  }
+  if (e.target.dataset.rosterSlotSelect) {
+    const id = e.target.dataset.rosterSlotSelect;
+    const slot = findDraftSlot(id);
+    const staffId = e.target.value || null;
+    if (slot?.is_locked) return showToast('ช่องนี้ล็อกอยู่');
+    if (staffId && !canStaffWorkSlot(staffId, slot)) {
+      if (hasAdjacentDuty(staffId, slot.duty_date, getAssignmentsForMonth(state.monthKey), slot)) showToast('คนนี้มีเวรติดกับวันก่อน/วันถัดไปแล้ว กรุณาเลือกคนอื่น');
+      else showToast('คนนี้ติดลา/ไม่รับเวร หรือประเภทไม่ตรงกับเวร');
+      renderPage();
+      return;
+    }
+    updateDraftSlot(id, { staff_id: staffId });
+    renderPage();
+    return;
   }
 }
 
@@ -1910,7 +1984,7 @@ async function saveLeave(form) {
       setBusy(false);
       return showToast('กรุณาระบุเหตุผลที่ Admin บันทึกแทน/ย้อนหลัง เพื่อให้ Audit Log ชัดเจน');
     }
-    res = await sb.rpc('admin_upsert_leave_v30', {
+    res = await sb.rpc('admin_upsert_leave_v32', {
       p_id: id || null,
       p_staff_id: row.staff_id,
       p_type: row.type,
@@ -1921,8 +1995,15 @@ async function saveLeave(form) {
       p_contact_phone: row.contact_phone || null,
       p_attachment_path: row.attachment_path || null,
       p_admin_record_reason: adminReason || null,
-      p_recorded_by_admin: !!row.recorded_by_admin
+      p_recorded_by_admin: true
     });
+    // เผื่อยังไม่ได้ Run patch V32 หรือ RPC มีปัญหา ให้ลองบันทึกตรงผ่าน policy admin เป็น fallback
+    if (res.error && (String(res.error.message || '').includes('admin_upsert_leave_v32') || String(res.error.message || '').includes('Could not find the function') || String(res.error.message || '').includes('schema cache'))) {
+      const directRow = { ...row, recorded_by_admin: true, admin_record_reason: adminReason || row.admin_record_reason || 'Admin บันทึกแทน', updated_by: currentStaffId() };
+      res = id
+        ? await sb.from('leave_requests').update(directRow).eq('id', id)
+        : await sb.from('leave_requests').insert({ ...directRow, created_by: currentStaffId(), status: 'active' });
+    }
   } else {
     res = id ? await sb.from('leave_requests').update(row).eq('id', id) : await sb.from('leave_requests').insert({ ...row, created_by: currentStaffId(), status: 'active' });
   }
@@ -1934,10 +2015,18 @@ async function saveLeave(form) {
   showToast(backdated ? 'บันทึกลาย้อนหลังแทนเจ้าหน้าที่แล้ว' : 'บันทึกแล้ว');
 }
 async function cancelLeave(id) {
-  if (!confirm('ยืนยันยกเลิกรายการนี้?')) return;
+  if (!(await confirmDialog('ยืนยันยกเลิกรายการนี้?', 'ยืนยันการยกเลิก'))) return;
   const { error } = await sb.from('leave_requests').update({ status:'cancelled', updated_by: currentStaffId() }).eq('id', id);
-  if (error) return showToast(error.message);
+  if (error) return showToast(friendlyDbError(error));
   await loadAllData(); renderPage(); showToast('ยกเลิกแล้ว');
+}
+async function deleteLeave(id) {
+  if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้นที่ลบทิ้งได้');
+  if (!(await confirmDialog('ลบทิ้งจะหายจากรายการใช้งานทันที แต่ Audit Log ยังเก็บประวัติไว้ ต้องการลบทิ้งใช่ไหม?', 'ยืนยันลบทิ้ง'))) return;
+  const { error } = await sb.from('leave_requests').delete().eq('id', id);
+  if (error) return showToast(friendlyDbError(error));
+  state.editingLeaveId = null;
+  await loadAllData(); renderPage(); showToast('ลบทิ้งแล้ว');
 }
 async function saveActivity(form) {
   const fd = new FormData(form);
@@ -1979,7 +2068,7 @@ async function saveActivity(form) {
   await loadAllData(); renderPage(); showToast('บันทึกกิจกรรมแล้ว');
 }
 async function deleteActivity(id) {
-  if (!confirm('ลบกิจกรรมนี้?')) return;
+  if (!(await confirmDialog('ลบกิจกรรมนี้?'))) return;
   const { error } = await sb.from('activity_events').delete().eq('id', id);
   if (error) return showToast(error.message);
   await loadAllData(); renderPage(); showToast('ลบแล้ว');
@@ -2236,37 +2325,52 @@ async function saveHoliday(form) {
 }
 async function checkIn() {
   const pos = await getGps();
-  if (!pos.ok) return showToast(pos.message);
-  if (!isInsideGeofence(pos) && CFG.GEOFENCE?.enabled) return showToast('อยู่นอกพื้นที่ที่กำหนด ไม่สามารถ Check-In ได้');
+  if (!pos.ok) return showGpsHelp(pos.message);
+  if (!isInsideGeofence(pos) && CFG.GEOFENCE?.enabled) return showGpsHelp('อยู่นอกพื้นที่ที่กำหนด ไม่สามารถยืนยันวันอยู่เวรได้');
   const device = navigator.userAgent.slice(0, 250);
   const { error } = await sb.from('attendance_logs').insert({ staff_id: currentStaffId(), duty_date: todayStr(), check_in_at: new Date().toISOString(), lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device });
   if (error) return showToast(error.message);
-  await loadAllData(); renderPage(); showToast('Check-In แล้ว');
+  await loadAllData(); renderPage(); showToast('ยืนยันวันอยู่เวรแล้ว');
 }
 async function saveOtRequest(form) {
   const pos = await getGps();
-  if (!pos.ok) return showToast(pos.message);
-  if (!isInsideGeofence(pos) && CFG.GEOFENCE?.enabled) return showToast('อยู่นอกพื้นที่ที่กำหนด ไม่สามารถขอ OT ได้');
+  if (!pos.ok) return showGpsHelp(pos.message);
+  if (!isInsideGeofence(pos) && CFG.GEOFENCE?.enabled) return showGpsHelp('อยู่นอกพื้นที่ที่กำหนด ไม่สามารถยืนยันขอ OT เพิ่มได้');
   const fd = new FormData(form);
   const row = { staff_id: currentStaffId(), work_date: fd.get('work_date'), end_time: fd.get('end_time'), reason: fd.get('reason'), note: fd.get('note'), status: 'รออนุมัติ', check_out_at: new Date().toISOString(), lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device: navigator.userAgent.slice(0, 250) };
   const { error } = await sb.from('ot_requests').insert(row);
   if (error) return showToast(error.message);
-  await loadAllData(); renderPage(); showToast('ส่งคำขอ OT แล้ว');
+  await loadAllData(); renderPage(); showToast('ส่งคำขอ OT เพิ่มแล้ว');
 }
 async function updateOtStatus(id, status) {
   const { error } = await sb.from('ot_requests').update({ status, reviewed_by: currentStaffId(), reviewed_at: new Date().toISOString() }).eq('id', id);
   if (error) return showToast(error.message);
   await loadAllData(); renderPage(); showToast('อัปเดต OT แล้ว');
 }
+function showGpsHelp(message) {
+  const geo = CFG.GEOFENCE || {};
+  showModal(`<h2>ยังยืนยันตำแหน่งไม่ได้</h2>
+    <div class="notice soft-notice"><b>${escapeHtml(message || 'ไม่สามารถอ่าน GPS ได้')}</b></div>
+    <p class="hint">วิธีแก้บน iPhone/Safari: กดไอคอนหน้า URL หรือ aA > Website Settings > Location > Allow แล้ว Refresh หน้าเว็บ</p>
+    <p class="hint">ถ้าอยู่ช่วงทดสอบ ให้ตั้งค่าใน config.js: <b>GEOFENCE.enabled = false</b> ก่อน หรือถ้าจะใช้จริง ให้ใส่ lat/lng จุดกลางหน่วย และ radiusMeters เช่น 300–500 เมตร</p>
+    <div class="table-wrap compact-detail-table"><table><tbody><tr><td>สถานะ GPS ในระบบ</td><td>${geo.enabled ? 'เปิดใช้การตรวจพื้นที่' : 'ยังไม่บังคับพื้นที่'}</td></tr><tr><td>พิกัดที่ตั้งไว้</td><td>${escapeHtml(String(geo.lat || '-'))}, ${escapeHtml(String(geo.lng || '-'))}</td></tr><tr><td>รัศมี</td><td>${escapeHtml(String(geo.radiusMeters || 500))} เมตร</td></tr></tbody></table></div>`);
+}
 function getGps() {
   return new Promise(resolve => {
     if (!navigator.geolocation) return resolve({ ok:false, message:'อุปกรณ์นี้ไม่รองรับ GPS' });
     navigator.geolocation.getCurrentPosition(
       p => resolve({ ok:true, lat:p.coords.latitude, lng:p.coords.longitude, accuracy:p.coords.accuracy }),
-      err => resolve({ ok:false, message: err.message || 'ไม่สามารถอ่าน GPS ได้' }),
+      err => resolve({ ok:false, message: gpsErrorMessage(err) }),
       { enableHighAccuracy:true, timeout:12000, maximumAge:0 }
     );
   });
+}
+function gpsErrorMessage(err) {
+  if (!err) return 'ไม่สามารถอ่าน GPS ได้';
+  if (err.code === 1) return 'มือถือ/Browser ไม่อนุญาตให้ใช้ตำแหน่ง กรุณาเปิด Location Permission ให้เว็บนี้ก่อน';
+  if (err.code === 2) return 'หา GPS ไม่เจอ ลองเปิด Location/Wi‑Fi แล้วกดใหม่';
+  if (err.code === 3) return 'อ่าน GPS ไม่ทันเวลา ลองกดใหม่อีกครั้ง';
+  return err.message || 'ไม่สามารถอ่าน GPS ได้';
 }
 function isInsideGeofence(pos) {
   if (!CFG.GEOFENCE?.enabled) return true;
@@ -2350,7 +2454,7 @@ async function savePositionEligibility() {
 }
 async function resetUserPassword(email) {
   if (!email) return showToast('ยังไม่มีอีเมลของผู้ใช้นี้');
-  if (!confirm(`ส่งลิงก์ reset password ไปที่ ${email}?`)) return;
+  if (!(await confirmDialog(`ส่งลิงก์ reset password ไปที่ ${email}?`, 'ส่งลิงก์ตั้งรหัสผ่าน'))) return;
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl('recovery') });
   if (error) return showToast(error.message);
   showToast('ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว');
@@ -2371,7 +2475,7 @@ function showTradeModal(assignmentId) {
       <label>ประเภท <select name="trade_type" id="tradeTypeSelect"><option>ขายเวร</option><option>แลกเวร</option></select></label>
       <label>คนที่จะรับ/คู่แลก <select name="receiver_id" id="tradeReceiverSelect" required><option value="">เลือกคน</option>${possibleReceiver.map(s => `<option value="${s.id}">${escapeHtml(s.nickname || s.full_name)} (${escapeHtml(s.staff_type || '-')})</option>`).join('')}</select></label>
       <label class="wide trade-swap-only" id="tradeSwapWrap" style="display:none">กรณีแลกเวรเท่านั้น: เลือกเวรของคู่แลก <select name="to_assignment_id" id="tradeSwapSelect"><option value="">เลือกเวรของคู่แลก</option>${otherDutyOptions}</select><span class="hint">ถ้าเป็นขายเวร ไม่ต้องเลือกวันที่/เวรซ้ำ ระบบใช้เวรที่กดมาให้อัตโนมัติ</span></label>
-      <label>คิดเรท <select name="rate_mode"><option value="mt">เรท MT</option><option value="kerk">เรทเคิก</option><option value="custom">ตกลงกันเอง</option></select></label>
+      <label>คิดเรท <select name="rate_mode"><option value="mt">เรท MT</option><option value="kerk">เรทเคิก</option><option value="custom">ตกลงกันเอง</option></select><span class="hint">เลือกแค่เรทหลักพอ ถ้าตกลงกันเองให้กรอกจำนวนเงิน</span></label>
       <label>จำนวนเงินตกลงเอง (ถ้ามี) <input name="custom_amount" type="number" min="0" step="1" placeholder="ไม่บังคับ"></label>
       <label class="wide">หมายเหตุ <textarea name="note" placeholder="เช่น ขายเป็นเรทเคิก / แลกเวรกับเพื่อน / ตกลงกันแล้ว"></textarea></label>
       <button class="primary-btn wide" type="submit">ส่งคำขอให้อีกฝ่ายยืนยัน</button>

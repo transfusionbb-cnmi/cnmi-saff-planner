@@ -473,3 +473,88 @@ details summary { cursor: pointer; font-weight: 900; color: var(--primary-dark);
 @media (min-width: 821px) {
   .mobile-schedule-list, .mobile-position-list, .mobile-calendar-list, .mobile-calendar-tools { display:none; }
 }
+
+
+/* V32 mobile/admin polish */
+.modal { align-items:center; justify-items:center; }
+.modal.modal-sm .modal-card { width:min(520px, calc(100vw - 32px)); }
+.confirm-box h2 { margin-top:0; }
+.confirm-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+.gps-help { margin-top:14px; }
+.mobile-roster-select { display:none; margin-top:8px; width:100%; }
+.audit-mobile-cards, .users-mobile-cards { display:none; }
+.user-mobile-card { gap:10px; }
+
+@media (max-width: 820px) {
+  html, body { overflow-x:hidden; }
+  .modal { padding:14px; place-items:center !important; align-items:center !important; }
+  .modal-card { width:min(94vw, 720px) !important; max-height:82vh; border-radius:26px !important; padding:20px !important; }
+  .modal.modal-sm .modal-card { width:min(92vw, 500px) !important; }
+  .confirm-actions { display:grid; grid-template-columns:1fr 1fr; }
+  .ot-page { grid-template-columns:1fr !important; }
+  .ot-card .primary-btn { width:100%; min-height:54px; font-size:18px; }
+  .audit-page-card .audit-desktop-table { display:none; }
+  .audit-mobile-cards { display:grid !important; gap:12px; }
+  .audit-toolbar { display:grid; grid-template-columns:1fr 1fr; }
+  .audit-toolbar label { grid-column:1/-1; }
+  .audit-mobile-card p { margin:4px 0; line-height:1.45; }
+  .users-mobile-cards { display:grid !important; gap:12px; }
+  .users-mobile-cards + .hint { margin-top:12px; }
+  .users-mobile-cards .grid-2 { grid-template-columns:1fr 1fr !important; }
+  .mobile-roster-select { display:block; }
+  .roster-board { display:block; }
+  .staff-pool { display:none; }
+  .roster-slot .actions { justify-content:flex-start; }
+  .roster-slot { min-width:150px; }
+  .roster-table { min-width:760px; }
+  .topbar { align-items:flex-start; }
+  .topbar h2 { font-size:24px; line-height:1.15; }
+  .page-content { padding:16px; }
+}
+
+/* V32: stronger app-like modal and mobile pages */
+body.modal-open { overflow: hidden; }
+.modal { z-index: 9999; background: rgba(17, 30, 43, .48); backdrop-filter: blur(3px); align-items: center !important; justify-items: center !important; place-items: center !important; }
+.modal-card { border-radius: 28px !important; box-shadow: 0 28px 80px rgba(20, 35, 52, .32) !important; animation: modalPop .16s ease-out; }
+.modal-close { z-index: 2; }
+@keyframes modalPop { from { opacity: .5; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.mobile-roster-cards { display: none; }
+.ot-mobile-cards { display: none; }
+
+@media (max-width: 820px) {
+  .modal { padding: 18px !important; align-items: center !important; justify-items: center !important; place-items: center !important; }
+  .modal-card { width: min(94vw, 680px) !important; max-height: 82vh !important; border-radius: 26px !important; padding: 20px !important; }
+  .confirm-box p { font-size: 16px; line-height: 1.55; }
+
+  .grid.grid-2:has(#leaveForm), .grid.grid-2:has(#activityForm) { grid-template-columns: 1fr !important; }
+  #leaveForm, #activityForm, #newStaffForm, #otForm { grid-template-columns: 1fr !important; }
+  .leave-desktop-table, .activity-desktop-table, .users-desktop-table, .audit-desktop-table, .ot-desktop-table, .roster-table-wrap { display: none !important; }
+  .mobile-cards, .audit-mobile-cards, .users-mobile-cards, .ot-mobile-cards, .mobile-roster-cards { display: grid !important; gap: 12px; }
+  .mobile-card { border-radius: 22px; padding: 16px; box-shadow: 0 8px 22px rgba(31,50,72,.05); }
+
+  .roster-board > .card:first-child { display: none; }
+  .roster-board > .card:last-child { padding: 12px; }
+  .mobile-roster-slot { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .mobile-roster-slot:first-of-type { border-top: 0; padding-top: 0; }
+  .mobile-roster-slot select { width: 100%; min-height: 48px; }
+  .roster-day-card { background: #fff; }
+
+  .audit-toolbar { display: grid !important; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .audit-toolbar label { grid-column: 1 / -1; }
+  .audit-page-card { overflow: hidden; }
+  .audit-mobile-card { font-size: 15px; }
+
+  .users-mobile-cards label { font-size: 14px; }
+  .users-mobile-cards input, .users-mobile-cards select { min-height: 44px; }
+
+  .ot-card { overflow: visible; }
+  .ot-card h3 { font-size: 22px; }
+  .ot-card .primary-btn { min-height: 56px; font-size: 18px; }
+
+  .calendar-shell .toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .calendar-shell .toolbar label, .calendar-shell .toolbar b { grid-column: 1 / -1; }
+  .mobile-calendar-list { max-height: none; }
+
+  .sidebar { max-width: 82vw; }
+  body.sidebar-open::after { z-index: 70; }
+}
