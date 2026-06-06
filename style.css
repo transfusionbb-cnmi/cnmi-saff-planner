@@ -317,3 +317,57 @@ details summary { cursor: pointer; font-weight: 900; color: var(--primary-dark);
   .schedule-person-cell { justify-content: flex-start; }
   .trade-btn { width: 100%; }
 }
+
+/* V17: no blank monthly position cells */
+.month-position-matrix .needs-review-cell { background: #fff4df; color: #8a5a00; font-weight: 800; }
+.month-position-matrix .needs-review-cell span { display: inline-block; padding: 3px 8px; border-radius: 999px; background: rgba(255, 196, 87, .28); }
+
+/* V19 roster usability + monthly position summary */
+.roster-board > .card:first-child {
+  position: sticky;
+  top: 86px;
+  align-self: start;
+  max-height: calc(100vh - 110px);
+  overflow: auto;
+}
+.roster-board .table-wrap {
+  max-height: calc(100vh - 230px);
+  overflow: auto;
+}
+.roster-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+.month-position-summary {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #fbfdff;
+}
+.month-position-summary h4 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+.month-position-summary table {
+  min-width: 920px;
+}
+.month-position-summary td,
+.month-position-summary th {
+  vertical-align: top;
+  text-align: left;
+}
+.trade-swap-only .hint {
+  display: block;
+  margin-top: 6px;
+}
+@media (max-width: 1100px) {
+  .roster-board > .card:first-child {
+    position: static;
+    max-height: none;
+  }
+  .roster-board .table-wrap {
+    max-height: none;
+  }
+}
