@@ -244,7 +244,7 @@ function bindGlobalEvents() {
     if (error) {
       const msg = String(error.message || '');
       if (msg.toLowerCase().includes('invalid login credentials')) {
-        return showToast('อีเมลหรือรหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ตั้งรหัสผ่านใหม่');
+        return showToast('อีเมลหรือรหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ลืมรหัสผ่าน');
       }
       return showToast(msg);
     }
@@ -254,7 +254,7 @@ function bindGlobalEvents() {
     e.preventDefault();
     const email = $('setupPasswordEmail').value.trim().toLowerCase();
     if (!requireMahidolEmail(email)) return showToast('ใช้ได้เฉพาะอีเมล @mahidol.ac.th');
-    setBusy(true, 'กำลังส่งลิงก์ตั้งรหัสผ่าน');
+    setBusy(true, 'กำลังส่งลิงก์ตั้งรหัสผ่านใหม่');
     try {
       await requestPasswordSetupLink(email);
       showToast('ถ้าอีเมลนี้อยู่ในรายชื่อเจ้าหน้าที่ ระบบจะส่งลิงก์ให้ตั้งรหัสผ่านใหม่');
