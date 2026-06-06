@@ -256,8 +256,8 @@ function bindGlobalEvents() {
     if (!requireMahidolEmail(email)) return showToast('ใช้ได้เฉพาะอีเมล @mahidol.ac.th');
     setBusy(true, 'กำลังส่งลิงก์ตั้งรหัสผ่านใหม่');
     try {
-      await requestPasswordSetupLink(email);
-      showToast('ถ้าอีเมลนี้อยู่ในรายชื่อเจ้าหน้าที่ ระบบจะส่งลิงก์ให้ตั้งรหัสผ่านใหม่');
+      const result = await requestPasswordSetupLink(email);
+      showToast(result?.sentBy === 'MailApp' ? 'ส่งอีเมลตั้งรหัสผ่านแล้ว กรุณาเช็ก Inbox / Spam' : 'ถ้าอีเมลนี้อยู่ในรายชื่อเจ้าหน้าที่ ระบบจะส่งลิงก์ให้ตั้งรหัสผ่านใหม่');
     } catch (err) {
       showToast(err.message || 'ส่งลิงก์ไม่สำเร็จ');
     } finally {
