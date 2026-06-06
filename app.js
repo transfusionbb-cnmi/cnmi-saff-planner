@@ -1,4 +1,4 @@
-/* CNMI Duty Hub V34 - dashboard wording and duty order */
+/* CNMI Duty Hub V35 - calendar reason, HR summary, upload guide */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'ภาพรวมวันนี้', subtitle: 'สรุปภาพรวมทั้งหมดของวันนี้', group: 'staff' },
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { id: 'ot', icon: '⏱️', title: 'OT & Attendance', subtitle: 'Check-In, ขอ OT, อนุมัติ, สรุป', group: 'staff' },
   { id: 'audit', icon: '🕵️', title: 'Audit Log ล่าสุด', subtitle: 'ประวัติการใช้งานแบบอ่านง่าย กรองรายวันได้', group: 'staff' },
   { id: 'hr', icon: '🧾', title: 'ตรวจสอบ HR', subtitle: 'Admin ตรวจว่าแจ้งใน HR แล้วหรือยัง', group: 'admin' },
+  { id: 'hrSummary', icon: '✅', title: 'สรุปตรวจสอบ HR แล้ว', subtitle: 'รายการที่ Admin ตรวจสอบ HR แล้ว ย้อนกลับมาดูได้', group: 'admin' },
   { id: 'scheduler', icon: '🧩', title: 'จัดตารางเวร', subtitle: 'Auto Assign, Drag & Drop, Lock, Publish', group: 'admin' },
   { id: 'positionMonth', icon: '🗓️', title: 'จัดตำแหน่งรายเดือน', subtitle: 'Admin วาง default ทั้งเดือนก่อนให้อินชาร์จปรับรายวัน', group: 'admin' },
   { id: 'users', icon: '👥', title: 'ผู้ใช้งานและสิทธิ์', subtitle: 'เพิ่ม/แก้ไขเจ้าหน้าที่ เฉพาะ Admin', group: 'admin' },
@@ -605,6 +606,7 @@ function renderPage() {
     leave: renderLeavePage,
     activities: renderActivitiesPage,
     hr: renderHrPage,
+    hrSummary: renderHrSummaryPage,
     scheduler: renderSchedulerPage,
     schedule: renderMonthlySchedulePage,
     tradeRequests: renderTradeRequestsPage,
@@ -968,6 +970,13 @@ function renderCalendar() {
       </div>
     </div>`;
 }
+function leaveReasonText(l) {
+  return String(l?.note || l?.admin_record_reason || '').trim();
+}
+function calendarEventDetail(e) {
+  const reason = e.reason || (e.raw && (e.raw.note || e.raw.admin_record_reason)) || '';
+  return reason ? `<br><span class="muted">เหตุผล: ${escapeHtml(reason)}</span>` : '';
+}
 function collectCalendarEvents() {
   const events = [];
   state.leaves.filter(x => x.status !== 'cancelled').forEach(l => {
@@ -975,7 +984,9 @@ function collectCalendarEvents() {
     const hrChecked = isLeaveHrChecked(l.id);
     days.forEach(date => {
       const lt = l.type === 'ลาพักร้อน' ? 'leave-vacation' : l.type === 'ลากิจ' ? 'leave-personal' : (l.type === 'ลาป่วย' || l.type === 'ลาคลอด') ? 'leave-sick' : l.type === 'ไม่รับเวร' ? 'noduty' : 'leave-other';
-      events.push({ date, type: lt, title: `${l.type}: ${staffNick(l.staff_id)}${hrChecked ? ' ✓ ตรวจ HR แล้ว' : ''}`, raw: l, hrChecked });
+      const reason = leaveReasonText(l);
+      const reasonSuffix = reason ? ` — ${reason}` : '';
+      events.push({ date, type: lt, title: `${l.type}: ${staffNick(l.staff_id)}${reasonSuffix}${hrChecked ? ' ✓ ตรวจ HR แล้ว' : ''}`, raw: l, hrChecked, reason });
     });
   });
   state.activities.forEach(a => {
@@ -1030,13 +1041,13 @@ function renderCalendarWeek() {
 function renderCalendarDay() { return `<div class="day-list">${renderDayTimeline(toDateInput(state.calendarDate))}</div>`; }
 function renderDayTimeline(date) {
   const evs = collectCalendarEvents().filter(e => e.date === date);
-  return `<div class="card"><div class="section-title"><h3>${formatThaiDate(date)}</h3><button class="tiny-btn" data-day-detail="${date}">รายละเอียด</button></div>${evs.length ? evs.map(e => `<div class="timeline-item"><span>${escapeHtml(e.title)}</span><span>${badge(eventText(e.type), eventBadge(e.type))}</span></div>`).join('') : empty('ไม่มีรายการ')}</div>`;
+  return `<div class="card"><div class="section-title"><h3>${formatThaiDate(date)}</h3><button class="tiny-btn" data-day-detail="${date}">รายละเอียด</button></div>${evs.length ? evs.map(e => `<div class="timeline-item"><span>${escapeHtml(e.title)}${calendarEventDetail(e)}</span><span>${badge(eventText(e.type), eventBadge(e.type))}</span></div>`).join('') : empty('ไม่มีรายการ')}</div>`;
 }
 function eventText(type) { return ({'leave-vacation':'ลาพักร้อน','leave-personal':'ลากิจ','leave-sick':'ลาป่วย/ลาคลอด','leave-other':'ลา', noduty:'ไม่รับเวร', training:'อบรม', meeting:'ประชุม', outing:'ออกหน่วย', standard:'ตรวจมาตรฐาน', code:'ซ้อม CODE', holiday:'วันหยุด', duty:'เวร'}[type] || type); }
 function eventBadge(type) { return ({'leave-vacation':'green','leave-personal':'purple','leave-sick':'yellow','leave-other':'blue', noduty:'black', training:'blue', meeting:'orange', outing:'red', standard:'purple', code:'yellow', holiday:'yellow', duty:'black'}[type] || 'black'); }
 function showDayDetail(date) {
   const evs = collectCalendarEvents().filter(e => e.date === date);
-  showModal(`<h2>${formatThaiDate(date)}</h2>${evs.length ? evs.map(e => `<div class="timeline-item"><div><b>${escapeHtml(e.title)}</b><br><span class="muted">${eventText(e.type)}</span> ${e.hrChecked ? '<span class="badge green">✓ ตรวจสอบ HR แล้ว</span>' : ''}</div></div>`).join('') : empty('ไม่มีรายการในวันนี้')}`);
+  showModal(`<h2>${formatThaiDate(date)}</h2>${evs.length ? evs.map(e => `<div class="timeline-item"><div><b>${escapeHtml(e.title)}</b>${calendarEventDetail(e)}<br><span class="muted">${eventText(e.type)}</span> ${e.hrChecked ? '<span class="badge green">✓ ตรวจสอบ HR แล้ว</span>' : ''}</div></div>`).join('') : empty('ไม่มีรายการในวันนี้')}`);
 }
 
 function renderLeavePage() {
@@ -1163,6 +1174,29 @@ function renderHrPage() {
     </tbody></table></div>` : empty('ไม่มีรายการลาให้ตรวจ')}
   </div>`;
 }
+
+function renderHrSummaryPage() {
+  if (!isAdmin()) return noPermission();
+  const checkedRows = state.hrChecks
+    .filter(h => h.status === 'ตรวจสอบแล้ว')
+    .map(h => ({ h, l: state.leaves.find(x => x.id === h.leave_request_id) }))
+    .filter(x => x.l)
+    .sort((a,b) => String(b.h.checked_at || '').localeCompare(String(a.h.checked_at || '')));
+  return `<div class="card">
+    <div class="section-title"><h3>สรุปตรวจสอบ HR แล้ว</h3><span class="muted">เก็บไว้ให้ Admin กลับมาตรวจย้อนหลังได้</span></div>
+    ${checkedRows.length ? `<div class="table-wrap desktop-table"><table><thead><tr><th>ผู้ลา</th><th>ประเภท/ช่วงวันที่</th><th>วันที่แจ้งใน HR</th><th>ผู้ตรวจ/เวลาตรวจ</th><th>หมายเหตุ</th></tr></thead><tbody>
+      ${checkedRows.map(({h,l}) => `<tr>
+        <td>${escapeHtml(staffName(l.staff_id))}</td>
+        <td>${badge(l.type, leaveBadgeClass(l.type))}<br>${formatThaiDate(l.start_date)} - ${formatThaiDate(l.end_date)}<br><span class="muted">เหตุผล: ${escapeHtml(leaveReasonText(l) || '-')}</span></td>
+        <td>${h.hr_reported_date ? formatThaiDate(h.hr_reported_date) : '-'}</td>
+        <td>${staffPill(h.checked_by)}<br><span class="muted">${formatThaiDateTime(h.checked_at)}</span></td>
+        <td>${escapeHtml(h.note || '-')}</td>
+      </tr>`).join('')}
+    </tbody></table></div>
+    <div class="mobile-cards">${checkedRows.map(({h,l}) => `<div class="mobile-card"><div class="section-title"><h3>${escapeHtml(staffNick(l.staff_id))}</h3>${badge(l.type, leaveBadgeClass(l.type))}</div><div>${formatThaiDate(l.start_date)} - ${formatThaiDate(l.end_date)}</div><div><b>เหตุผล:</b> ${escapeHtml(leaveReasonText(l) || '-')}</div><div><b>แจ้งใน HR:</b> ${h.hr_reported_date ? formatThaiDate(h.hr_reported_date) : '-'}</div><div><b>ผู้ตรวจ:</b> ${staffPill(h.checked_by)}<br><span class="muted">${formatThaiDateTime(h.checked_at)}</span></div><div><b>หมายเหตุ:</b> ${escapeHtml(h.note || '-')}</div></div>`).join('')}</div>` : empty('ยังไม่มีรายการที่ตรวจสอบ HR แล้ว')}
+  </div>`;
+}
+
 function noPermission() { return `<div class="card">${empty('หน้านี้ Staff มองเห็นเมนูได้ แต่ปุ่มทำงานสำหรับ Admin เท่านั้น')}</div>`; }
 
 function renderSchedulerPage() {
