@@ -1,4 +1,4 @@
-/* CNMI Duty Hub V16 - Staff monthly position view */
+/* CNMI Duty Hub V18 - No fake extra positions; show review instead */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'Dashboard', subtitle: 'ภาพรวมทั้งหมดของวันนี้', group: 'staff' },
@@ -76,13 +76,20 @@ const DEFAULT_POSITIONS = [
 ];
 
 const OUTING_POSITIONS = [
-  { code: 'DR-Registration', zone: 'Donor Room', break_time: 'ออกหน่วย', main_rule: 'MT / แตง', job_desc: 'ลงทะเบียน, คัดกรองความดัน ชีพจร อุณหภูมิ' },
-  { code: 'DR-Preparation', zone: 'Donor Room', break_time: 'ออกหน่วย', main_rule: 'มัส', job_desc: 'เตรียม set ดูแลโปรแกรมออกหน่วย แก้ปัญหาหน้างาน ดูแลภาพรวม กลับมาลงทะเบียน' },
-  { code: 'DR-Finger 1', zone: 'Donor Room', break_time: 'ออกหน่วย', main_rule: 'MT / แตง', job_desc: 'คัดกรอง สัมภาษณ์ เจาะปลายนิ้ว กลับมาปั่นเลือด' },
-  { code: 'DR-Finger 2', zone: 'Donor Room', break_time: 'ออกหน่วย', main_rule: 'MT / แตง', job_desc: 'คัดกรอง สัมภาษณ์ เจาะปลายนิ้ว กลับมาปั่นเลือด' },
-  { code: 'DR-Main 1', zone: 'Donor Room', break_time: 'ออกหน่วย', main_rule: 'MT / แตง', job_desc: 'เจาะเลือดตัวหลัก กลับมาปั่นเลือด' },
-  { code: 'DR-Main 2', zone: 'Donor Room', break_time: 'ออกหน่วย', main_rule: 'MT / แตง', job_desc: 'เจาะเลือดตัวหลัก กลับมาปั่นเลือด' },
-  { code: 'DR-Sup', zone: 'Donor Room', break_time: 'ออกหน่วย', main_rule: 'แก๊ส / เฟื่อง', job_desc: 'เตรียม Set เจาะ เติมน้ำดื่ม/ขนม เช็ดเตียง เก็บถุงเลือด จดอุณหภูมิห้องก่อนออกหน่วย' }
+  { code: 'DR-Registration', zone: 'ออกหน่วย', break_time: 'ออกหน่วย', main_rule: 'MT / แตง', job_desc: 'ลงทะเบียน, คัดกรองความดัน ชีพจร อุณหภูมิ' },
+  { code: 'DR-Preparation', zone: 'ออกหน่วย', break_time: 'ออกหน่วย', main_rule: 'มัส', job_desc: 'เตรียม set ดูแลโปรแกรมออกหน่วย แก้ปัญหาหน้างาน ดูแลภาพรวม กลับมาลงทะเบียน' },
+  { code: 'DR-Finger 1', zone: 'ออกหน่วย', break_time: 'ออกหน่วย', main_rule: 'MT / แตง', job_desc: 'คัดกรอง สัมภาษณ์ เจาะปลายนิ้ว กลับมาปั่นเลือด' },
+  { code: 'DR-Finger 2', zone: 'ออกหน่วย', break_time: 'ออกหน่วย', main_rule: 'MT / แตง', job_desc: 'คัดกรอง สัมภาษณ์ เจาะปลายนิ้ว กลับมาปั่นเลือด' },
+  { code: 'DR-Main 1', zone: 'ออกหน่วย', break_time: 'ออกหน่วย', main_rule: 'MT / แตง', job_desc: 'เจาะเลือดตัวหลัก กลับมาปั่นเลือด' },
+  { code: 'DR-Main 2', zone: 'ออกหน่วย', break_time: 'ออกหน่วย', main_rule: 'MT / แตง', job_desc: 'เจาะเลือดตัวหลัก กลับมาปั่นเลือด' },
+  { code: 'DR-Sup', zone: 'ออกหน่วย', break_time: 'ออกหน่วย', main_rule: 'แก๊ส / เฟื่อง', job_desc: 'เตรียม Set เจาะ เติมน้ำดื่ม/ขนม เช็ดเตียง เก็บถุงเลือด จดอุณหภูมิห้องก่อนออกหน่วย' }
+];
+
+const FALLBACK_POSITION_BASES = [
+  { code: 'BB-Float', zone: 'Blood Bank', break_time: 'ตามอินชาร์จ', main_rule: 'MT / เคิก', job_desc: 'ช่วยงาน Blood Bank ตามที่อินชาร์จมอบหมาย' },
+  { code: 'DR-Float', zone: 'Donor Room', break_time: 'ตามอินชาร์จ', main_rule: 'MT / เคิก', job_desc: 'ช่วยงาน Donor Room ตามที่อินชาร์จมอบหมาย' },
+  { code: 'BB-Probation', zone: 'Blood Bank', break_time: 'ตามพี่เลี้ยง', main_rule: 'น้องใหม่+พี่เลี้ยง', job_desc: 'ฝึก/ช่วยงาน Blood Bank ภายใต้พี่เลี้ยง' },
+  { code: 'DR-Probation', zone: 'Donor Room', break_time: 'ตามพี่เลี้ยง', main_rule: 'น้องใหม่+พี่เลี้ยง', job_desc: 'ฝึก/ช่วยงาน Donor Room ภายใต้พี่เลี้ยง' }
 ];
 
 
@@ -651,12 +658,23 @@ function positionRuleOk(staff, rule) {
   if (!staff) return false;
   const nick = staff.nickname || '';
   const type = staff.staff_type || '';
-  if (rule.includes('มัส')) return nick === 'มัส';
-  if (rule.includes('แก๊ส') || rule.includes('เฟื่อง')) return ['แก๊ส','เฟื่อง'].includes(nick);
-  if (rule.includes('แตง') && rule.includes('MT')) return type === 'MT' || nick === 'แตง';
-  if (rule.includes('MT เท่านั้น')) return type === 'MT';
-  if (rule.includes('เคิก')) return type === 'เคิก';
-  if (rule.includes('MT')) return type === 'MT';
+  const text = String(rule || '');
+  if (text.includes('มัส')) return nick === 'มัส';
+  if (text.includes('MT เท่านั้น')) return type === 'MT';
+  // เช่น DR-Support ปกติ: แตง / แก๊ส / เฟื่อง / MT ต้องรับได้ทั้ง MT และเคิก 3 คนนี้
+  if (text.includes('MT') && (text.includes('แตง') || text.includes('แก๊ส') || text.includes('เฟื่อง'))) {
+    return type === 'MT' || ['แตง','แก๊ส','เฟื่อง'].includes(nick);
+  }
+  // เช่น DR-Registration ปกติ: แตง / แก๊ส / เฟื่อง
+  if (!text.includes('MT') && (text.includes('แตง') || text.includes('แก๊ส') || text.includes('เฟื่อง'))) {
+    const allowed = [];
+    if (text.includes('แตง')) allowed.push('แตง');
+    if (text.includes('แก๊ส')) allowed.push('แก๊ส');
+    if (text.includes('เฟื่อง')) allowed.push('เฟื่อง');
+    return allowed.includes(nick);
+  }
+  if (text.includes('เคิก')) return type === 'เคิก';
+  if (text.includes('MT')) return type === 'MT';
   return true;
 }
 function staffOptionList(selected='', filterFn=null) {
@@ -1151,8 +1169,8 @@ function renderPositionMonthPage() {
       <span>${badge(`มีข้อมูล ${savedCount} รายการ`, savedCount ? 'green' : 'black')}</span>
       <span>${badge(`วันทำงาน ${workingDays} วัน`, 'blue')}</span>
     </div>
-    <div class="notice soft-notice">หลักการ: เสาร์-อาทิตย์และวันหยุดราชการขึ้น WEEKEND/HOLIDAY และไม่จัดตำแหน่ง ส่วนวันที่มีออกหน่วยจะใช้ชุดตำแหน่งออกหน่วยแทนตำแหน่งปกติจากรายชื่อผู้เข้าร่วมกิจกรรม</div>
-    <div class="notice soft-notice">BB-Report และ DR-Processing จะพยายามฟิคเป็นรายสัปดาห์เพื่อเก็บ QC ต่อเนื่อง แต่ถ้าคนที่ฟิคไว้ลา/ไม่พร้อม ระบบจะเว้นหรือเลือกคนที่เหมาะสมถัดไปให้ Admin ตรวจต่อ</div>
+    <div class="notice soft-notice">หลักการ: เสาร์-อาทิตย์และวันหยุดราชการขึ้น WEEKEND/HOLIDAY และไม่จัดตำแหน่ง ส่วนวันที่มีออกหน่วยจะใช้ชุดตำแหน่งออกหน่วยแทนตำแหน่งปกติจากรายชื่อผู้เข้าร่วมกิจกรรม และวันทำงานห้ามปล่อยคนพร้อมทำงานเป็น “-”</div>
+    <div class="notice soft-notice">BB-Report และ DR-Processing จะพยายามฟิคเป็นรายสัปดาห์เพื่อเก็บ QC ต่อเนื่อง ถ้าเกลี่ยแล้วคนนั้นยังไม่มีตำแหน่ง ระบบจะแสดง “รอตรวจสอบ” ให้ Admin ปรับเอง ไม่ใส่ตำแหน่งเสริมปลอม</div>
     ${renderMonthPositionMatrix(rows, dates)}
   </div>`;
 }
@@ -1205,11 +1223,40 @@ function renderMonthPositionCell(staff, date, codes) {
   const leave = isActiveLeaveOn(staff.id, date);
   const outing = hasOuting(date);
   if (noDay) return `<td class="matrix-cell no-position-day"><span>${isHolidayDate(date) ? 'HOLIDAY' : 'WEEKEND'}</span></td>`;
-  const cls = `${outing ? 'outing-cell' : ''} ${leave ? 'leave-cell' : ''}`.trim();
-  const text = codes.length ? codes.join('<br>') : '-';
-  const leaveMark = leave ? '<div class="cell-note">ลา/ไม่รับเวร</div>' : '';
+  const cls = `${outing ? 'outing-cell' : ''} ${leave ? 'leave-cell' : ''} ${!codes.length && !leave ? 'needs-review-cell' : ''}`.trim();
+  const text = codes.length ? codes.join('<br>') : (leave ? 'ลา/ไม่รับเวร' : 'รอตรวจสอบ');
+  const leaveMark = leave ? '<div class="cell-note">ไม่ต้องจัดตำแหน่ง</div>' : '';
   const outingMark = outing && codes.length ? '<div class="cell-note">ออกหน่วย</div>' : '';
   return `<td class="matrix-cell ${cls}"><span>${text}</span>${leaveMark}${outingMark}</td>`;
+}
+function workingPositionStaffIdsForDate(date) {
+  return state.staff
+    .filter(s => isDailyPositionEnabled(s) && !isActiveLeaveOn(s.id, date))
+    .map(s => s.id);
+}
+function createFallbackPositionRow(staff, date, usedCodes, orderNo) {
+  const isProbation = String(staff.position_training_status || '').includes('น้องใหม่');
+  const isKerk = staff.staff_type === 'เคิก';
+  const base = isProbation
+    ? FALLBACK_POSITION_BASES[isKerk ? 3 : 2]
+    : FALLBACK_POSITION_BASES[(orderNo % 2 === 0) ? 0 : 1];
+  let code = base.code;
+  let n = 1;
+  while (usedCodes.has(code)) {
+    n += 1;
+    code = `${base.code} ${n}`;
+  }
+  usedCodes.add(code);
+  return {
+    work_date: date,
+    position_code: code,
+    zone: base.zone,
+    break_time: base.break_time,
+    main_rule: base.main_rule,
+    job_desc: base.job_desc,
+    staff_id: staff.id,
+    updated_by: currentStaffId()
+  };
 }
 function buildMonthlyPositionDraft(key) {
   const { y, m } = getMonthRange(key);
@@ -1224,7 +1271,7 @@ function buildMonthlyPositionDraft(key) {
     counts[staffId].byCode[code] = (counts[staffId].byCode[code] || 0) + 1;
   };
   const pick = (p, date, used, fixedPreferred=null) => {
-    const poolIds = hasOuting(date) ? outingParticipants(date) : state.staff.filter(s=>isDailyPositionEnabled(s)).map(s=>s.id);
+    const poolIds = hasOuting(date) ? outingParticipants(date).filter(id => workingPositionStaffIdsForDate(date).includes(id)) : workingPositionStaffIdsForDate(date);
     if (fixedPreferred && !used.has(fixedPreferred)) {
       const fs = state.staff.find(x => x.id === fixedPreferred);
       if (poolIds.includes(fixedPreferred) && positionCandidateOk(fs, p, date)) return fs;
@@ -1239,7 +1286,9 @@ function buildMonthlyPositionDraft(key) {
     const wk = weekKeyOf(date);
     weeklyFixed[wk] = weeklyFixed[wk] || {};
     const used = new Set();
+    const usedCodes = new Set();
     positionTemplateForDate(date).forEach(p => {
+      usedCodes.add(p.code);
       let staff = null;
       if (!hasOuting(date) && ['BB-Report','DR-Processing'].includes(p.code)) {
         if (!weeklyFixed[wk][p.code]) {
@@ -1253,9 +1302,13 @@ function buildMonthlyPositionDraft(key) {
       if (staff) { used.add(staff.id); addCount(staff.id, p.code); }
       rows.push({ work_date: date, position_code: p.code, zone: p.zone, break_time: p.break_time, main_rule: p.main_rule, job_desc: p.job_desc, staff_id: staff?.id || null, updated_by: currentStaffId() });
     });
+
+    // V18: ไม่ใส่ตำแหน่งเสริมปลอมเพื่อกลบช่องว่าง
+    // ถ้าวันทำงานแล้วยังไม่มีตำแหน่ง จะแสดงใน matrix เป็น “รอตรวจสอบ” เพื่อให้ Admin เลือกตำแหน่งจริงเอง
   }
   return { monthKey: key, rows };
 }
+
 
 function renderOtPage() {
   const myDuty = state.rosterAssignments.some(x => x.duty_date === todayStr() && x.staff_id === currentStaffId());
@@ -1387,7 +1440,7 @@ function renderEligibilityPage() {
         <div>${escapeHtml(selected.full_name || '')}</div>
         <small>${escapeHtml(selected.staff_type || '-')} • ${escapeHtml(selected.position_training_status || 'ใช้งานปกติ')}</small>
       </div>
-      <p class="hint">ถ้าคนใหม่ผ่านโปรแล้ว ให้กลับไปเมนู ผู้ใช้งานและสิทธิ์ → เปลี่ยนสถานะ และเปิด Auto ตำแหน่งก่อน จากนั้นค่อยติ๊กตำแหน่งที่ขึ้นได้ตรงหน้านี้</p>
+      <p class="hint">ถ้าคนใหม่ผ่านโปรแล้ว ให้กลับไปเมนู ผู้ใช้งานและสิทธิ์ → เปลี่ยนสถานะ และเปิด Auto ตำแหน่งก่อน จากนั้นค่อยติ๊กตำแหน่งที่ขึ้นได้ตรงหน้านี้ ตำแหน่งออกหน่วยจะแยกอยู่ในโซน “ออกหน่วย” ไม่ใช่ตำแหน่งประจำห้อง Donor</p>
     </div>
     <div class="card eligibility-position-panel">
       <div class="section-title">
