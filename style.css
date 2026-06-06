@@ -264,3 +264,31 @@ details summary { cursor: pointer; font-weight: 900; color: var(--primary-dark);
   .schedule-readable { font-size: 12px; }
   .schedule-readable .staff-color-pill { min-width: 34px; padding: 5px 8px; }
 }
+
+/* V14 monthly position matrix */
+.monthly-position-page .notice { margin: 10px 0; }
+.monthly-matrix-wrap { display: grid; gap: 10px; }
+.matrix-legend { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 13px; font-weight: 800; }
+.legend-box { width: 18px; height: 18px; border-radius: 5px; display: inline-block; border: 1px solid var(--line); }
+.legend-box.weekend { background: #d6dbe1; }
+.legend-box.outing { background: #ffe9ee; }
+.legend-box.leave { background: #fff7d8; }
+.month-position-matrix table { min-width: 1500px; border-collapse: separate; border-spacing: 0; }
+.month-position-matrix th, .month-position-matrix td { padding: 8px 10px; min-width: 92px; text-align: center; vertical-align: middle; }
+.month-position-matrix .sticky-col { position: sticky; left: 0; z-index: 3; box-shadow: 4px 0 10px rgba(31,50,72,.08); }
+.month-position-matrix thead .sticky-col { z-index: 5; background: #f6f9fc; }
+.month-position-matrix .staff-col { min-width: 150px; text-align: left; }
+.month-position-matrix .date-head { font-size: 12px; line-height: 1.2; }
+.month-position-matrix .weekend-head, .month-position-matrix .holiday-head { background: #d6dbe1; color: #1f2933; }
+.month-position-matrix .outing-head { background: #ffe9ee; color: #b3354c; }
+.matrix-cell { font-size: 12px; font-weight: 900; line-height: 1.25; background: #fff; }
+.matrix-cell span { display: inline-block; white-space: nowrap; }
+.matrix-cell.no-position-day { background: #d6dbe1; color: #4a5562; font-size: 11px; letter-spacing: .04em; }
+.matrix-cell.outing-cell { background: #fff1f4; color: #b3354c; }
+.matrix-cell.leave-cell { background: #fff7d8; color: #806000; }
+.cell-note { margin-top: 4px; font-size: 10px; color: var(--muted); font-weight: 800; }
+.staff-color-cell small { opacity: .85; }
+@media (max-width: 720px) {
+  .month-position-matrix th, .month-position-matrix td { min-width: 82px; padding: 7px 8px; font-size: 11px; }
+  .month-position-matrix .staff-col { min-width: 124px; }
+}

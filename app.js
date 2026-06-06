@@ -1,4 +1,4 @@
-/* CNMI Duty Hub V13 - Duty holiday rules + readable roster + monthly position planning */
+/* CNMI Duty Hub V14 - Monthly position matrix + leave warning flow */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'Dashboard', subtitle: 'ภาพรวมทั้งหมดของวันนี้', group: 'staff' },
@@ -597,7 +597,13 @@ function canManagePositions(date=todayStr()) {
   const key = String(date).slice(0,7);
   return isAdmin() || currentInchargeForMonth(key) === currentStaffId();
 }
-function positionTemplateForDate(date) { return hasOuting(date) ? OUTING_POSITIONS : DEFAULT_POSITIONS; }
+function positionDayStatus(date) { return state.positionDayStatus.find(x => x.work_date === date); }
+function positionDayPublished(date) { return positionDayStatus(date)?.status === 'published'; }
+function isNoPositionDay(date) { return isWeekend(date) || isHolidayDate(date); }
+function positionTemplateForDate(date) {
+  if (isNoPositionDay(date)) return [];
+  return hasOuting(date) ? OUTING_POSITIONS : DEFAULT_POSITIONS;
+}
 function hasOuting(date) { return state.activities.some(a => a.event_type === 'ออกหน่วย' && dateInRange(date, a.start_date, a.end_date)); }
 function outingParticipants(date) {
   const act = state.activities.find(a => a.event_type === 'ออกหน่วย' && dateInRange(date, a.start_date, a.end_date));
@@ -768,9 +774,15 @@ function renderLeavePage() {
           </label>
           <label>วันที่เริ่ม <input name="start_date" type="date" value="${editing?.start_date || todayStr()}" required></label>
           <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${editing?.end_date || todayStr()}" required></label>
+          <label>ช่วงเวลา
+            <select name="leave_period">
+              ${['เต็มวัน','ครึ่งเช้า 08:00-12:30','ครึ่งบ่าย 11:30-16:00'].map(v => `<option value="${v}" ${(editing?.leave_period || 'เต็มวัน')===v?'selected':''}>${v}</option>`).join('')}
+            </select>
+          </label>
           <label>เบอร์ติดต่อระหว่างลา <input name="contact_phone" value="${escapeHtml(editing?.contact_phone || '')}" placeholder="เบอร์ติดต่อ"></label>
           <label>แนบไฟล์ <input name="file" type="file"></label>
           <label class="wide">หมายเหตุ <textarea name="note" placeholder="ระบุรายละเอียดเพิ่มเติม">${escapeHtml(editing?.note || '')}</textarea></label>
+          <div class="notice soft-notice wide">ถ้าวันที่ขอลามีการประกาศตารางตำแหน่งรายวันแล้ว ระบบยังบันทึกได้ แต่จะแจ้งเตือนให้ติดต่ออินชาร์จหรือหัวหน้า เพื่อให้ปรับตำแหน่งหน้างานทันที</div>
           <button class="primary-btn wide" type="submit">${editing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}</button>
         </form>
       </div>
@@ -783,7 +795,7 @@ function renderLeavePage() {
 function renderLeaveTable(rows) {
   if (!rows.length) return empty('ยังไม่มีรายการ');
   return `<div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>ประเภท</th><th>ช่วงวันที่</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
-    ${rows.map(r => `<tr><td>${escapeHtml(staffNick(r.staff_id))}</td><td>${badge(r.type, leaveBadgeClass(r.type))}</td><td>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}<br><span class="muted">${escapeHtml(r.note || '')}</span></td><td>${badge(r.status || 'active', r.status==='cancelled'?'red':'green')}</td><td><div class="actions">
+    ${rows.map(r => `<tr><td>${escapeHtml(staffNick(r.staff_id))}</td><td>${badge(r.type, leaveBadgeClass(r.type))}</td><td>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}<br><span class="badge blue">${escapeHtml(r.leave_period || 'เต็มวัน')}</span><br><span class="muted">${escapeHtml(r.note || '')}</span></td><td>${badge(r.status || 'active', r.status==='cancelled'?'red':'green')}</td><td><div class="actions">
       ${canEditOwn(r) ? `<button class="tiny-btn" data-edit-leave="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-cancel-leave="${r.id}">ยกเลิก</button>` : '<span class="muted">แก้ไม่ได้</span>'}
     </div></td></tr>`).join('')}
   </tbody></table></div>`;
@@ -1035,18 +1047,20 @@ function renderPositionsPage() {
   const incharge = currentInchargeForMonth(key);
   const dayStatus = state.positionDayStatus.find(x => x.work_date === date);
   const isPublished = dayStatus?.status === 'published';
+  const noPosition = isNoPositionDay(date);
   return `<div class="card">
     <div class="toolbar">
       <label>วันที่ <input type="date" id="positionDateInput" value="${date}"></label>
       ${isAdmin() ? `<label>อินชาร์จประจำเดือน <select id="inchargeSelect"><option value="">ไม่ระบุ</option>${staffOptions(incharge)}</select></label><button class="soft-btn" data-save-incharge>บันทึกอินชาร์จ</button>` : `<span>${badge('อินชาร์จ: ' + staffNick(incharge), 'blue')}</span>`}
       ${badge(isPublished ? 'ประกาศแล้ว' : 'ยังไม่ประกาศ', isPublished ? 'green' : 'orange')}
-      ${canManage ? '<button class="soft-btn" data-auto-positions>จัดตำแหน่งอัตโนมัติ</button><button class="primary-btn" data-save-positions>บันทึกตำแหน่งวันนี้</button><button class="soft-btn" data-publish-positions>ประกาศตารางวันนี้</button>' : ''}
+      ${canManage && !noPosition ? '<button class="soft-btn" data-auto-positions>จัดตำแหน่งอัตโนมัติ</button><button class="primary-btn" data-save-positions>บันทึกตำแหน่งวันนี้</button><button class="soft-btn" data-publish-positions>ประกาศตารางวันนี้</button>' : ''}
     </div>
-    <div class="notice soft-notice">ตารางรายวันมาจาก default รายเดือนก่อน อินชาร์จปรับได้ตามคนลา/งานจริง แล้วกดประกาศก่อน 07:30 น. คนที่จะลาในวันนี้ควรบันทึกก่อนอินชาร์จกดประกาศ</div>
-    ${hasOuting(date) ? `<div class="notice">วันนี้มีออกหน่วย ระบบใช้ชุดตำแหน่ง Donor Room สำหรับออกหน่วย และจะยึดรายชื่อผู้เข้าร่วมกิจกรรมออกหน่วยเป็นหลัก</div>` : ''}
-    <div class="table-wrap"><table><thead><tr><th>โซน</th><th>ตำแหน่ง</th><th>เวลาพัก</th><th>ผู้รับผิดชอบ</th><th>ผู้ปฏิบัติหลัก</th><th>หน้าที่โดยย่อ</th></tr></thead><tbody>
+    <div class="notice soft-notice">ตารางรายวันมาจาก default รายเดือนก่อน อินชาร์จปรับได้ตามคนลา/งานจริง แล้วกดประกาศก่อน 07:30 น. หากมีคนลาหลังประกาศ ให้แจ้งอินชาร์จหรือหัวหน้าเพื่อปรับหน้างาน</div>
+    ${noPosition ? `<div class="notice">วันนี้เป็น${isHolidayDate(date) ? 'วันหยุดราชการ' : 'วันเสาร์-อาทิตย์'} จึงไม่ต้องจัดตำแหน่งรายวัน</div>` : ''}
+    ${!noPosition && hasOuting(date) ? `<div class="notice">วันนี้มีออกหน่วย ระบบใช้ชุดตำแหน่ง Donor Room สำหรับออกหน่วย และจะยึดรายชื่อผู้เข้าร่วมกิจกรรมออกหน่วยเป็นหลัก</div>` : ''}
+    ${noPosition ? empty('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : `<div class="table-wrap"><table><thead><tr><th>โซน</th><th>ตำแหน่ง</th><th>เวลาพัก</th><th>ผู้รับผิดชอบ</th><th>ผู้ปฏิบัติหลัก</th><th>หน้าที่โดยย่อ</th></tr></thead><tbody>
       ${rows.map(r => `<tr><td>${escapeHtml(r.zone)}</td><td><b>${escapeHtml(r.position_code)}</b></td><td>${escapeHtml(r.break_time)}</td><td>${canManage ? `<select data-position-staff="${escapeHtml(r.position_code)}"><option value="">-</option>${staffOptionList(r.staff_id, s => positionCandidateOk(s, r, date))}</select>` : `${staffPill(r.staff_id)}`}</td><td>${escapeHtml(r.main_rule)}</td><td>${escapeHtml(r.job_desc)}</td></tr>`).join('')}
-    </tbody></table></div>
+    </tbody></table></div>`}
   </div>`;
 }
 
@@ -1055,29 +1069,59 @@ function renderPositionMonthPage() {
   const key = state.positionMonthKey || state.monthKey;
   const { y, m } = getMonthRange(key);
   const last = new Date(y, m, 0).getDate();
-  const rows = Array.from({length:last}, (_,i)=>`${y}-${pad(m)}-${pad(i+1)}`);
+  const dates = Array.from({length:last}, (_,i)=>`${y}-${pad(m)}-${pad(i+1)}`);
+  const rows = state.monthPositionDraft?.monthKey === key ? state.monthPositionDraft.rows : state.positions.filter(x => x.work_date?.startsWith(key));
   const savedCount = state.positions.filter(x => x.work_date?.startsWith(key)).length;
+  const workingDays = dates.filter(d => !isNoPositionDay(d)).length;
   return `<div class="card monthly-position-page">
-    <div class="section-title"><div><h3>จัดตำแหน่งรายเดือน ${key}</h3><p class="hint">Admin วาง default ทั้งเดือนก่อน จากนั้นอินชาร์จแก้รายวันและประกาศก่อน 07:30 น.</p></div></div>
+    <div class="section-title"><div><h3>จัดตำแหน่งรายเดือน ${key}</h3><p class="hint">รูปแบบ Excel: แถวเป็นเจ้าหน้าที่ คอลัมน์เป็นวันที่ และในช่องคือ “ตำแหน่งของคนนั้นในวันนั้น”</p></div></div>
     <div class="toolbar">
       <label>เดือน <input type="month" id="positionMonthInput" value="${key}"></label>
       <button class="soft-btn" data-generate-month-positions>สร้าง default ทั้งเดือน</button>
       <button class="primary-btn" data-save-month-positions>บันทึก default ทั้งเดือน</button>
       <span>${badge(`มีข้อมูล ${savedCount} รายการ`, savedCount ? 'green' : 'black')}</span>
+      <span>${badge(`วันทำงาน ${workingDays} วัน`, 'blue')}</span>
     </div>
-    <div class="notice soft-notice">หลักการ: BB-Report และ DR-Processing จะพยายามฟิคเป็นรายสัปดาห์เพื่อเก็บ QC ถุงเลือดต่อเนื่อง ส่วนตำแหน่งอื่นจะเกลี่ยให้ใกล้เคียงกัน โดยไม่จัดคนที่ลา/ไม่รับเวร/ปิดสิทธิ์ตำแหน่ง</div>
-    ${state.monthPositionDraft?.monthKey === key ? renderMonthPositionPreview(state.monthPositionDraft.rows, rows) : renderMonthPositionPreview(state.positions.filter(x => x.work_date?.startsWith(key)), rows)}
+    <div class="notice soft-notice">หลักการ: เสาร์-อาทิตย์และวันหยุดราชการขึ้น WEEKEND/HOLIDAY และไม่จัดตำแหน่ง ส่วนวันที่มีออกหน่วยจะใช้ชุดตำแหน่งออกหน่วยแทนตำแหน่งปกติจากรายชื่อผู้เข้าร่วมกิจกรรม</div>
+    <div class="notice soft-notice">BB-Report และ DR-Processing จะพยายามฟิคเป็นรายสัปดาห์เพื่อเก็บ QC ต่อเนื่อง แต่ถ้าคนที่ฟิคไว้ลา/ไม่พร้อม ระบบจะเว้นหรือเลือกคนที่เหมาะสมถัดไปให้ Admin ตรวจต่อ</div>
+    ${renderMonthPositionMatrix(rows, dates)}
   </div>`;
 }
-function renderMonthPositionPreview(rows, dates) {
+function positionDisplayMap(rows) {
+  const map = {};
+  rows.forEach(r => {
+    if (!r.staff_id) return;
+    const key = `${r.staff_id}|${r.work_date}`;
+    map[key] = map[key] || [];
+    map[key].push(r.position_code || r.code);
+  });
+  return map;
+}
+function renderMonthPositionMatrix(rows, dates) {
   if (!rows.length) return empty('ยังไม่มี default รายเดือน กด “สร้าง default ทั้งเดือน” ก่อน');
-  return `<div class="table-wrap month-position-preview"><table><thead><tr><th>วันที่</th><th>BB-Report</th><th>DR-Processing</th><th>จำนวนตำแหน่งที่จัดแล้ว</th></tr></thead><tbody>${dates.map(date => {
-    const dayRows = rows.filter(r => r.work_date === date);
-    const bb = dayRows.find(r => (r.position_code || r.code) === 'BB-Report')?.staff_id;
-    const dr = dayRows.find(r => (r.position_code || r.code) === 'DR-Processing')?.staff_id;
-    const filled = dayRows.filter(r => r.staff_id).length;
-    return `<tr><td><b>${formatThaiDate(date)}</b><br><span class="muted">${parseDate(date).toLocaleDateString('th-TH', { weekday:'short' })}</span></td><td>${staffPill(bb)}</td><td>${staffPill(dr)}</td><td>${filled}/${positionTemplateForDate(date).length}</td></tr>`;
-  }).join('')}</tbody></table></div>`;
+  const map = positionDisplayMap(rows);
+  const displayStaff = state.staff.filter(s => isDailyPositionEnabled(s) || rows.some(r => r.staff_id === s.id));
+  return `<div class="monthly-matrix-wrap">
+    <div class="matrix-legend"><span class="legend-box weekend"></span> WEEKEND/HOLIDAY = ไม่จัดตำแหน่ง <span class="legend-box outing"></span> ออกหน่วย <span class="legend-box leave"></span> มีลา/ไม่รับเวร</div>
+    <div class="table-wrap month-position-matrix"><table><thead><tr><th class="sticky-col staff-col">เจ้าหน้าที่</th>${dates.map(date => {
+      const d = parseDate(date);
+      const cls = isHolidayDate(date) ? 'holiday-head' : isWeekend(date) ? 'weekend-head' : hasOuting(date) ? 'outing-head' : '';
+      return `<th class="date-head ${cls}"><b>${d.getDate()}</b><br><span>${d.toLocaleDateString('th-TH', { weekday:'short' })}</span></th>`;
+    }).join('')}</tr></thead><tbody>
+      ${displayStaff.map(st => `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${staffColor(st)};color:${textColorFor(staffColor(st))}"><b>${escapeHtml(st.nickname || st.full_name)}</b><br><small>${escapeHtml(st.staff_type || '')}</small></td>${dates.map(date => renderMonthPositionCell(st, date, map[`${st.id}|${date}`] || [])).join('')}</tr>`).join('')}
+    </tbody></table></div>
+  </div>`;
+}
+function renderMonthPositionCell(staff, date, codes) {
+  const noDay = isNoPositionDay(date);
+  const leave = isActiveLeaveOn(staff.id, date);
+  const outing = hasOuting(date);
+  if (noDay) return `<td class="matrix-cell no-position-day"><span>${isHolidayDate(date) ? 'HOLIDAY' : 'WEEKEND'}</span></td>`;
+  const cls = `${outing ? 'outing-cell' : ''} ${leave ? 'leave-cell' : ''}`.trim();
+  const text = codes.length ? codes.join('<br>') : '-';
+  const leaveMark = leave ? '<div class="cell-note">ลา/ไม่รับเวร</div>' : '';
+  const outingMark = outing && codes.length ? '<div class="cell-note">ออกหน่วย</div>' : '';
+  return `<td class="matrix-cell ${cls}"><span>${text}</span>${leaveMark}${outingMark}</td>`;
 }
 function buildMonthlyPositionDraft(key) {
   const { y, m } = getMonthRange(key);
@@ -1103,6 +1147,7 @@ function buildMonthlyPositionDraft(key) {
   };
   for (let day=1; day<=last; day++) {
     const date = `${y}-${pad(m)}-${pad(day)}`;
+    if (isNoPositionDay(date)) continue;
     const wk = weekKeyOf(date);
     weeklyFixed[wk] = weeklyFixed[wk] || {};
     const used = new Set();
@@ -1353,12 +1398,19 @@ async function saveLeave(form) {
     type: fd.get('type'),
     start_date: fd.get('start_date'),
     end_date: fd.get('end_date'),
+    leave_period: fd.get('leave_period') || 'เต็มวัน',
     note: fd.get('note'),
     contact_phone: fd.get('contact_phone'),
     swap_with_staff_id: fd.get('swap_with_staff_id') || null,
     updated_by: currentStaffId()
   };
   if (row.end_date < row.start_date) return showToast('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');
+  const requestedDates = datesBetween(row.start_date, row.end_date);
+  const hasPublishedDay = requestedDates.some(positionDayPublished);
+  if (hasPublishedDay && !isAdmin()) {
+    row.note = [row.note, '[ระบบเตือน] วันที่ขอลามีการประกาศตารางตำแหน่งแล้ว กรุณาแจ้งอินชาร์จหรือหัวหน้า'].filter(Boolean).join(' | ');
+    showToast('วันที่ขอลามีการประกาศตำแหน่งแล้ว กรุณาแจ้งอินชาร์จหรือหัวหน้าเพื่อปรับหน้างาน');
+  }
   const file = fd.get('file');
   if (file && file.size) row.attachment_path = await uploadFile(file, 'leave');
   setBusy(true, 'กำลังบันทึก');
@@ -1384,6 +1436,12 @@ async function saveActivity(form) {
     owner_id: fd.get('owner_id') || currentStaffId(), participant_ids: participants, updated_by: currentStaffId()
   };
   if (row.end_date < row.start_date) return showToast('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');
+  const requestedDates = datesBetween(row.start_date, row.end_date);
+  const hasPublishedDay = requestedDates.some(positionDayPublished);
+  if (hasPublishedDay && !isAdmin()) {
+    row.note = [row.note, '[ระบบเตือน] วันที่ขอลามีการประกาศตารางตำแหน่งแล้ว กรุณาแจ้งอินชาร์จหรือหัวหน้า'].filter(Boolean).join(' | ');
+    showToast('วันที่ขอลามีการประกาศตำแหน่งแล้ว กรุณาแจ้งอินชาร์จหรือหัวหน้าเพื่อปรับหน้างาน');
+  }
   const file = fd.get('file');
   if (file && file.size) row.attachment_path = await uploadFile(file, 'activities');
   const id = state.editingActivityId;
