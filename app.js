@@ -1,4 +1,4 @@
-/* CNMI Duty Hub V29 - no consecutive roster duties */
+/* CNMI Duty Hub V30 - mobile UX + leave/trade fixes */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'Dashboard', subtitle: 'ภาพรวมทั้งหมดของวันนี้', group: 'staff' },
@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { id: 'leave', icon: '🌿', title: 'แจ้งลา / ไม่รับเวร', subtitle: 'บันทึก แก้ไข ยกเลิก และแนบไฟล์', group: 'staff' },
   { id: 'activities', icon: '🗂️', title: 'กิจกรรมหน่วยงาน', subtitle: 'ประชุม อบรม ออกหน่วย ตรวจมาตรฐาน ซ้อม CODE และอื่นๆ', group: 'staff' },
   { id: 'schedule', icon: '📋', title: 'ตารางเวรประจำเดือน', subtitle: 'ดูรายเดือน Export Excel / PDF / Print', group: 'staff' },
+  { id: 'tradeRequests', icon: '🔁', title: 'คำขอแลก/ขายเวร', subtitle: 'รอฉันยืนยัน / รอ Admin บันทึก', group: 'staff' },
   { id: 'positionMonthView', icon: '🗓️', title: 'ตารางตำแหน่งรายเดือน', subtitle: 'ดู default รายเดือนแบบอ่านอย่างเดียว', group: 'staff' },
   { id: 'positions', icon: '🧪', title: 'ตารางตำแหน่งรายวัน', subtitle: 'อินชาร์จปรับและประกาศตารางก่อนเริ่มงาน', group: 'staff' },
   { id: 'ot', icon: '⏱️', title: 'OT & Attendance', subtitle: 'Check-In, ขอ OT, อนุมัติ, สรุป', group: 'staff' },
@@ -229,10 +230,11 @@ function friendlyDbError(error) {
   if (msg.includes('null value') && msg.includes('roster_assignments') && msg.includes('id')) return 'บันทึกตารางเวรไม่สำเร็จ เพราะระบบกำลังส่งรหัสรายการเวรว่างอยู่ กรุณารีเฟรชหน้าแล้วกดสร้างร่าง/บันทึกใหม่อีกครั้ง';
   if (msg.includes('violates not-null constraint')) return 'บันทึกไม่สำเร็จ เพราะมีข้อมูลจำเป็นบางช่องว่างอยู่ กรุณาตรวจช่องที่ยังไม่ได้เลือก';
   if (msg.includes('duplicate key')) return 'บันทึกซ้ำกับข้อมูลเดิม กรุณารีเฟรชแล้วลองใหม่';
+  if (msg.includes('roster_trade_requests_rate_mode_check') || msg.includes('rate_mode_check')) return 'ยังส่งคำขอแลก/ขายเวรไม่ได้ เพราะฐานข้อมูลยังไม่รองรับเรท MT/เรทเคิก กรุณา Run SQL Patch V30 ก่อน';
   if (msg.includes('row-level security')) return 'สิทธิ์ไม่พอสำหรับบันทึกข้อมูลนี้ กรุณาใช้บัญชี Admin หรืออินชาร์จที่ได้รับสิทธิ์';
-  if (msg.includes('admin_upsert_leave_v27') || msg.includes('function public.admin_upsert_leave_v27')) return 'ยังบันทึกลาแทนไม่ได้ เพราะยังไม่ได้ Run SQL Patch V27 ใน Supabase';
-  if (msg.includes('admin_save_leave') || msg.includes('function public.admin_save_leave') || msg.includes('Could not find the function')) return 'ยังบันทึกลาแทนไม่ได้ เพราะยังไม่ได้ Run SQL Patch V27 ใน Supabase';
-  if (msg.includes('admin_record_reason') || msg.includes('recorded_by_admin')) return 'ยังบันทึกลาแทนไม่ได้ เพราะฐานข้อมูลยังไม่มีช่องสำหรับ Admin บันทึกแทน กรุณา Run SQL Patch V27';
+  if (msg.includes('admin_upsert_leave_v30') || msg.includes('function public.admin_upsert_leave_v30')) return 'ยังบันทึกลาแทนไม่ได้ เพราะยังไม่ได้ Run SQL Patch V30 ใน Supabase';
+  if (msg.includes('admin_save_leave') || msg.includes('function public.admin_save_leave') || msg.includes('Could not find the function')) return 'ยังบันทึกลาแทนไม่ได้ เพราะยังไม่ได้ Run SQL Patch V30 ใน Supabase';
+  if (msg.includes('admin_record_reason') || msg.includes('recorded_by_admin')) return 'ยังบันทึกลาแทนไม่ได้ เพราะฐานข้อมูลยังไม่มีช่องสำหรับ Admin บันทึกแทน กรุณา Run SQL Patch V30';
   return msg || 'เกิดข้อผิดพลาดขณะบันทึกข้อมูล';
 }
 function setBusy(on, msg='กำลังโหลด') {
@@ -346,7 +348,16 @@ document.addEventListener('DOMContentLoaded', init);
 function bindGlobalEvents() {
   $('modalClose').addEventListener('click', closeModal);
   $('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
-  $('mobileMenuBtn').addEventListener('click', () => $('sidebar').classList.toggle('open'));
+  $('mobileMenuBtn').addEventListener('click', () => { $('sidebar').classList.toggle('open'); document.body.classList.toggle('sidebar-open', $('sidebar').classList.contains('open')); });
+  document.addEventListener('click', e => {
+    if (window.innerWidth > 820) return;
+    const sidebar = $('sidebar');
+    const btn = $('mobileMenuBtn');
+    if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && !btn.contains(e.target)) {
+      sidebar.classList.remove('open');
+      document.body.classList.remove('sidebar-open');
+    }
+  });
   $('reloadBtn').addEventListener('click', async () => { await loadAllData(); renderPage(); });
   $('logoutBtn').addEventListener('click', async () => { if (sb) { await logAuth('LOGOUT'); sessionStorage.removeItem('cnmi_login_audit_' + (state.session?.user?.id || '')); await sb.auth.signOut(); } });
 
@@ -553,6 +564,7 @@ function renderPage() {
     hr: renderHrPage,
     scheduler: renderSchedulerPage,
     schedule: renderMonthlySchedulePage,
+    tradeRequests: renderTradeRequestsPage,
     positions: renderPositionsPage,
     ot: renderOtPage,
     audit: renderAuditPage,
@@ -916,6 +928,7 @@ function collectCalendarEvents() {
 function renderCalendarMonth() {
   const events = collectCalendarEvents();
   const d = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), 1);
+  if (window.innerWidth <= 820) return renderCalendarMobileMonth(events, d);
   const first = new Date(d);
   first.setDate(1 - first.getDay());
   const cells = [];
@@ -930,6 +943,24 @@ function renderCalendarMonth() {
     </div>`);
   }
   return `<div class="calendar-grid">${['อา','จ','อ','พ','พฤ','ศ','ส'].map(x => `<div class="calendar-dayname">${x}</div>`).join('')}${cells.join('')}</div>`;
+}
+function renderCalendarMobileMonth(events, monthDate) {
+  const y = monthDate.getFullYear();
+  const m = monthDate.getMonth() + 1;
+  const last = new Date(y, m, 0).getDate();
+  const all = !!state.mobileCalendarAll;
+  const rows = [];
+  for (let day=1; day<=last; day++) {
+    const ds = `${y}-${pad(m)}-${pad(day)}`;
+    const evs = events.filter(e => e.date === ds);
+    if (!all && !evs.length && ds !== todayStr()) continue;
+    rows.push(`<div class="mobile-day-card ${ds===todayStr()?'today':''}" data-day-detail="${ds}">
+      <div class="mobile-day-head"><b>${day}</b><span>${parseDate(ds).toLocaleDateString('th-TH', { weekday:'short' })}</span><button class="tiny-btn" data-day-detail="${ds}">ดู</button></div>
+      ${evs.length ? evs.slice(0,6).map(e => `<button class="event-pill event-${e.type}" data-day-detail="${ds}">${escapeHtml(e.title)}</button>`).join('') : '<span class="hint">ไม่มีรายการ</span>'}
+      ${evs.length > 6 ? `<span class="hint">+${evs.length - 6} รายการ</span>` : ''}
+    </div>`);
+  }
+  return `<div class="mobile-calendar-tools"><button class="soft-btn" data-toggle-mobile-calendar>${all ? 'ซ่อนวันที่ไม่มีรายการ' : 'แสดงทุกวัน'}</button><span class="hint">มือถือแสดงแบบรายการเพื่อลดการไถยาว</span></div><div class="mobile-calendar-list">${rows.length ? rows.join('') : empty('เดือนนี้ยังไม่มีรายการ')}</div>`;
 }
 function renderCalendarWeek() {
   const start = new Date(state.calendarDate); start.setDate(start.getDate() - start.getDay());
@@ -984,11 +1015,13 @@ function renderLeavePage() {
 }
 function renderLeaveTable(rows) {
   if (!rows.length) return empty('ยังไม่มีรายการ');
-  return `<div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>ประเภท</th><th>ช่วงวันที่</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
+  const table = `<div class="table-wrap desktop-table"><table><thead><tr><th>ชื่อ</th><th>ประเภท</th><th>ช่วงวันที่</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
     ${rows.map(r => `<tr><td>${escapeHtml(staffNick(r.staff_id))}${r.recorded_by_admin ? '<br><span class="badge purple">Admin บันทึกแทน</span>' : ''}</td><td>${badge(r.type, leaveBadgeClass(r.type))}</td><td>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}<br><span class="badge blue">${escapeHtml(r.leave_period || 'เต็มวัน')}</span><br><span class="muted">${escapeHtml(r.note || '')}</span>${r.admin_record_reason ? `<br><span class="muted">เหตุผล Admin: ${escapeHtml(r.admin_record_reason)}</span>` : ''}</td><td>${badge(r.status || 'active', r.status==='cancelled'?'red':'green')}</td><td><div class="actions">
       ${canEditOwn(r) ? `<button class="tiny-btn" data-edit-leave="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-cancel-leave="${r.id}">ยกเลิก</button>` : '<span class="muted">แก้ไม่ได้</span>'}
     </div></td></tr>`).join('')}
   </tbody></table></div>`;
+  const cards = `<div class="mobile-cards">${rows.map(r => `<div class="mobile-card"><div class="section-title"><h3>${escapeHtml(staffNick(r.staff_id))}</h3>${badge(r.type, leaveBadgeClass(r.type))}</div><div><b>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}</b><br>${badge(r.leave_period || 'เต็มวัน','blue')} ${badge(r.status || 'active', r.status==='cancelled'?'red':'green')}</div>${r.recorded_by_admin ? '<span class="badge purple">Admin บันทึกแทน</span>' : ''}<span class="muted">${escapeHtml(r.note || '')}</span><div class="actions">${canEditOwn(r) ? `<button class="tiny-btn" data-edit-leave="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-cancel-leave="${r.id}">ยกเลิก</button>` : '<span class="muted">แก้ไม่ได้</span>'}</div></div>`).join('')}</div>`;
+  return table + cards;
 }
 function canEditOwn(row) {
   if (isAdmin()) return true;
@@ -1033,11 +1066,13 @@ function renderActivitiesPage() {
 }
 function renderActivityTable(rows) {
   if (!rows.length) return empty('ยังไม่มีกิจกรรม');
-  return `<div class="table-wrap"><table><thead><tr><th>รายละเอียดกิจกรรม</th><th>วันเวลา</th><th>สถานที่</th><th>ผู้รับผิดชอบ</th><th>จัดการ</th></tr></thead><tbody>
+  const table = `<div class="table-wrap desktop-table"><table><thead><tr><th>รายละเอียดกิจกรรม</th><th>วันเวลา</th><th>สถานที่</th><th>ผู้รับผิดชอบ</th><th>จัดการ</th></tr></thead><tbody>
     ${rows.map(r => `<tr><td><b>${escapeHtml(r.title)}</b><br>${badge(r.event_type, activityClass(r.event_type))}</td><td>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}<br><span class="muted">${escapeHtml([r.start_time, r.end_time].filter(Boolean).join(' - '))}</span></td><td>${escapeHtml(r.location || '-')}</td><td>${escapeHtml(staffNick(r.owner_id))}</td><td><div class="actions">
       ${(isAdmin() || r.created_by === currentStaffId() || r.owner_id === currentStaffId()) ? `<button class="tiny-btn" data-edit-activity="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-delete-activity="${r.id}">ลบ</button>` : '<span class="muted">ดูอย่างเดียว</span>'}
     </div></td></tr>`).join('')}
   </tbody></table></div>`;
+  const cards = `<div class="mobile-cards">${rows.map(r => `<div class="mobile-card"><div class="section-title"><h3>${escapeHtml(r.title)}</h3>${badge(r.event_type, activityClass(r.event_type))}</div><div>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}<br><span class="muted">${escapeHtml([r.start_time, r.end_time].filter(Boolean).join(' - '))}</span></div><div><b>สถานที่:</b> ${escapeHtml(r.location || '-')}</div><div><b>ผู้รับผิดชอบ:</b> ${escapeHtml(staffNick(r.owner_id))}</div><div class="actions">${(isAdmin() || r.created_by === currentStaffId() || r.owner_id === currentStaffId()) ? `<button class="tiny-btn" data-edit-activity="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-delete-activity="${r.id}">ลบ</button>` : '<span class="muted">ดูอย่างเดียว</span>'}</div></div>`).join('')}</div>`;
+  return table + cards;
 }
 
 function isLeaveHrChecked(leaveId) {
@@ -1197,6 +1232,14 @@ function calcFairness(assignments) {
   return stats;
 }
 
+function renderTradeRequestsPage() {
+  const assignments = getAssignmentsForMonth(state.monthKey);
+  const related = state.tradeRequests.filter(r => isAdmin() || r.requester_id === currentStaffId() || r.receiver_id === currentStaffId());
+  const pendingMine = related.filter(r => r.status === 'pending' && r.receiver_id === currentStaffId()).length;
+  const waitingAdmin = related.filter(r => r.status === 'confirmed').length;
+  return `<div class="card"><div class="toolbar"><label>เดือน <input type="month" id="scheduleMonthInput" value="${state.monthKey}"></label>${badge(`รอฉันยืนยัน ${pendingMine}`, pendingMine ? 'orange' : 'black')}${badge(`รอ Admin ${waitingAdmin}`, waitingAdmin ? 'blue' : 'black')}</div><div class="notice soft-notice">คำขอแลก/ขายเวรจะแสดงที่นี่ เพื่อให้อีกฝ่ายกดยืนยัน และให้ Admin บันทึกเปลี่ยนตารางจริงหลังตกลงกันแล้ว</div>${renderDutyTradePanel(assignments)}</div>`;
+}
+
 function renderMonthlySchedulePage() {
   const assignments = getAssignmentsForMonth(state.monthKey);
   return `<div class="card">
@@ -1231,7 +1274,16 @@ function renderDutyTradePanel(assignments) {
   });
   const visible = isAdmin() ? monthRows : monthRows.filter(r => r.requester_id === currentStaffId() || r.receiver_id === currentStaffId());
   if (!visible.length) return `<div class="trade-panel"><h3>คำขอแลก/ขายเวร</h3>${empty('ยังไม่มีคำขอแลก/ขายเวรในเดือนนี้')}</div>`;
-  return `<div class="trade-panel"><h3>คำขอแลก/ขายเวร</h3><div class="table-wrap"><table><thead><tr><th>ผู้ขอ</th><th>ผู้รับ/คู่แลก</th><th>รายการ</th><th>เงินโดยประมาณ</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>${visible.map(r => renderTradeRow(r, assignments)).join('')}</tbody></table></div></div>`;
+  return `<div class="trade-panel"><h3>คำขอแลก/ขายเวร</h3><div class="table-wrap desktop-table"><table><thead><tr><th>ผู้ขอ</th><th>ผู้รับ/คู่แลก</th><th>รายการ</th><th>เงินโดยประมาณ</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>${visible.map(r => renderTradeRow(r, assignments)).join('')}</tbody></table></div>${renderTradeCards(visible, assignments)}</div>`;
+}
+function renderTradeCards(rows, assignments) {
+  return `<div class="mobile-cards trade-mobile-cards">${rows.map(r => {
+    const from = assignments.find(a => a.id === r.from_assignment_id) || {};
+    const to = assignments.find(a => a.id === r.to_assignment_id) || null;
+    const receiverActions = r.status === 'pending' && r.receiver_id === currentStaffId();
+    const adminActions = r.status === 'confirmed' && isAdmin();
+    return `<div class="mobile-card"><div class="section-title"><h3>${escapeHtml(r.trade_type || '-')}</h3>${badge(tradeStatusLabel(r.status), r.status==='confirmed'?'green':r.status==='rejected'?'red':r.status==='completed'?'blue':'orange')}</div><div><b>ผู้ขอ:</b> ${staffPill(r.requester_id)}<br><b>ผู้รับ/คู่แลก:</b> ${staffPill(r.receiver_id)}</div><div>${formatThaiDate(from.duty_date)} ${DUTY_LABEL[from.duty_code] || from.duty_code || ''}${to ? ` ↔ ${formatThaiDate(to.duty_date)} ${DUTY_LABEL[to.duty_code] || to.duty_code}` : ''}</div><div><b>เงินโดยประมาณ:</b> ${Number(r.amount_from || 0).toLocaleString()} บ.${r.amount_diff ? `<br><span class="muted">ส่วนต่าง ${Number(r.amount_diff).toLocaleString()} บ.</span>` : ''}</div><div class="actions">${receiverActions ? `<button class="tiny-btn" data-trade-status="${r.id}|confirmed">ยืนยัน</button><button class="tiny-btn danger" data-trade-status="${r.id}|rejected">ปฏิเสธ</button>` : adminActions ? `<button class="tiny-btn" data-trade-apply="${r.id}">Admin บันทึกเปลี่ยนเวร</button>` : '<span class="muted">ไม่มีรายการที่ต้องกดตอนนี้</span>'}</div></div>`;
+  }).join('')}</div>`;
 }
 function renderTradeRow(r, assignments) {
   const from = assignments.find(a => a.id === r.from_assignment_id) || {};
@@ -1245,7 +1297,7 @@ function renderReadOnlySchedule(assignments) {
   if (!assignments.length) return empty('ยังไม่มีตารางเวรของเดือนนี้');
   const { y, m } = getMonthRange(state.monthKey);
   const last = new Date(y, m, 0).getDate();
-  return `<div class="table-wrap"><table id="scheduleTable" class="schedule-readable"><thead><tr><th>วันที่</th>${DUTY_COLUMNS.map(c => `<th>${escapeHtml(DUTY_LABEL[c] || c)}</th>`).join('')}</tr></thead><tbody>
+  const table = `<div class="table-wrap desktop-schedule-table"><table id="scheduleTable" class="schedule-readable"><thead><tr><th>วันที่</th>${DUTY_COLUMNS.map(c => `<th>${escapeHtml(DUTY_LABEL[c] || c)}</th>`).join('')}</tr></thead><tbody>
     ${Array.from({length:last}, (_,i)=>i+1).map(day => {
       const date = `${y}-${pad(m)}-${pad(day)}`;
       const rowCls = isHolidayDate(date) ? 'holiday-row' : isWeekend(date) ? 'weekend-row' : '';
@@ -1256,6 +1308,12 @@ function renderReadOnlySchedule(assignments) {
       }).join('')}</tr>`;
     }).join('')}
   </tbody></table></div>`;
+  const mobile = `<div class="mobile-schedule-list">${Array.from({length:last}, (_,i)=>i+1).map(day => {
+    const date = `${y}-${pad(m)}-${pad(day)}`;
+    const slots = DUTY_COLUMNS.map(code => ({ code, slot: assignments.find(a => a.duty_date === date && a.duty_code === code) })).filter(x => allowedDutyCodesForDate(date).includes(x.code) && x.slot?.staff_id);
+    return `<div class="schedule-day-card ${isHolidayDate(date)||isWeekend(date)?'weekend-row':''}"><div class="mobile-day-head"><b>${day}</b><span>${parseDate(date).toLocaleDateString('th-TH', { weekday:'short' })}</span>${isHolidayDate(date) ? badge(holidayName(date),'yellow') : ''}</div>${slots.length ? slots.map(({code,slot}) => `<div class="mobile-duty-line"><b>${escapeHtml(DUTY_LABEL[code] || code)}</b><span>${staffPill(slot.staff_id, { button:true, attrs:`data-staff-stat="${slot.staff_id}" type="button"` })}</span>${renderTradeButton(slot)}</div>`).join('') : '<span class="muted">ไม่มีเวร</span>'}</div>`;
+  }).join('')}</div>`;
+  return table + mobile;
 }
 function showStaffStats(staffId) {
   const assignments = getAssignmentsForMonth(state.monthKey).filter(x => x.staff_id === staffId);
@@ -1287,15 +1345,26 @@ function renderPositionsPage() {
     <div class="notice soft-notice">ตารางรายวันมาจาก default รายเดือนก่อน อินชาร์จปรับได้ตามคนลา/งานจริง แล้วกดประกาศก่อน 07:30 น. หากมีคนลาหลังประกาศ ให้แจ้งอินชาร์จหรือหัวหน้าเพื่อปรับหน้างาน</div>
     ${noPosition ? `<div class="notice">วันนี้เป็น${isHolidayDate(date) ? 'วันหยุดราชการ' : 'วันเสาร์-อาทิตย์'} จึงไม่ต้องจัดตำแหน่งรายวัน</div>` : ''}
     ${!noPosition && hasOuting(date) ? `<div class="notice">วันนี้มีออกหน่วย: คนที่ถูกติ๊กในกิจกรรมจะถูกจัดลงชุดออกหน่วย ส่วนคนที่เหลือจะถูกเกลี่ยไปตำแหน่งห้อง Blood Bank</div>` : ''}
-    ${noPosition ? empty('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : `<div class="table-wrap"><table><thead><tr><th>โซน</th><th>ตำแหน่ง</th><th>เวลาพัก</th><th>ผู้รับผิดชอบ</th><th>ผู้ปฏิบัติหลัก</th><th>หน้าที่โดยย่อ</th></tr></thead><tbody>
-      ${rows.map((r,idx) => {
-        const baseCode = positionBaseCode(r.position_code || r.code);
-        const base = positionTemplateByCode(baseCode, date) || r;
-        return `<tr><td>${escapeHtml(r.zone || base.zone || '')}</td><td><b>${escapeHtml(positionLabelForCell(r.position_code || base.code))}</b></td><td>${escapeHtml(r.break_time || base.break_time || '')}</td><td>${canManage ? `<select data-position-row="${idx}" data-position-code="${escapeHtml(base.code || r.position_code)}" data-position-zone="${escapeHtml(r.zone || base.zone || '')}" data-position-break="${escapeHtml(r.break_time || base.break_time || '')}" data-position-rule="${escapeHtml(r.main_rule || base.main_rule || '')}" data-position-job="${escapeHtml(r.job_desc || base.job_desc || '')}"><option value="">-</option>${staffOptionList(r.staff_id, s => positionBaseCode(r.position_code)==='รอตรวจสอบ' || positionCandidateOk(s, { ...base, code: base.code || r.position_code, position_code: base.code || r.position_code, main_rule: r.main_rule || base.main_rule }, date))}</select>` : `${staffPill(r.staff_id)}`}</td><td>${escapeHtml(r.main_rule || base.main_rule || '')}</td><td>${escapeHtml(r.job_desc || base.job_desc || '')}</td></tr>`;
-      }).join('')}
-    </tbody></table></div>`}
+    ${noPosition ? empty('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : renderDailyPositionList(rows, date, canManage)}
   </div>`;
 }
+function renderDailyPositionList(rows, date, canManage) {
+  const table = `<div class="table-wrap daily-position-table desktop-table"><table><thead><tr><th>โซน</th><th>ตำแหน่ง</th><th>เวลาพัก</th><th>ผู้รับผิดชอบ</th><th>ผู้ปฏิบัติหลัก</th><th>หน้าที่โดยย่อ</th></tr></thead><tbody>
+    ${rows.map((r,idx) => {
+      const baseCode = positionBaseCode(r.position_code || r.code);
+      const base = positionTemplateByCode(baseCode, date) || r;
+      return `<tr><td>${escapeHtml(r.zone || base.zone || '')}</td><td><b>${escapeHtml(positionLabelForCell(r.position_code || base.code))}</b></td><td>${escapeHtml(r.break_time || base.break_time || '')}</td><td>${canManage ? `<select data-position-row="${idx}" data-position-code="${escapeHtml(base.code || r.position_code)}" data-position-zone="${escapeHtml(r.zone || base.zone || '')}" data-position-break="${escapeHtml(r.break_time || base.break_time || '')}" data-position-rule="${escapeHtml(r.main_rule || base.main_rule || '')}" data-position-job="${escapeHtml(r.job_desc || base.job_desc || '')}"><option value="">-</option>${staffOptionList(r.staff_id, s => positionBaseCode(r.position_code)==='รอตรวจสอบ' || positionCandidateOk(s, { ...base, code: base.code || r.position_code, position_code: base.code || r.position_code, main_rule: r.main_rule || base.main_rule }, date))}</select>` : `${staffPill(r.staff_id)}`}</td><td>${escapeHtml(r.main_rule || base.main_rule || '')}</td><td>${escapeHtml(r.job_desc || base.job_desc || '')}</td></tr>`;
+    }).join('')}
+  </tbody></table></div>`;
+  const cards = `<div class="mobile-position-list">${rows.map((r,idx) => {
+    const baseCode = positionBaseCode(r.position_code || r.code);
+    const base = positionTemplateByCode(baseCode, date) || r;
+    const select = canManage ? `<select data-position-row="${idx}" data-position-code="${escapeHtml(base.code || r.position_code)}" data-position-zone="${escapeHtml(r.zone || base.zone || '')}" data-position-break="${escapeHtml(r.break_time || base.break_time || '')}" data-position-rule="${escapeHtml(r.main_rule || base.main_rule || '')}" data-position-job="${escapeHtml(r.job_desc || base.job_desc || '')}"><option value="">-</option>${staffOptionList(r.staff_id, s => positionBaseCode(r.position_code)==='รอตรวจสอบ' || positionCandidateOk(s, { ...base, code: base.code || r.position_code, position_code: base.code || r.position_code, main_rule: r.main_rule || base.main_rule }, date))}</select>` : `${staffPill(r.staff_id)}`;
+    return `<div class="position-mobile-card"><div class="section-title"><h3>${escapeHtml(positionLabelForCell(r.position_code || base.code))}</h3>${badge(r.zone || base.zone || '-', r.zone === 'ออกหน่วย' ? 'red' : 'blue')}</div><div class="muted">พัก ${escapeHtml(r.break_time || base.break_time || '-')} • ${escapeHtml(r.main_rule || base.main_rule || '')}</div><label>ผู้รับผิดชอบ ${select}</label><p>${escapeHtml(r.job_desc || base.job_desc || '')}</p></div>`;
+  }).join('')}</div>`;
+  return table + cards;
+}
+
 function renderPositionMonthPage() {
   if (!isAdmin()) return noPermission();
   const key = state.positionMonthKey || state.monthKey;
@@ -1730,10 +1799,11 @@ async function handleSubmit(e) {
 async function handleClick(e) {
   const t = e.target.closest('button, [data-day-detail]');
   if (!t) return;
-  if (t.dataset.page) { state.page = t.dataset.page; $('sidebar').classList.remove('open'); renderPage(); return; }
+  if (t.dataset.page) { state.page = t.dataset.page; $('sidebar').classList.remove('open'); document.body.classList.remove('sidebar-open'); renderPage(); return; }
   if (t.dataset.calView) { state.calendarView = t.dataset.calView; renderPage(); return; }
   if (t.dataset.calNav) { calendarNav(t.dataset.calNav); renderPage(); return; }
   if (t.dataset.dayDetail) { showDayDetail(t.dataset.dayDetail); return; }
+  if (t.hasAttribute('data-toggle-mobile-calendar')) { state.mobileCalendarAll = !state.mobileCalendarAll; renderPage(); return; }
   if (t.dataset.editLeave) { state.editingLeaveId = t.dataset.editLeave; renderPage(); return; }
   if (t.hasAttribute('data-cancel-edit-leave')) { state.editingLeaveId = null; renderPage(); return; }
   if (t.dataset.cancelLeave) { await cancelLeave(t.dataset.cancelLeave); return; }
@@ -1840,7 +1910,7 @@ async function saveLeave(form) {
       setBusy(false);
       return showToast('กรุณาระบุเหตุผลที่ Admin บันทึกแทน/ย้อนหลัง เพื่อให้ Audit Log ชัดเจน');
     }
-    res = await sb.rpc('admin_upsert_leave_v27', {
+    res = await sb.rpc('admin_upsert_leave_v30', {
       p_id: id || null,
       p_staff_id: row.staff_id,
       p_type: row.type,
@@ -2301,7 +2371,7 @@ function showTradeModal(assignmentId) {
       <label>ประเภท <select name="trade_type" id="tradeTypeSelect"><option>ขายเวร</option><option>แลกเวร</option></select></label>
       <label>คนที่จะรับ/คู่แลก <select name="receiver_id" id="tradeReceiverSelect" required><option value="">เลือกคน</option>${possibleReceiver.map(s => `<option value="${s.id}">${escapeHtml(s.nickname || s.full_name)} (${escapeHtml(s.staff_type || '-')})</option>`).join('')}</select></label>
       <label class="wide trade-swap-only" id="tradeSwapWrap" style="display:none">กรณีแลกเวรเท่านั้น: เลือกเวรของคู่แลก <select name="to_assignment_id" id="tradeSwapSelect"><option value="">เลือกเวรของคู่แลก</option>${otherDutyOptions}</select><span class="hint">ถ้าเป็นขายเวร ไม่ต้องเลือกวันที่/เวรซ้ำ ระบบใช้เวรที่กดมาให้อัตโนมัติ</span></label>
-      <label>คิดเรท <select name="rate_mode"><option value="mt">เรท MT</option><option value="kerk">เรทเคิก</option><option value="receiver">ตามเรทคนรับเวร</option><option value="owner">ตามเรทเจ้าของเวรเดิม</option><option value="custom">ตกลงกันเอง</option></select></label>
+      <label>คิดเรท <select name="rate_mode"><option value="mt">เรท MT</option><option value="kerk">เรทเคิก</option><option value="custom">ตกลงกันเอง</option></select></label>
       <label>จำนวนเงินตกลงเอง (ถ้ามี) <input name="custom_amount" type="number" min="0" step="1" placeholder="ไม่บังคับ"></label>
       <label class="wide">หมายเหตุ <textarea name="note" placeholder="เช่น ขายเป็นเรทเคิก / แลกเวรกับเพื่อน / ตกลงกันแล้ว"></textarea></label>
       <button class="primary-btn wide" type="submit">ส่งคำขอให้อีกฝ่ายยืนยัน</button>
@@ -2326,10 +2396,10 @@ async function saveTradeRequest(form) {
   const to = fd.get('to_assignment_id') ? getAssignmentsForMonth(state.monthKey).find(a => a.id === fd.get('to_assignment_id')) : null;
   if (!from || !receiverId) return showToast('กรุณาเลือกผู้รับ/คู่แลกให้ครบ');
   if ((fd.get('trade_type') || '') === 'แลกเวร' && !fd.get('to_assignment_id')) return showToast('ถ้าเลือกแลกเวร กรุณาเลือกเวรของคู่แลกด้วย');
-  const rateMode = fd.get('rate_mode') || 'receiver';
+  const rateMode = fd.get('rate_mode') || 'mt';
   const custom = Number(fd.get('custom_amount') || 0);
-  const amountFrom = custom > 0 ? custom : tradeRateAmount(from, receiverId, rateMode);
-  const amountTo = to ? dutyMetrics(to, from.staff_id).pay : 0;
+  const amountFrom = rateMode === 'custom' ? custom : tradeRateAmount(from, receiverId, rateMode);
+  const amountTo = to ? (rateMode === 'custom' ? 0 : dutyMetrics(to, from.staff_id).pay) : 0;
   const row = {
     requester_id: currentStaffId(), receiver_id: receiverId, from_assignment_id: fromId, to_assignment_id: to?.id || null,
     trade_type: fd.get('trade_type') || 'ขายเวร', rate_mode: rateMode, amount_from: amountFrom, amount_to: amountTo, amount_diff: amountFrom - amountTo,
