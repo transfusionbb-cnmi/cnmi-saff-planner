@@ -558,3 +558,59 @@ body.modal-open { overflow: hidden; }
   .sidebar { max-width: 82vw; }
   body.sidebar-open::after { z-index: 70; }
 }
+
+/* V36: Staff Planner brand + mobile monthly roster views */
+.app-title { letter-spacing: .2px; }
+.mobile-schedule-tabs { display:none; }
+.mobile-schedule-view { display:none; }
+.mobile-schedule-person-list, .mobile-ot-summary-list { display:grid; gap:12px; }
+.schedule-person-card, .ot-summary-card {
+  border:1px solid var(--line);
+  border-radius:22px;
+  padding:14px;
+  background:#fff;
+  display:grid;
+  gap:10px;
+  text-align:left;
+}
+.schedule-person-card .person-card-head, .person-duty-line, .mobile-duty-line {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  border-bottom:1px solid var(--line);
+  padding-bottom:8px;
+}
+.schedule-person-card .person-card-head { border-bottom:0; background:var(--staff-bg); color:var(--staff-fg); border-radius:16px; padding:10px 12px; }
+.person-duty-line:last-child, .mobile-duty-line:last-child { border-bottom:0; padding-bottom:0; }
+.ot-summary-card {
+  background:var(--staff-bg);
+  color:var(--staff-fg);
+  border-color:rgba(20,35,52,.08);
+  grid-template-columns:1.2fr .8fr .8fr 1fr;
+  align-items:center;
+  font-weight:800;
+}
+.mobile-schedule-matrix-wrap { max-height:72vh; border-radius:20px; }
+.schedule-person-matrix { border-collapse:separate; border-spacing:0; min-width:920px; }
+.schedule-person-matrix th, .schedule-person-matrix td { min-width:92px; text-align:center; vertical-align:middle; }
+.schedule-person-matrix thead th { position:sticky; top:0; z-index:3; background:#f4f8fb; }
+.schedule-person-matrix tbody th { position:sticky; left:0; z-index:2; background:var(--staff-bg); color:var(--staff-fg); min-width:126px; }
+.schedule-person-matrix td.weekend-cell { background:#d7dde3; color:#425466; font-size:12px; font-weight:800; }
+.schedule-person-matrix td.holiday-cell { background:#fff5cf; color:#715600; font-size:12px; font-weight:800; }
+.schedule-person-matrix .trade-btn { display:block; margin:6px auto 0; }
+@media (max-width: 820px) {
+  .desktop-schedule-summary { display:none !important; }
+  .mobile-schedule-tabs { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px; margin:10px 0 14px; }
+  .mobile-schedule-tabs button { min-height:44px; padding:8px 6px; font-size:14px; }
+  .desktop-schedule-table { display:none !important; }
+  .mobile-schedule-view { display:block; }
+  .trade-panel .desktop-table { display:none !important; }
+  .trade-mobile-cards { display:grid !important; }
+  .schedule-day-card { border-radius:24px; padding:18px; }
+  .mobile-duty-line { align-items:flex-start; }
+  .mobile-duty-line .trade-btn { margin-left:auto; }
+  .ot-summary-card { grid-template-columns:1fr 1fr; gap:6px; }
+  .ot-summary-card b { grid-column:1/-1; font-size:18px; }
+  .schedule-page-card { padding:14px; }
+}

@@ -1,4 +1,4 @@
-/* CNMI Duty Hub V35 - calendar reason, HR summary, upload guide */
+/* CNMI Staff Planner V36 - mobile monthly schedule views */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'ภาพรวมวันนี้', subtitle: 'สรุปภาพรวมทั้งหมดของวันนี้', group: 'staff' },
@@ -156,6 +156,7 @@ let state = {
   auditDate: todayStr(),
   calendarDate: new Date(),
   calendarView: 'month',
+  scheduleMobileView: 'day',
   monthKey: monthKey(new Date()),
   positionMonthKey: monthKey(new Date()),
   positionMonthViewKey: monthKey(new Date()),
@@ -1350,22 +1351,31 @@ function renderTradeRequestsPage() {
 
 function renderMonthlySchedulePage() {
   const assignments = getAssignmentsForMonth(state.monthKey);
-  return `<div class="card">
+  return `<div class="card schedule-page-card">
     <div class="toolbar no-print">
       <label>เดือน <input type="month" id="scheduleMonthInput" value="${state.monthKey}"></label>
       <button class="ghost-btn" data-export-schedule-excel>Export Excel</button>
       <button class="ghost-btn" data-print-page>Export PDF / พิมพ์</button>
       <button class="soft-btn" data-show-fairness>กดชื่อคนเพื่อดูสถิติ หรือดูสมดุลเวร</button>
     </div>
+    <div class="mobile-schedule-tabs no-print">
+      ${mobileScheduleTab('day', 'ดูตามวัน')}
+      ${mobileScheduleTab('person', 'ดูตามคน')}
+      ${mobileScheduleTab('ot', 'สรุป OT')}
+      ${mobileScheduleTab('table', 'ตาราง')}
+    </div>
     <h3 class="print-only">ตารางเวรประจำเดือน ${state.monthKey}</h3>
     ${renderScheduleSummary(assignments)}${renderReadOnlySchedule(assignments)}${renderDutyTradePanel(assignments)}
   </div>`;
+}
+function mobileScheduleTab(id, label) {
+  return `<button class="${state.scheduleMobileView === id ? 'primary-btn' : 'ghost-btn'}" data-schedule-mobile-view="${id}">${label}</button>`;
 }
 function renderScheduleSummary(assignments) {
   const stats = calcFairness(assignments.filter(x => x.staff_id));
   const active = orderedStaff(state.staff.filter(s => isRosterEnabled(s)));
   if (!active.length) return '';
-  return `<div class="schedule-summary">${active.map(s => { const r = stats[s.id] || {}; return `<div class="summary-chip" style="--staff-bg:${staffColor(s)};--staff-fg:${textColorFor(staffColor(s))}"><b>${escapeHtml(s.nickname || s.full_name)}</b><span>${(r.units||0).toFixed(1)} หน่วย • ${(r.hours||0).toFixed(0)} ชม. • ${(r.pay||0).toLocaleString()} บ.</span></div>`; }).join('')}</div>`;
+  return `<div class="schedule-summary desktop-schedule-summary">${active.map(s => { const r = stats[s.id] || {}; return `<div class="summary-chip" style="--staff-bg:${staffColor(s)};--staff-fg:${textColorFor(staffColor(s))}"><b>${escapeHtml(s.nickname || s.full_name)}</b><span>${(r.units||0).toFixed(1)} หน่วย • ${(r.hours||0).toFixed(0)} ชม. • ${(r.pay||0).toLocaleString()} บ.</span></div>`; }).join('')}</div>`;
 }
 function canRequestTrade(slot) {
   if (!slot?.id || !slot.staff_id) return false;
@@ -1416,12 +1426,49 @@ function renderReadOnlySchedule(assignments) {
       }).join('')}</tr>`;
     }).join('')}
   </tbody></table></div>`;
-  const mobile = `<div class="mobile-schedule-list">${Array.from({length:last}, (_,i)=>i+1).map(day => {
+  return table + `<div class="mobile-schedule-view">${renderMobileScheduleView(assignments)}</div>`;
+}
+function renderMobileScheduleView(assignments) {
+  if (state.scheduleMobileView === 'person') return renderMobileScheduleByPerson(assignments);
+  if (state.scheduleMobileView === 'ot') return renderMobileScheduleOt(assignments);
+  if (state.scheduleMobileView === 'table') return renderSchedulePersonMatrix(assignments);
+  return renderMobileScheduleByDay(assignments);
+}
+function renderMobileScheduleByDay(assignments) {
+  const { y, m } = getMonthRange(state.monthKey);
+  const last = new Date(y, m, 0).getDate();
+  return `<div class="mobile-schedule-list">${Array.from({length:last}, (_,i)=>i+1).map(day => {
     const date = `${y}-${pad(m)}-${pad(day)}`;
     const slots = DUTY_COLUMNS.map(code => ({ code, slot: assignments.find(a => a.duty_date === date && a.duty_code === code) })).filter(x => allowedDutyCodesForDate(date).includes(x.code) && x.slot?.staff_id);
     return `<div class="schedule-day-card ${isHolidayDate(date)||isWeekend(date)?'weekend-row':''}"><div class="mobile-day-head"><b>${day}</b><span>${parseDate(date).toLocaleDateString('th-TH', { weekday:'short' })}</span>${isHolidayDate(date) ? badge(holidayName(date),'yellow') : ''}</div>${slots.length ? slots.map(({code,slot}) => `<div class="mobile-duty-line"><b>${escapeHtml(DUTY_LABEL[code] || code)}</b><span>${staffPill(slot.staff_id, { button:true, attrs:`data-staff-stat="${slot.staff_id}" type="button"` })}</span>${renderTradeButton(slot)}</div>`).join('') : '<span class="muted">ไม่มีเวร</span>'}</div>`;
   }).join('')}</div>`;
-  return table + mobile;
+}
+function renderMobileScheduleByPerson(assignments) {
+  const active = orderedStaff(state.staff.filter(s => isRosterEnabled(s)));
+  return `<div class="mobile-schedule-person-list">${active.map(s => {
+    const rows = assignments.filter(a => a.staff_id === s.id).sort((a,b)=>String(a.duty_date).localeCompare(String(b.duty_date)));
+    return `<div class="schedule-person-card" style="--staff-bg:${staffColor(s)};--staff-fg:${textColorFor(staffColor(s))}"><div class="person-card-head"><b>${escapeHtml(s.nickname || s.full_name)}</b><span>${rows.length} เวร</span></div>${rows.length ? rows.map(a => `<div class="person-duty-line"><span>${formatThaiDate(a.duty_date)}</span><b>${escapeHtml(DUTY_LABEL[a.duty_code] || a.duty_code)}</b>${renderTradeButton(a)}</div>`).join('') : '<span class="muted">ไม่มีเวรเดือนนี้</span>'}</div>`;
+  }).join('')}</div>`;
+}
+function renderMobileScheduleOt(assignments) {
+  const stats = calcFairness(assignments.filter(x => x.staff_id));
+  const active = orderedStaff(state.staff.filter(s => isRosterEnabled(s)));
+  return `<div class="mobile-ot-summary-list">${active.map(s => {
+    const r = stats[s.id] || {};
+    return `<button class="ot-summary-card" style="--staff-bg:${staffColor(s)};--staff-fg:${textColorFor(staffColor(s))}" data-staff-stat="${s.id}" type="button"><b>${escapeHtml(s.nickname || s.full_name)}</b><span>${(r.units||0).toFixed(1)} หน่วย</span><span>${(r.hours||0).toFixed(0)} ชม.</span><span>${(r.pay||0).toLocaleString()} บ.</span></button>`;
+  }).join('')}</div>`;
+}
+function renderSchedulePersonMatrix(assignments) {
+  const { y, m } = getMonthRange(state.monthKey);
+  const last = new Date(y, m, 0).getDate();
+  const active = orderedStaff(state.staff.filter(s => isRosterEnabled(s)));
+  const days = Array.from({length:last}, (_,i)=>i+1);
+  return `<div class="table-wrap mobile-schedule-matrix-wrap"><table class="schedule-person-matrix"><thead><tr><th>เจ้าหน้าที่</th>${days.map(day => `<th>${day}<br><span>${parseDate(`${y}-${pad(m)}-${pad(day)}`).toLocaleDateString('th-TH', { weekday:'short' })}</span></th>`).join('')}</tr></thead><tbody>${active.map(s => `<tr><th style="--staff-bg:${staffColor(s)};--staff-fg:${textColorFor(staffColor(s))}">${escapeHtml(s.nickname || s.full_name)}</th>${days.map(day => {
+    const date = `${y}-${pad(m)}-${pad(day)}`;
+    const row = assignments.find(a => a.staff_id === s.id && a.duty_date === date);
+    const cls = isHolidayDate(date) ? 'holiday-cell' : isWeekend(date) ? 'weekend-cell' : '';
+    return `<td class="${cls}">${row ? `<b>${escapeHtml(DUTY_LABEL[row.duty_code] || row.duty_code)}</b>${renderTradeButton(row)}` : (isWeekend(date) ? 'WEEKEND' : isHolidayDate(date) ? 'HOLIDAY' : '')}</td>`;
+  }).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function showStaffStats(staffId) {
   const assignments = getAssignmentsForMonth(state.monthKey).filter(x => x.staff_id === staffId);
@@ -1944,6 +1991,7 @@ async function handleClick(e) {
   if (t.hasAttribute('data-lock-roster')) { await saveRosterDraft('locked'); return; }
   if (t.dataset.clearSlot) { updateDraftSlot(t.dataset.clearSlot, { staff_id:null }); renderPage(); return; }
   if (t.dataset.toggleLockSlot) { const slot = findDraftSlot(t.dataset.toggleLockSlot); updateDraftSlot(t.dataset.toggleLockSlot, { is_locked: !slot?.is_locked }); renderPage(); return; }
+  if (t.dataset.scheduleMobileView) { state.scheduleMobileView = t.dataset.scheduleMobileView; renderPage(); return; }
   if (t.hasAttribute('data-show-fairness')) { showFairness(); return; }
   if (t.dataset.staffStat) { showStaffStats(t.dataset.staffStat); return; }
   if (t.dataset.monthPositionStat) { showMonthPositionStaffSummary(t.dataset.monthPositionStat); return; }
