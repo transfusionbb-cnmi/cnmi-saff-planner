@@ -292,3 +292,28 @@ details summary { cursor: pointer; font-weight: 900; color: var(--primary-dark);
   .month-position-matrix th, .month-position-matrix td { min-width: 82px; padding: 7px 8px; font-size: 11px; }
   .month-position-matrix .staff-col { min-width: 124px; }
 }
+
+/* V15 duty trade + clearer roster cells */
+.schedule-person-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.trade-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+  opacity: 0.92;
+}
+.trade-panel {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(120, 145, 170, .18);
+}
+.trade-panel h3 { margin-bottom: 10px; }
+.modal .form-grid textarea { min-height: 92px; }
+@media (max-width: 900px) {
+  .schedule-person-cell { justify-content: flex-start; }
+  .trade-btn { width: 100%; }
+}

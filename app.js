@@ -1,10 +1,10 @@
-/* CNMI Duty Hub V14 - Monthly position matrix + leave warning flow */
+/* CNMI Duty Hub V15 - Activity required fields + OT calculation + duty trade requests */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'Dashboard', subtitle: 'ภาพรวมทั้งหมดของวันนี้', group: 'staff' },
   { id: 'calendar', icon: '📅', title: 'Calendar กลาง', subtitle: 'รวมลา อบรม ประชุม ออกหน่วย วันหยุด และเวร', group: 'staff' },
   { id: 'leave', icon: '🌿', title: 'แจ้งลา / ไม่รับเวร', subtitle: 'บันทึก แก้ไข ยกเลิก และแนบไฟล์', group: 'staff' },
-  { id: 'activities', icon: '🗂️', title: 'กิจกรรมหน่วยงาน', subtitle: 'CQI HA ออกหน่วย ประชุม อบรม และกิจกรรมอื่น', group: 'staff' },
+  { id: 'activities', icon: '🗂️', title: 'กิจกรรมหน่วยงาน', subtitle: 'ประชุม อบรม ออกหน่วย ตรวจมาตรฐาน ซ้อม CODE และอื่นๆ', group: 'staff' },
   { id: 'schedule', icon: '📋', title: 'ตารางเวรประจำเดือน', subtitle: 'ดูรายเดือน Export Excel / PDF / Print', group: 'staff' },
   { id: 'positions', icon: '🧪', title: 'ตารางตำแหน่งรายวัน', subtitle: 'อินชาร์จปรับและประกาศตารางก่อนเริ่มงาน', group: 'staff' },
   { id: 'ot', icon: '⏱️', title: 'OT & Attendance', subtitle: 'Check-In, ขอ OT, อนุมัติ, สรุป', group: 'staff' },
@@ -128,6 +128,7 @@ let state = {
   positions: [],
   attendance: [],
   otRequests: [],
+  tradeRequests: [],
   auditLogs: [],
   holidays: [],
   incharges: [],
@@ -471,7 +472,7 @@ async function loadAllData() {
   const start = toDateInput(new Date(now.getFullYear(), now.getMonth()-2, 1));
   const end = toDateInput(new Date(now.getFullYear(), now.getMonth()+4, 0));
   const yearStart = `${now.getFullYear()}-01-01`;
-  const [staff, leaves, activities, rosterMonths, rosterAssignments, positions, attendance, otRequests, hrChecks, auditLogs, holidays, incharges, positionEligibility, positionDayStatus] = await Promise.all([
+  const [staff, leaves, activities, rosterMonths, rosterAssignments, positions, attendance, otRequests, tradeRequests, hrChecks, auditLogs, holidays, incharges, positionEligibility, positionDayStatus] = await Promise.all([
     sb.from('staff_profiles').select('*').order('staff_type').order('nickname'),
     sb.from('leave_requests').select('*').gte('end_date', yearStart).lte('start_date', end).order('start_date', { ascending: false }),
     sb.from('activity_events').select('*').gte('end_date', start).lte('start_date', end).order('start_date'),
@@ -480,6 +481,7 @@ async function loadAllData() {
     sb.from('daily_positions').select('*').gte('work_date', start).lte('work_date', end).order('work_date'),
     sb.from('attendance_logs').select('*').gte('duty_date', start).lte('duty_date', end).order('duty_date', { ascending: false }),
     sb.from('ot_requests').select('*').gte('work_date', yearStart).lte('work_date', end).order('work_date', { ascending: false }),
+    sb.from('roster_trade_requests').select('*').gte('created_at', `${start}T00:00:00`).order('created_at', { ascending: false }),
     isAdmin() ? sb.from('hr_checks').select('*').order('updated_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
     sb.from('audit_logs').select('*').order('created_at', { ascending:false }).limit(250),
     sb.from('public_holidays').select('*').gte('holiday_date', start).lte('holiday_date', end).order('holiday_date'),
@@ -487,7 +489,7 @@ async function loadAllData() {
     sb.from('daily_position_eligibility').select('*'),
     sb.from('daily_position_day_status').select('*').gte('work_date', start).lte('work_date', end).order('work_date')
   ]);
-  const packs = { staff, leaves, activities, rosterMonths, rosterAssignments, positions, attendance, otRequests, hrChecks, auditLogs, holidays, incharges, positionEligibility, positionDayStatus };
+  const packs = { staff, leaves, activities, rosterMonths, rosterAssignments, positions, attendance, otRequests, tradeRequests, hrChecks, auditLogs, holidays, incharges, positionEligibility, positionDayStatus };
   Object.entries(packs).forEach(([k,v]) => { if (v.error) throw new Error(`${k}: ${v.error.message}`); });
   state.staff = staff.data || [];
   state.leaves = leaves.data || [];
@@ -497,6 +499,7 @@ async function loadAllData() {
   state.positions = positions.data || [];
   state.attendance = attendance.data || [];
   state.otRequests = otRequests.data || [];
+  state.tradeRequests = tradeRequests.data || [];
   state.hrChecks = hrChecks.data || [];
   state.auditLogs = auditLogs.data || [];
   state.holidays = holidays.data || [];
@@ -579,14 +582,46 @@ function supportsRequiredRole(staff, required) {
   if (required === 'MT_OR_TANG') return staff.staff_type === 'MT' || staff.nickname === 'แตง';
   return staff.staff_type === required;
 }
-function dutyHours(date) { return (isWeekend(date) || isHolidayDate(date)) ? 24 : 16; }
-function dutyRatePerHour(staffId, date) {
+function dutyStaffTypeForRate(staffId, dutyCode='') {
   const s = state.staff.find(x => x.id === staffId);
-  const holiday = isWeekend(date) || isHolidayDate(date);
-  if (s?.staff_type === 'เคิก') return holiday ? 120 : 90;
-  return holiday ? 160 : 130;
+  if (!s) return 'MT';
+  if (['ช4A','ช4B'].includes(dutyCode) && s.nickname === 'แตง') return 'MT';
+  return s.staff_type === 'เคิก' ? 'เคิก' : 'MT';
 }
-function dutyAmount(staffId, date) { return dutyHours(date) * dutyRatePerHour(staffId, date); }
+function dutyRatePerHour(staffId, date, dutyCode='') {
+  const type = dutyStaffTypeForRate(staffId, dutyCode);
+  const publicHoliday = isHolidayDate(date);
+  if (type === 'เคิก') return publicHoliday ? 120 : 90;
+  return publicHoliday ? 160 : 130;
+}
+function dutyHoursForCode(date, dutyCode='') {
+  if (['ช9-เคิก','ช9-MT'].includes(dutyCode)) return 8;
+  if (['ช3A','ช3B'].includes(dutyCode)) return 12;
+  if (['ช4A','ช4B'].includes(dutyCode)) return 4;
+  if (['ชบด1','ชบด2','ชบด3'].includes(dutyCode)) return (isWeekend(date) || isHolidayDate(date)) ? 24 : 16;
+  return (isWeekend(date) || isHolidayDate(date)) ? 24 : 16;
+}
+function dutyUnitsForCode(date, dutyCode='') {
+  const h = dutyHoursForCode(date, dutyCode);
+  if (['ช3A','ช3B'].includes(dutyCode)) return 1.5;
+  return h / 8;
+}
+function dutyMetrics(a, staffIdOverride=null) {
+  const date = a?.duty_date || a;
+  const code = a?.duty_code || '';
+  const staffId = staffIdOverride || a?.staff_id || null;
+  const hours = dutyHoursForCode(date, code);
+  const rate = staffId ? dutyRatePerHour(staffId, date, code) : 0;
+  const pay = hours * rate;
+  return { hours, rate, pay, units: dutyUnitsForCode(date, code), code, publicHoliday: isHolidayDate(date), weekend: isWeekend(date) };
+}
+function dutyHours(date, dutyCode='') { return dutyHoursForCode(date, dutyCode); }
+function dutyAmount(staffId, date, dutyCode='') { return dutyHoursForCode(date, dutyCode) * dutyRatePerHour(staffId, date, dutyCode); }
+function tradeRateAmount(assignment, staffId, rateMode='receiver') {
+  if (!assignment || !staffId) return 0;
+  const baseStaff = rateMode === 'owner' ? assignment.staff_id : staffId;
+  return dutyMetrics(assignment, baseStaff).pay;
+}
 function weekKeyOf(date) {
   const d = parseDate(date);
   const oneJan = new Date(d.getFullYear(),0,1);
@@ -823,15 +858,15 @@ function renderActivitiesPage() {
         <form id="activityForm" class="form-grid">
           <label class="wide">รายละเอียดกิจกรรม <input name="title" value="${escapeHtml(editing?.title || '')}" placeholder="เช่น ประชุมทีม / ออกหน่วยที่..." required></label>
           <label>ประเภท <select name="event_type" required>${ACTIVITY_TYPES.map(t => `<option ${editing?.event_type===t?'selected':''}>${t}</option>`).join('')}</select></label>
-          <label>สถานที่ <input name="location" value="${escapeHtml(editing?.location || '')}"></label>
+          <label>สถานที่ <input name="location" value="${escapeHtml(editing?.location || '')}" required></label>
           <label>วันที่เริ่ม <input name="start_date" type="date" value="${editing?.start_date || todayStr()}" required></label>
           <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${editing?.end_date || todayStr()}" required></label>
-          <label>เวลาเริ่ม <input name="start_time" type="time" value="${editing?.start_time || ''}"></label>
-          <label>เวลาสิ้นสุด <input name="end_time" type="time" value="${editing?.end_time || ''}"></label>
-          <label>ผู้รับผิดชอบ <select name="owner_id"><option value="">ไม่ระบุ</option>${staffOptions(editing?.owner_id || currentStaffId())}</select></label>
+          <label>เวลาเริ่ม <input name="start_time" type="time" value="${editing?.start_time || ''}" required></label>
+          <label>เวลาสิ้นสุด <input name="end_time" type="time" value="${editing?.end_time || ''}" required></label>
+          <label>ผู้รับผิดชอบ <select name="owner_id" required><option value="">เลือกผู้รับผิดชอบ</option>${staffOptions(editing?.owner_id || currentStaffId())}</select></label>
           <label>เอกสารแนบ <input name="file" type="file"></label>
           <div class="wide"><div class="field-label">ผู้เข้าร่วม</div>${renderParticipantCheckboxes(asArray(editing?.participant_ids))}</div>
-          <label class="wide">รายละเอียด <textarea name="note">${escapeHtml(editing?.note || '')}</textarea></label>
+          <label class="wide">รายละเอียด <textarea name="note" required>${escapeHtml(editing?.note || '')}</textarea></label>
           <button class="primary-btn wide" type="submit">${editing ? 'บันทึกการแก้ไข' : 'บันทึกกิจกรรม'}</button>
         </form>
       </div>
@@ -971,19 +1006,25 @@ function showFairness() {
   const pays = Object.values(stats).map(x => x.pay || 0);
   const diff = hours.length ? Math.max(...hours) - Math.min(...hours) : 0;
   const payDiff = pays.length ? Math.max(...pays) - Math.min(...pays) : 0;
-  showModal(`<h2>ตรวจความยุติธรรม ${state.monthKey}</h2><p class="hint">ระบบเกลี่ยทั้งชั่วโมงและเงินโดยประมาณ: MT 130 บ./ชม., MT นักขัต/วันหยุด 160 บ./ชม., เคิก 90 บ./ชม., เคิก นักขัต/วันหยุด 120 บ./ชม. ถ้าน้องขาย/แลกเวรกันหลังประกาศ ถือว่าเป็นข้อตกลงระหว่างเจ้าหน้าที่</p><p class="hint">ส่วนต่างชั่วโมง ${diff.toFixed(1)} ชม. • ส่วนต่างเงินโดยประมาณ ${payDiff.toLocaleString()} บาท</p><div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>ชม.รวม</th><th>เงินประมาณ</th><th>เวรรวม</th><th>จันทร์</th><th>ศุกร์</th><th>วันหยุด/นักขัต</th><th>วันธรรมดา</th></tr></thead><tbody>
-    ${state.staff.filter(s=>isRosterEnabled(s)).map(s => { const r = stats[s.id] || {}; return `<tr><td>${staffPill(s)}</td><td>${(r.hours||0).toFixed(1)}</td><td>${(r.pay||0).toLocaleString()}</td><td>${r.total||0}</td><td>${r.mon||0}</td><td>${r.fri||0}</td><td>${r.weekend||0}</td><td>${r.weekday||0}</td></tr>`; }).join('')}
+  showModal(`<h2>ตรวจความยุติธรรม ${state.monthKey}</h2><p class="hint">คิดตามกติกาจริง: ชบด วันธรรมดา 16 ชม., ชบด เสาร์/อาทิตย์/นักขัต 24 ชม., ช9 8 ชม., ช3A/ช3B 12 ชม., ช4 4 ชม. เรท MT 130/นักขัต 160 บ./ชม. และเคิก 90/นักขัต 120 บ./ชม. ถ้ามีการขาย/แลกเวรหลังประกาศ ให้ถือเป็นข้อตกลงระหว่างเจ้าหน้าที่</p><p class="hint">ส่วนต่างชั่วโมง ${diff.toFixed(1)} ชม. • ส่วนต่างเงินโดยประมาณ ${payDiff.toLocaleString()} บาท</p><div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>ชม.รวม</th><th>เงินประมาณ</th><th>หน่วยเวร</th><th>ชบด</th><th>ช9</th><th>ช3A/B</th><th>ช4</th><th>จันทร์</th><th>ศุกร์</th><th>วันหยุด/นักขัต</th></tr></thead><tbody>
+    ${state.staff.filter(s=>isRosterEnabled(s)).map(s => { const r = stats[s.id] || {}; return `<tr><td>${staffPill(s)}</td><td>${(r.hours||0).toFixed(1)}</td><td>${(r.pay||0).toLocaleString()}</td><td>${(r.units||0).toFixed(1)}</td><td>${r.chbd||0}</td><td>${r.ch9||0}</td><td>${r.ch3||0}</td><td>${r.ch4||0}</td><td>${r.mon||0}</td><td>${r.fri||0}</td><td>${r.weekend||0}</td></tr>`; }).join('')}
   </tbody></table></div>`);
 }
 function calcFairness(assignments) {
   const stats = {};
   assignments.forEach(a => {
     if (!a.staff_id) return;
-    if (!stats[a.staff_id]) stats[a.staff_id] = { total:0, mon:0, fri:0, weekend:0, weekday:0, hours:0, pay:0, weekCounts:{} };
+    if (!stats[a.staff_id]) stats[a.staff_id] = { total:0, units:0, mon:0, fri:0, weekend:0, weekday:0, hours:0, pay:0, chbd:0, ch9:0, ch3:0, ch4:0, weekCounts:{} };
     const dow = parseDate(a.duty_date).getDay();
+    const m = dutyMetrics(a);
     stats[a.staff_id].total++;
-    stats[a.staff_id].hours += dutyHours(a.duty_date);
-    stats[a.staff_id].pay += dutyAmount(a.staff_id, a.duty_date);
+    stats[a.staff_id].hours += m.hours;
+    stats[a.staff_id].units += m.units;
+    stats[a.staff_id].pay += m.pay;
+    if (String(a.duty_code || '').startsWith('ชบด')) stats[a.staff_id].chbd++;
+    if (String(a.duty_code || '').startsWith('ช9')) stats[a.staff_id].ch9++;
+    if (['ช3A','ช3B'].includes(a.duty_code)) stats[a.staff_id].ch3++;
+    if (['ช4A','ช4B'].includes(a.duty_code)) stats[a.staff_id].ch4++;
     const wk = weekKeyOf(a.duty_date);
     stats[a.staff_id].weekCounts[wk] = (stats[a.staff_id].weekCounts[wk] || 0) + 1;
     if (dow === 1) stats[a.staff_id].mon++;
@@ -1004,15 +1045,40 @@ function renderMonthlySchedulePage() {
       <button class="soft-btn" data-show-fairness>กดชื่อคนเพื่อดูสถิติ หรือกดปุ่มนี้</button>
     </div>
     <h3 class="print-only">ตารางเวรประจำเดือน ${state.monthKey}</h3>
-    ${renderScheduleSummary(assignments)}${renderReadOnlySchedule(assignments)}
+    ${renderScheduleSummary(assignments)}${renderReadOnlySchedule(assignments)}${renderDutyTradePanel(assignments)}
   </div>`;
 }
 function renderScheduleSummary(assignments) {
   const stats = calcFairness(assignments.filter(x => x.staff_id));
   const active = state.staff.filter(s => isRosterEnabled(s));
   if (!active.length) return '';
-  return `<div class="schedule-summary">${active.map(s => { const r = stats[s.id] || {}; return `<div class="summary-chip" style="--staff-bg:${staffColor(s)};--staff-fg:${textColorFor(staffColor(s))}"><b>${escapeHtml(s.nickname || s.full_name)}</b><span>${r.total||0} เวร • ${(r.hours||0).toFixed(0)} ชม. • ${(r.pay||0).toLocaleString()} บ.</span></div>`; }).join('')}</div>`;
+  return `<div class="schedule-summary">${active.map(s => { const r = stats[s.id] || {}; return `<div class="summary-chip" style="--staff-bg:${staffColor(s)};--staff-fg:${textColorFor(staffColor(s))}"><b>${escapeHtml(s.nickname || s.full_name)}</b><span>${(r.units||0).toFixed(1)} หน่วย • ${(r.hours||0).toFixed(0)} ชม. • ${(r.pay||0).toLocaleString()} บ.</span></div>`; }).join('')}</div>`;
 }
+function canRequestTrade(slot) {
+  if (!slot?.id || !slot.staff_id) return false;
+  return slot.staff_id === currentStaffId() || isAdmin();
+}
+function renderTradeButton(slot) {
+  if (!canRequestTrade(slot)) return '';
+  return `<button class="tiny-btn trade-btn" data-trade-duty="${slot.id}">แลก/ขาย</button>`;
+}
+function renderDutyTradePanel(assignments) {
+  const monthRows = state.tradeRequests.filter(r => {
+    const a = assignments.find(x => x.id === r.from_assignment_id || x.id === r.to_assignment_id);
+    return a || String(r.created_at || '').startsWith(state.monthKey);
+  });
+  const visible = isAdmin() ? monthRows : monthRows.filter(r => r.requester_id === currentStaffId() || r.receiver_id === currentStaffId());
+  if (!visible.length) return `<div class="trade-panel"><h3>คำขอแลก/ขายเวร</h3>${empty('ยังไม่มีคำขอแลก/ขายเวรในเดือนนี้')}</div>`;
+  return `<div class="trade-panel"><h3>คำขอแลก/ขายเวร</h3><div class="table-wrap"><table><thead><tr><th>ผู้ขอ</th><th>ผู้รับ/คู่แลก</th><th>รายการ</th><th>เงินโดยประมาณ</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>${visible.map(r => renderTradeRow(r, assignments)).join('')}</tbody></table></div></div>`;
+}
+function renderTradeRow(r, assignments) {
+  const from = assignments.find(a => a.id === r.from_assignment_id) || {};
+  const to = assignments.find(a => a.id === r.to_assignment_id) || null;
+  const receiverActions = r.status === 'pending' && r.receiver_id === currentStaffId();
+  const adminActions = r.status === 'confirmed' && isAdmin();
+  return `<tr><td>${staffPill(r.requester_id)}</td><td>${staffPill(r.receiver_id)}</td><td>${escapeHtml(r.trade_type)}<br><span class="muted">${formatThaiDate(from.duty_date)} ${DUTY_LABEL[from.duty_code] || from.duty_code || ''}${to ? ` ↔ ${formatThaiDate(to.duty_date)} ${DUTY_LABEL[to.duty_code] || to.duty_code}` : ''}</span></td><td>${Number(r.amount_from || 0).toLocaleString()} บ.${r.amount_diff ? `<br><span class="muted">ส่วนต่าง ${Number(r.amount_diff).toLocaleString()} บ.</span>` : ''}</td><td>${badge(tradeStatusLabel(r.status), r.status==='confirmed'?'green':r.status==='rejected'?'red':r.status==='completed'?'blue':'orange')}</td><td>${receiverActions ? `<button class="tiny-btn" data-trade-status="${r.id}|confirmed">ยืนยัน</button><button class="tiny-btn danger" data-trade-status="${r.id}|rejected">ปฏิเสธ</button>` : adminActions ? `<button class="tiny-btn" data-trade-apply="${r.id}">Admin บันทึกเปลี่ยนเวร</button>` : '-'}</td></tr>`;
+}
+function tradeStatusLabel(status) { return ({ pending:'รออีกฝ่ายยืนยัน', confirmed:'ยืนยันแล้ว รอ Admin บันทึก', rejected:'ปฏิเสธ', completed:'เปลี่ยนตารางแล้ว' }[status] || status || '-'); }
 function renderReadOnlySchedule(assignments) {
   if (!assignments.length) return empty('ยังไม่มีตารางเวรของเดือนนี้');
   const { y, m } = getMonthRange(state.monthKey);
@@ -1024,7 +1090,7 @@ function renderReadOnlySchedule(assignments) {
       return `<tr class="${rowCls}"><td class="date-cell"><b>${day}</b><br><span class="muted">${parseDate(date).toLocaleDateString('th-TH', { weekday:'short' })}</span>${isHolidayDate(date) ? `<br><span class="badge yellow">${escapeHtml(holidayName(date))}</span>` : ''}</td>${DUTY_COLUMNS.map(code => {
         if (!allowedDutyCodesForDate(date).includes(code)) return '<td class="muted">-</td>';
         const slot = assignments.find(a => a.duty_date === date && a.duty_code === code);
-        return `<td>${slot?.staff_id ? staffPill(slot.staff_id, { button:true, attrs:`data-staff-stat="${slot.staff_id}" type="button"` }) : '-'}</td>`;
+        return `<td>${slot?.staff_id ? `<div class="schedule-person-cell">${staffPill(slot.staff_id, { button:true, attrs:`data-staff-stat="${slot.staff_id}" type="button"` })}${renderTradeButton(slot)}</div>` : '-'}</td>`;
       }).join('')}</tr>`;
     }).join('')}
   </tbody></table></div>`;
@@ -1194,7 +1260,7 @@ function renderOtPage() {
       ${renderOtTable(rows)}
     </div>
     <div class="card" style="grid-column:1/-1;">
-      <h3>ส่วนที่ 4 สรุป OT รายเดือน</h3>${renderOtSummary()}
+      <h3>ส่วนที่ 4 สรุป OT รายเดือน</h3><p class="hint">ส่วนนี้เป็น OT ขอเพิ่มตาม Check-Out จริง ส่วนตารางเวรประจำเดือนใช้กติกาเงิน/ชั่วโมงของเวรตั้งต้นและคำขอแลก/ขายเวรแยกต่างหาก</p>${renderOtSummary()}
     </div>
   </div>`;
 }
@@ -1326,6 +1392,7 @@ async function handleSubmit(e) {
   if (e.target.id === 'activityForm') { e.preventDefault(); await saveActivity(e.target); }
   if (e.target.classList.contains('hr-form')) { e.preventDefault(); await saveHrCheck(e.target); }
   if (e.target.id === 'otForm') { e.preventDefault(); await saveOtRequest(e.target); }
+  if (e.target.id === 'dutyTradeForm') { e.preventDefault(); await saveTradeRequest(e.target); }
   if (e.target.id === 'newStaffForm') { e.preventDefault(); await saveNewStaff(e.target); }
   if (e.target.id === 'holidayForm') { e.preventDefault(); await saveHoliday(e.target); }
 }
@@ -1351,6 +1418,9 @@ async function handleClick(e) {
   if (t.dataset.toggleLockSlot) { const slot = findDraftSlot(t.dataset.toggleLockSlot); updateDraftSlot(t.dataset.toggleLockSlot, { is_locked: !slot?.is_locked }); renderPage(); return; }
   if (t.hasAttribute('data-show-fairness')) { showFairness(); return; }
   if (t.dataset.staffStat) { showStaffStats(t.dataset.staffStat); return; }
+  if (t.dataset.tradeDuty) { showTradeModal(t.dataset.tradeDuty); return; }
+  if (t.dataset.tradeStatus) { const [id,status] = t.dataset.tradeStatus.split('|'); await updateTradeStatus(id,status); return; }
+  if (t.dataset.tradeApply) { await applyTradeRequest(t.dataset.tradeApply); return; }
   if (t.hasAttribute('data-export-schedule-excel')) { exportScheduleExcel(); return; }
   if (t.hasAttribute('data-print-page')) { window.print(); return; }
   if (t.hasAttribute('data-auto-positions')) { autoAssignPositions(); return; }
@@ -1431,22 +1501,38 @@ async function saveActivity(form) {
   const fd = new FormData(form);
   const participants = Array.from(form.querySelectorAll('input[name="participant_ids"]:checked')).map(o => o.value);
   const row = {
-    title: fd.get('title'), event_type: fd.get('event_type'), start_date: fd.get('start_date'), end_date: fd.get('end_date'),
-    start_time: fd.get('start_time') || null, end_time: fd.get('end_time') || null, location: fd.get('location'), note: fd.get('note'),
-    owner_id: fd.get('owner_id') || currentStaffId(), participant_ids: participants, updated_by: currentStaffId()
+    title: String(fd.get('title') || '').trim(),
+    event_type: fd.get('event_type'),
+    start_date: fd.get('start_date'),
+    end_date: fd.get('end_date'),
+    start_time: fd.get('start_time') || null,
+    end_time: fd.get('end_time') || null,
+    location: String(fd.get('location') || '').trim(),
+    note: String(fd.get('note') || '').trim(),
+    owner_id: fd.get('owner_id') || currentStaffId(),
+    participant_ids: participants,
+    updated_by: currentStaffId()
   };
+  const requiredMissing = [];
+  if (!row.title) requiredMissing.push('รายละเอียดกิจกรรม');
+  if (!row.event_type) requiredMissing.push('ประเภท');
+  if (!row.location) requiredMissing.push('สถานที่');
+  if (!row.start_date) requiredMissing.push('วันที่เริ่ม');
+  if (!row.end_date) requiredMissing.push('วันที่สิ้นสุด');
+  if (!row.start_time) requiredMissing.push('เวลาเริ่ม');
+  if (!row.end_time) requiredMissing.push('เวลาสิ้นสุด');
+  if (!row.owner_id) requiredMissing.push('ผู้รับผิดชอบ');
+  if (!participants.length) requiredMissing.push('ผู้เข้าร่วม');
+  if (!row.note) requiredMissing.push('รายละเอียด');
+  if (requiredMissing.length) return showToast('กรุณากรอก/เลือกให้ครบ ยกเว้นเอกสารแนบ: ' + requiredMissing.join(', '));
   if (row.end_date < row.start_date) return showToast('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');
-  const requestedDates = datesBetween(row.start_date, row.end_date);
-  const hasPublishedDay = requestedDates.some(positionDayPublished);
-  if (hasPublishedDay && !isAdmin()) {
-    row.note = [row.note, '[ระบบเตือน] วันที่ขอลามีการประกาศตารางตำแหน่งแล้ว กรุณาแจ้งอินชาร์จหรือหัวหน้า'].filter(Boolean).join(' | ');
-    showToast('วันที่ขอลามีการประกาศตำแหน่งแล้ว กรุณาแจ้งอินชาร์จหรือหัวหน้าเพื่อปรับหน้างาน');
-  }
+  if (row.start_date === row.end_date && row.end_time <= row.start_time) return showToast('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม');
   const file = fd.get('file');
-  if (file && file.size) row.attachment_path = await uploadFile(file, 'activities');
+  try { if (file && file.size) row.attachment_path = await uploadFile(file, 'activities'); }
+  catch (err) { return showToast('อัปโหลดไฟล์แนบไม่สำเร็จ: ' + err.message); }
   const id = state.editingActivityId;
   const res = id ? await sb.from('activity_events').update(row).eq('id', id) : await sb.from('activity_events').insert({ ...row, created_by: currentStaffId() });
-  if (res.error) return showToast(res.error.message);
+  if (res.error) return showToast(friendlyDbError(res.error));
   state.editingActivityId = null;
   await loadAllData(); renderPage(); showToast('บันทึกกิจกรรมแล้ว');
 }
@@ -1507,8 +1593,10 @@ function autoAssignRoster() {
       counts[candidates[0].id] = counts[candidates[0].id] || { total:0, mon:0, fri:0, weekend:0, weekday:0, hours:0, weekCounts:{} };
       const c = counts[candidates[0].id];
       c.total++;
-      c.hours += dutyHours(slot.duty_date);
-      c.pay = (c.pay || 0) + dutyAmount(candidates[0].id, slot.duty_date);
+      const dm = dutyMetrics(slot, candidates[0].id);
+      c.hours += dm.hours;
+      c.units = (c.units || 0) + dm.units;
+      c.pay = (c.pay || 0) + dm.pay;
       const wk2 = weekKeyOf(slot.duty_date); c.weekCounts[wk2] = (c.weekCounts[wk2] || 0) + 1;
       if (isWeekend(slot.duty_date) || isHolidayDate(slot.duty_date)) c.weekend++; else c.weekday++;
     }
@@ -1748,6 +1836,66 @@ async function resetUserPassword(email) {
   showToast('ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว');
 }
 
+function showTradeModal(assignmentId) {
+  const slot = getAssignmentsForMonth(state.monthKey).find(a => a.id === assignmentId);
+  if (!slot) return showToast('ไม่พบเวรนี้ กรุณารีเฟรชหน้า');
+  const possibleReceiver = state.staff.filter(s => isRosterEnabled(s) && s.id !== slot.staff_id);
+  const myAmount = dutyMetrics(slot, slot.staff_id).pay;
+  showModal(`<h2>ขอแลก/ขายเวร</h2><p class="hint">${formatThaiDate(slot.duty_date)} ${DUTY_LABEL[slot.duty_code] || slot.duty_code} • เจ้าของเวรเดิม ${staffPill(slot.staff_id)} • มูลค่าเวรเดิมประมาณ ${myAmount.toLocaleString()} บาท</p>
+    <form id="dutyTradeForm" class="form-grid">
+      <input type="hidden" name="from_assignment_id" value="${slot.id}">
+      <label>ประเภท <select name="trade_type"><option>ขายเวร</option><option>แลกเวร</option></select></label>
+      <label>คนที่จะรับ/คู่แลก <select name="receiver_id" required><option value="">เลือกคน</option>${possibleReceiver.map(s => `<option value="${s.id}">${escapeHtml(s.nickname || s.full_name)} (${escapeHtml(s.staff_type || '-')})</option>`).join('')}</select></label>
+      <label class="wide">ถ้าเป็นแลกเวร ให้เลือกเวรของอีกฝ่าย <select name="to_assignment_id"><option value="">ไม่เลือก / เป็นขายเวรอย่างเดียว</option>${getAssignmentsForMonth(state.monthKey).filter(a => a.staff_id && a.staff_id !== slot.staff_id).map(a => `<option value="${a.id}">${staffNick(a.staff_id)} — ${formatThaiDate(a.duty_date)} ${DUTY_LABEL[a.duty_code] || a.duty_code} (${dutyMetrics(a).pay.toLocaleString()} บ.)</option>`).join('')}</select></label>
+      <label>คิดเรท <select name="rate_mode"><option value="receiver">คิดตามเรทคนรับเวร</option><option value="owner">คิดตามเรทเจ้าของเวรเดิม</option><option value="custom">ตกลงกันเอง</option></select></label>
+      <label>จำนวนเงินตกลงเอง (ถ้ามี) <input name="custom_amount" type="number" min="0" step="1" placeholder="ไม่บังคับ"></label>
+      <label class="wide">หมายเหตุ <textarea name="note" placeholder="เช่น ขายเป็นเรทเคิก / แลกกับเวรวันที่... / ตกลงกันแล้ว"></textarea></label>
+      <button class="primary-btn wide" type="submit">ส่งคำขอให้อีกฝ่ายยืนยัน</button>
+    </form>`);
+}
+async function saveTradeRequest(form) {
+  const fd = new FormData(form);
+  const fromId = fd.get('from_assignment_id');
+  const receiverId = fd.get('receiver_id');
+  const from = getAssignmentsForMonth(state.monthKey).find(a => a.id === fromId);
+  const to = fd.get('to_assignment_id') ? getAssignmentsForMonth(state.monthKey).find(a => a.id === fd.get('to_assignment_id')) : null;
+  if (!from || !receiverId) return showToast('กรุณาเลือกข้อมูลให้ครบ');
+  const rateMode = fd.get('rate_mode') || 'receiver';
+  const custom = Number(fd.get('custom_amount') || 0);
+  const amountFrom = custom > 0 ? custom : tradeRateAmount(from, receiverId, rateMode);
+  const amountTo = to ? dutyMetrics(to, from.staff_id).pay : 0;
+  const row = {
+    requester_id: currentStaffId(), receiver_id: receiverId, from_assignment_id: fromId, to_assignment_id: to?.id || null,
+    trade_type: fd.get('trade_type') || 'ขายเวร', rate_mode: rateMode, amount_from: amountFrom, amount_to: amountTo, amount_diff: amountFrom - amountTo,
+    status: 'pending', note: fd.get('note') || null, created_by: currentStaffId(), updated_by: currentStaffId()
+  };
+  const { error } = await sb.from('roster_trade_requests').insert(row);
+  if (error) return showToast(friendlyDbError(error));
+  closeModal(); await loadAllData(); renderPage(); showToast('ส่งคำขอแล้ว รออีกฝ่ายกดยืนยัน');
+}
+async function updateTradeStatus(id, status) {
+  const { error } = await sb.from('roster_trade_requests').update({ status, updated_by: currentStaffId(), confirmed_at: status==='confirmed' ? new Date().toISOString() : null }).eq('id', id);
+  if (error) return showToast(friendlyDbError(error));
+  await loadAllData(); renderPage(); showToast(status === 'confirmed' ? 'ยืนยันคำขอแล้ว รอ Admin บันทึกเปลี่ยนเวร' : 'ปฏิเสธคำขอแล้ว');
+}
+async function applyTradeRequest(id) {
+  if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้น');
+  const r = state.tradeRequests.find(x => x.id === id);
+  if (!r || r.status !== 'confirmed') return showToast('คำขอนี้ยังไม่พร้อมให้บันทึกเปลี่ยนเวร');
+  const from = state.rosterAssignments.find(a => a.id === r.from_assignment_id);
+  const to = r.to_assignment_id ? state.rosterAssignments.find(a => a.id === r.to_assignment_id) : null;
+  if (!from) return showToast('ไม่พบเวรต้นทาง');
+  const updates = [];
+  updates.push(sb.from('roster_assignments').update({ staff_id: r.receiver_id, updated_by: currentStaffId() }).eq('id', from.id));
+  if (to) updates.push(sb.from('roster_assignments').update({ staff_id: r.requester_id, updated_by: currentStaffId() }).eq('id', to.id));
+  const results = await Promise.all(updates);
+  const err = results.find(x => x.error)?.error;
+  if (err) return showToast(friendlyDbError(err));
+  const { error } = await sb.from('roster_trade_requests').update({ status: 'completed', updated_by: currentStaffId() }).eq('id', id);
+  if (error) return showToast(friendlyDbError(error));
+  await loadAllData(); renderPage(); showToast('บันทึกเปลี่ยนเวรแล้ว');
+}
+
 function staffOptions(selected='') { return state.staff.filter(s => s.is_active).map(s => `<option value="${s.id}" ${selected===s.id?'selected':''}>${escapeHtml(s.nickname || s.full_name)} (${escapeHtml(s.staff_type || '-')})</option>`).join(''); }
 function daysBetween(start, end) { const out=[]; const d=parseDate(start); const e=parseDate(end); while(d<=e){ out.push(toDateInput(d)); d.setDate(d.getDate()+1); } return out; }
 function exportTable(tableId, filename) { const table = document.getElementById(tableId); if (!table) return showToast('ไม่พบตารางสำหรับ Export'); const wb = XLSX.utils.table_to_book(table, { sheet: 'Sheet1' }); XLSX.writeFile(wb, filename); }
@@ -1775,7 +1923,7 @@ function tableLabel(table) {
   return ({
     auth: 'ระบบ Login', staff_profiles: 'ผู้ใช้งานและสิทธิ์', leave_requests: 'แจ้งลา/ไม่รับเวร', activity_events: 'กิจกรรมหน่วยงาน',
     hr_checks: 'ตรวจสอบ HR', roster_months: 'สถานะตารางเวร', roster_assignments: 'ตารางเวร', daily_positions: 'ตารางตำแหน่งรายวัน',
-    attendance_logs: 'ลงชื่อเข้าเวร', ot_requests: 'OT', public_holidays: 'วันหยุดราชการ', monthly_incharges: 'อินชาร์จประจำเดือน', daily_position_eligibility: 'สิทธิ์ตำแหน่งรายวัน', daily_position_day_status: 'ประกาศตำแหน่งรายวัน'
+    attendance_logs: 'ลงชื่อเข้าเวร', ot_requests: 'OT', public_holidays: 'วันหยุดราชการ', monthly_incharges: 'อินชาร์จประจำเดือน', daily_position_eligibility: 'สิทธิ์ตำแหน่งรายวัน', daily_position_day_status: 'ประกาศตำแหน่งรายวัน', roster_trade_requests: 'คำขอแลก/ขายเวร'
   }[table] || table || '-');
 }
 function auditSummary(a) {
@@ -1789,6 +1937,7 @@ function auditSummary(a) {
   if (a.table_name === 'public_holidays') return `${tableLabel(a.table_name)}: ${formatThaiDate(n.holiday_date || o.holiday_date)} ${n.title || o.title || ''}`;
   if (a.table_name === 'daily_position_eligibility') return `${tableLabel(a.table_name)}: ${staffNick(n.staff_id || o.staff_id)} ${n.position_code || o.position_code || ''} = ${(n.is_eligible ?? o.is_eligible) ? 'เปิด' : 'ปิด'}`;
   if (a.table_name === 'daily_position_day_status') return `${tableLabel(a.table_name)}: ${formatThaiDate(n.work_date || o.work_date)} = ${n.status || o.status || '-'}`;
+  if (a.table_name === 'roster_trade_requests') return `${tableLabel(a.table_name)}: ${staffNick(n.requester_id || o.requester_id)} → ${staffNick(n.receiver_id || o.receiver_id)} ${n.trade_type || o.trade_type || ''} = ${tradeStatusLabel(n.status || o.status)}`;
   return tableLabel(a.table_name);
 }
 function exportAuditExcel() {
