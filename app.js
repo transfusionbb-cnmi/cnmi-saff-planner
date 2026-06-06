@@ -108,8 +108,8 @@ function debounce(fn, wait=250) { let t; return (...args) => { clearTimeout(t); 
 // Capture recovery intent BEFORE Supabase reads/cleans the URL hash.
 // This fixes password reset links that otherwise jump straight into Dashboard.
 const INITIAL_AUTH_URL = `${window.location.search || ''}${window.location.hash || ''}`;
-const RECOVERY_INTENT = /(^|[?#&])type=(recovery|password_recovery)(&|$)/.test(INITIAL_AUTH_URL)
-  || /(^|[?#&])mode=recovery(&|$)/.test(INITIAL_AUTH_URL);
+const RECOVERY_INTENT = /(^|[?#&])type=(recovery|password_recovery|invite)(&|$)/.test(INITIAL_AUTH_URL)
+  || /(^|[?#&])mode=(recovery|set-password)(&|$)/.test(INITIAL_AUTH_URL);
 
 function authRedirectUrl(mode='') {
   const base = window.location.origin + window.location.pathname;
@@ -139,12 +139,44 @@ function requireMahidolEmail(email) {
   const domain = CFG.ALLOWED_DOMAIN || 'mahidol.ac.th';
   return String(email || '').toLowerCase().endsWith('@' + domain.toLowerCase());
 }
+async function requestPasswordSetupLink(email) {
+  const redirectTo = authRedirectUrl('recovery');
+
+  // Recommended flow: Apps Script holds Supabase service_role key safely, checks staff_profiles whitelist,
+  // creates/invites Auth user if needed, then sends password setup/recovery link.
+  if (CFG.APP_SCRIPT_URL) {
+    const res = await fetch(CFG.APP_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'requestPasswordLink', email, redirectTo })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) throw new Error(data.message || 'ส่งลิงก์ไม่สำเร็จ');
+    return data;
+  }
+
+  // Fallback if Apps Script is not configured: works only when the Auth user already exists.
+  // It still checks staff_profiles first so random emails do not trigger a login flow from our UI.
+  const { data: profile, error: profileError } = await sb
+    .from('staff_profiles')
+    .select('id,email,is_active')
+    .ilike('email', email)
+    .maybeSingle();
+  if (profileError) throw new Error(profileError.message);
+  if (!profile || !profile.is_active) return { ok: true, skipped: true };
+
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+  return { ok: true };
+}
 function isPasswordRecoveryUrl() {
   const raw = `${window.location.search || ''}${window.location.hash || ''}`;
   return RECOVERY_INTENT
     || raw.includes('type=recovery')
     || raw.includes('type=password_recovery')
-    || raw.includes('mode=recovery');
+    || raw.includes('type=invite')
+    || raw.includes('mode=recovery')
+    || raw.includes('mode=set-password');
 }
 
 async function init() {
@@ -203,41 +235,34 @@ function bindGlobalEvents() {
 
   $('loginForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const email = $('loginEmail').value.trim();
+    const email = $('loginEmail').value.trim().toLowerCase();
     const password = $('loginPassword').value;
     if (!requireMahidolEmail(email)) return showToast('ใช้ได้เฉพาะอีเมล @mahidol.ac.th');
     setBusy(true, 'กำลังเข้าสู่ระบบ');
     const { error } = await sb.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (error) return showToast(error.message);
+    if (error) {
+      const msg = String(error.message || '');
+      if (msg.toLowerCase().includes('invalid login credentials')) {
+        return showToast('อีเมลหรือรหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ตั้งรหัสผ่านใหม่');
+      }
+      return showToast(msg);
+    }
   });
 
-  $('googleLoginBtn').addEventListener('click', async () => {
-    const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: authRedirectUrl() } });
-    if (error) showToast(error.message);
-  });
-
-  $('signupForm').addEventListener('submit', async e => {
+  $('setupPasswordForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const email = $('signupEmail').value.trim();
-    const password = $('signupPassword').value;
+    const email = $('setupPasswordEmail').value.trim().toLowerCase();
     if (!requireMahidolEmail(email)) return showToast('ใช้ได้เฉพาะอีเมล @mahidol.ac.th');
-    setBusy(true, 'กำลังสร้างบัญชี');
-    const { error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: authRedirectUrl() } });
-    setBusy(false);
-    if (error) return showToast(error.message);
-    showToast('ส่งคำขอยืนยันอีเมลแล้ว ถ้า Supabase เปิดยืนยันอีเมลไว้ กรุณากดยืนยันก่อนเข้าใช้');
-  });
-
-  $('forgotForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const email = $('forgotEmail').value.trim();
-    if (!requireMahidolEmail(email)) return showToast('ใช้ได้เฉพาะอีเมล @mahidol.ac.th');
-    setBusy(true, 'กำลังส่งลิงก์');
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl('recovery') });
-    setBusy(false);
-    if (error) return showToast(error.message);
-    showToast('ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว');
+    setBusy(true, 'กำลังส่งลิงก์ตั้งรหัสผ่าน');
+    try {
+      await requestPasswordSetupLink(email);
+      showToast('ถ้าอีเมลนี้อยู่ในรายชื่อเจ้าหน้าที่ ระบบจะส่งลิงก์ให้ตั้งรหัสผ่านใหม่');
+    } catch (err) {
+      showToast(err.message || 'ส่งลิงก์ไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
   });
 
   $('resetPasswordForm').addEventListener('submit', async e => {
@@ -275,6 +300,7 @@ function renderAuthTabs() {
 function showResetPasswordPanel() {
   $('appView').classList.add('hidden');
   document.querySelectorAll('.auth-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.auth-tab').forEach(b => b.classList.remove('active'));
   $('resetPasswordForm').classList.remove('hidden');
   $('resetPasswordForm').classList.add('active');
   $('authView').classList.remove('hidden');
@@ -286,7 +312,7 @@ async function enterApp() {
   await loadProfile();
   if (!state.profile?.is_active) {
     await sb.auth.signOut();
-    showToast('บัญชีนี้ยังไม่ได้เปิดใช้งาน กรุณาให้ Admin เปิดสิทธิ์ก่อน');
+    showToast('บัญชีนี้ยังไม่ได้อยู่ใน whitelist หรือยังไม่ได้เปิดใช้งาน กรุณาให้ Admin ตรวจ staff_profiles');
     setBusy(false);
     return;
   }

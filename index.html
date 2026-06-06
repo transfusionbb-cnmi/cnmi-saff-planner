@@ -19,12 +19,11 @@
     <div class="auth-card">
       <div class="brand-mark">CNMI</div>
       <h1>ระบบเวรและกิจกรรมหน่วยงาน</h1>
-      <p class="muted">Login ด้วย Mahidol email / Google และจัดการเวร ลา กิจกรรม OT ในระบบเดียว</p>
+      <p class="muted">Login ด้วยอีเมล Mahidol และรหัสผ่านของระบบ ใช้รายชื่อเจ้าหน้าที่เป็น whitelist ก่อนเข้าใช้งาน</p>
 
       <div class="auth-tabs">
         <button class="auth-tab active" data-auth-tab="login">เข้าสู่ระบบ</button>
-        <button class="auth-tab" data-auth-tab="signup">ตั้งรหัสผ่านครั้งแรก</button>
-        <button class="auth-tab" data-auth-tab="forgot">ลืมรหัสผ่าน</button>
+        <button class="auth-tab" data-auth-tab="setupPassword">Login ครั้งแรก / ตั้งรหัสผ่านใหม่</button>
       </div>
 
       <form id="loginForm" class="auth-panel active">
@@ -35,25 +34,15 @@
           <input id="loginPassword" type="password" placeholder="รหัสผ่าน" autocomplete="current-password" required>
         </label>
         <button class="primary-btn full-btn" type="submit">เข้าสู่ระบบ</button>
-        <button id="googleLoginBtn" class="ghost-btn full-btn" type="button">เข้าสู่ระบบด้วย Google Mahidol</button>
+        <p class="hint">ยังไม่เคยตั้งรหัสผ่าน หรือจำรหัสผ่านไม่ได้ ให้ไปแท็บ “Login ครั้งแรก / ตั้งรหัสผ่านใหม่”</p>
       </form>
 
-      <form id="signupForm" class="auth-panel">
+      <form id="setupPasswordForm" class="auth-panel">
         <label>อีเมล Mahidol
-          <input id="signupEmail" type="email" placeholder="name@mahidol.ac.th" autocomplete="username" required>
+          <input id="setupPasswordEmail" type="email" placeholder="name@mahidol.ac.th" autocomplete="username" required>
         </label>
-        <label>ตั้งรหัสผ่าน
-          <input id="signupPassword" type="password" placeholder="อย่างน้อย 8 ตัวอักษร" autocomplete="new-password" minlength="8" required>
-        </label>
-        <button class="primary-btn full-btn" type="submit">สมัคร / ตั้งรหัสผ่าน</button>
-        <p class="hint">หลังสมัครครั้งแรก ระบบจะให้ยืนยันอีเมลตามการตั้งค่าใน Supabase</p>
-      </form>
-
-      <form id="forgotForm" class="auth-panel">
-        <label>อีเมล Mahidol
-          <input id="forgotEmail" type="email" placeholder="name@mahidol.ac.th" required>
-        </label>
-        <button class="primary-btn full-btn" type="submit">ส่งลิงก์รีเซ็ตรหัสผ่าน</button>
+        <button class="primary-btn full-btn" type="submit">ส่งลิงก์ให้ตั้งรหัสผ่านใหม่</button>
+        <p class="hint">ระบบจะส่งลิงก์เฉพาะอีเมลที่อยู่ในรายชื่อ staff_profiles และเปิดใช้งานแล้วเท่านั้น</p>
       </form>
 
       <form id="resetPasswordForm" class="auth-panel reset-panel hidden">
