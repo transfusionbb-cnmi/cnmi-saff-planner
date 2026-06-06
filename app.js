@@ -1,9 +1,10 @@
-/* CNMI Staff Planner V36 - mobile monthly schedule views */
+/* CNMI Staff Planner V37 - staff phone autofill + profile change requests */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'ภาพรวมวันนี้', subtitle: 'สรุปภาพรวมทั้งหมดของวันนี้', group: 'staff' },
   { id: 'calendar', icon: '📅', title: 'Calendar กลาง', subtitle: 'รวมลา อบรม ประชุม ออกหน่วย วันหยุด และเวร', group: 'staff' },
   { id: 'leave', icon: '🌿', title: 'แจ้งลา / ไม่รับเวร', subtitle: 'บันทึก แก้ไข ยกเลิก และแนบไฟล์', group: 'staff' },
+  { id: 'myProfile', icon: '👤', title: 'ข้อมูลส่วนตัว', subtitle: 'ดูข้อมูลและขอแก้ไขชื่อ/เบอร์โทร', group: 'staff' },
   { id: 'activities', icon: '🗂️', title: 'กิจกรรมหน่วยงาน', subtitle: 'ประชุม อบรม ออกหน่วย ตรวจมาตรฐาน ซ้อม CODE และอื่นๆ', group: 'staff' },
   { id: 'schedule', icon: '📋', title: 'ตารางเวรประจำเดือน', subtitle: 'ดูรายเดือน Export Excel / PDF / Print', group: 'staff' },
   { id: 'tradeRequests', icon: '🔁', title: 'คำขอแลก/ขายเวร', subtitle: 'รอฉันยืนยัน / รอ Admin บันทึก', group: 'staff' },
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { id: 'hrSummary', icon: '✅', title: 'สรุปตรวจสอบ HR แล้ว', subtitle: 'รายการที่ Admin ตรวจสอบ HR แล้ว ย้อนกลับมาดูได้', group: 'admin' },
   { id: 'scheduler', icon: '🧩', title: 'จัดตารางเวร', subtitle: 'Auto Assign, Drag & Drop, Lock, Publish', group: 'admin' },
   { id: 'positionMonth', icon: '🗓️', title: 'จัดตำแหน่งรายเดือน', subtitle: 'Admin วาง default ทั้งเดือนก่อนให้อินชาร์จปรับรายวัน', group: 'admin' },
+  { id: 'profileRequests', icon: '📝', title: 'คำขอแก้ไขข้อมูลส่วนตัว', subtitle: 'Admin อนุมัติชื่อ/ชื่อเล่น/เบอร์โทร', group: 'admin' },
   { id: 'users', icon: '👥', title: 'ผู้ใช้งานและสิทธิ์', subtitle: 'เพิ่ม/แก้ไขเจ้าหน้าที่ เฉพาะ Admin', group: 'admin' },
   { id: 'eligibility', icon: '✅', title: 'สิทธิ์ตำแหน่งรายวัน', subtitle: 'กำหนดว่าแต่ละคนขึ้นตำแหน่งไหนได้', group: 'admin' }
 ];
@@ -152,6 +154,7 @@ let state = {
   incharges: [],
   positionEligibility: [],
   positionDayStatus: [],
+  profileChangeRequests: [],
   eligibilityStaffId: null,
   auditDate: todayStr(),
   calendarDate: new Date(),
@@ -203,6 +206,7 @@ function currentStaffId() { return state.profile?.id || null; }
 function isAdmin() { return state.profile?.role === 'admin'; }
 function staffName(id) { const s = state.staff.find(x => x.id === id); return s ? `${s.nickname || s.full_name || ''}${s.nickname && s.full_name ? ` (${s.full_name})` : ''}` : '-'; }
 function staffNick(id) { const s = state.staff.find(x => x.id === id); return s?.nickname || s?.full_name || '-'; }
+function staffPhone(id) { const s = state.staff.find(x => x.id === id); return s?.phone || s?.contact_phone || ''; }
 function defaultStaffColor(nick) { return DEFAULT_STAFF_COLORS[String(nick || '').trim()] || '#e8f3ff'; }
 function staffColor(staffOrId) {
   const s = typeof staffOrId === 'object' ? staffOrId : state.staff.find(x => x.id === staffOrId);
@@ -582,6 +586,13 @@ async function loadAllData() {
   state.incharges = incharges.data || [];
   state.positionEligibility = positionEligibility.data || [];
   state.positionDayStatus = positionDayStatus.data || [];
+  if (isAdmin()) {
+    const pr = await sb.from('profile_change_requests').select('*').order('created_at', { ascending:false }).limit(100);
+    state.profileChangeRequests = pr.error ? [] : (pr.data || []);
+  } else {
+    const pr = await sb.from('profile_change_requests').select('*').eq('staff_id', currentStaffId()).order('created_at', { ascending:false }).limit(20);
+    state.profileChangeRequests = pr.error ? [] : (pr.data || []);
+  }
 }
 
 function renderNav() {
@@ -605,6 +616,7 @@ function renderPage() {
     dashboard: renderDashboard,
     calendar: renderCalendar,
     leave: renderLeavePage,
+    myProfile: renderMyProfilePage,
     activities: renderActivitiesPage,
     hr: renderHrPage,
     hrSummary: renderHrSummaryPage,
@@ -614,6 +626,7 @@ function renderPage() {
     positions: renderPositionsPage,
     ot: renderOtPage,
     audit: renderAuditPage,
+    profileRequests: renderProfileRequestsPage,
     users: renderUsersPage,
     eligibility: renderEligibilityPage,
     positionMonth: renderPositionMonthPage,
@@ -1055,12 +1068,13 @@ function renderLeavePage() {
   const rows = state.leaves.filter(x => isAdmin() || x.staff_id === currentStaffId());
   const editing = state.editingLeaveId ? state.leaves.find(x => x.id === state.editingLeaveId) : null;
   const selectedStaff = editing?.staff_id || currentStaffId();
+  const selectedPhone = editing?.contact_phone || staffPhone(selectedStaff);
   return `
     <div class="grid grid-2">
       <div class="card">
         <div class="section-title"><h3>${editing ? 'แก้ไขรายการ' : 'แจ้งลา / ไม่รับเวร'}</h3>${editing ? '<button class="ghost-btn" data-cancel-edit-leave>ยกเลิกแก้ไข</button>' : ''}</div>
         <form id="leaveForm" class="form-grid">
-          ${isAdmin() ? `<label class="wide">บันทึกให้เจ้าหน้าที่ <select name="staff_id" required>${staffOptions(selectedStaff)}</select><span class="hint">Admin เพิ่ม/แก้ไข/ยกเลิกแทน staff ได้ รวมถึงลาย้อนหลัง กรณีเจ้าหน้าที่ไม่สะดวกบันทึกเอง</span></label>` : ''}
+          ${isAdmin() ? `<label class="wide">บันทึกให้เจ้าหน้าที่ <select name="staff_id" id="leaveStaffSelect" required>${staffOptions(selectedStaff)}</select><span class="hint">Admin เพิ่ม/แก้ไข/ยกเลิกแทน staff ได้ รวมถึงลาย้อนหลัง กรณีเจ้าหน้าที่ไม่สะดวกบันทึกเอง</span></label>` : ''}
           ${isAdmin() ? `<div class="notice soft-notice wide"><b>โหมด Admin:</b> บันทึกลาย้อนหลัง/บันทึกแทนเจ้าหน้าที่ได้ ระบบจะเก็บ Log และระบุว่า Admin เป็นผู้บันทึกแทน</div>` : ''}
           <label>ประเภท
             <select name="type" required>${LEAVE_TYPES.map(t => `<option ${editing?.type===t?'selected':''}>${t}</option>`).join('')}</select>
@@ -1072,7 +1086,7 @@ function renderLeavePage() {
               ${['เต็มวัน','ครึ่งเช้า 08:00-12:30','ครึ่งบ่าย 11:30-16:00'].map(v => `<option value="${v}" ${(editing?.leave_period || 'เต็มวัน')===v?'selected':''}>${v}</option>`).join('')}
             </select>
           </label>
-          <label>เบอร์ติดต่อระหว่างลา <input name="contact_phone" value="${escapeHtml(editing?.contact_phone || '')}" placeholder="เบอร์ติดต่อ"></label>
+          <label>เบอร์ติดต่อระหว่างลา <input name="contact_phone" id="leaveContactPhone" value="${escapeHtml(selectedPhone || '')}" placeholder="ระบบเติมจากข้อมูลเจ้าหน้าที่ให้อัตโนมัติ"></label>
           <label>แนบไฟล์ (ถ้ามี) <input name="file" type="file"><span class="hint">ไม่บังคับแนบไฟล์ ถ้ามีเอกสารค่อยแนบได้</span></label>
           ${isAdmin() ? `<label class="wide">เหตุผลที่ Admin บันทึกแทน / ย้อนหลัง <textarea name="admin_record_reason" placeholder="เช่น น้องไม่สะดวกเข้าระบบ / บันทึกย้อนหลังตามใบลา / แจ้งทางโทรศัพท์">${escapeHtml(editing?.admin_record_reason || '')}</textarea></label>` : ''}
           <label class="wide">หมายเหตุ <textarea name="note" placeholder="ระบุรายละเอียดเพิ่มเติม">${escapeHtml(editing?.note || '')}</textarea></label>
@@ -1107,6 +1121,54 @@ function isRosterLockedForDate(date) {
   const closeDay = CFG.ROSTER_CLOSE_DAY || 20;
   const close = new Date(d.getFullYear(), d.getMonth()-1, closeDay, 23,59,59);
   return new Date() > close;
+}
+
+
+function renderMyProfilePage() {
+  const p = state.profile || {};
+  const myReqs = (state.profileChangeRequests || []).filter(r => r.staff_id === currentStaffId()).slice(0, 10);
+  return `<div class="grid grid-2">
+    <div class="card">
+      <div class="section-title"><div><h3>ข้อมูลส่วนตัว</h3><p class="hint">ข้อมูลจริงใช้จากตารางผู้ใช้งาน ถ้าต้องการแก้ ให้ส่งคำขอให้ Admin อนุมัติ</p></div></div>
+      <div class="profile-info-grid">
+        <div><span class="muted">ชื่อเล่น</span><b>${escapeHtml(p.nickname || '-')}</b></div>
+        <div><span class="muted">ชื่อ-สกุล</span><b>${escapeHtml(p.full_name || '-')}</b></div>
+        <div><span class="muted">เบอร์โทร</span><b>${escapeHtml(p.phone || '-')}</b></div>
+        <div><span class="muted">Email</span><b>${escapeHtml(p.email || '-')}</b></div>
+      </div>
+      <form id="profileChangeForm" class="form-grid compact-form">
+        <label>ต้องการแก้ไข <select name="field_name" required><option value="phone">เบอร์โทร</option><option value="nickname">ชื่อเล่น</option><option value="full_name">ชื่อ-สกุล</option></select></label>
+        <label>ข้อมูลใหม่ <input name="new_value" required placeholder="กรอกข้อมูลใหม่"></label>
+        <label class="wide">เหตุผล/หมายเหตุ <textarea name="note" placeholder="เช่น เปลี่ยนเบอร์โทร / สะกดชื่อผิด"></textarea></label>
+        <button class="primary-btn wide" type="submit">ส่งคำขอให้ Admin อนุมัติ</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="section-title"><h3>คำขอล่าสุดของฉัน</h3></div>
+      ${myReqs.length ? `<div class="mobile-cards always-cards">${myReqs.map(r => `<div class="mobile-card"><div class="mobile-day-head"><b>${profileFieldLabel(r.field_name)}</b>${badge(profileRequestStatusText(r.status), profileRequestBadge(r.status))}</div><div><b>ค่าเดิม:</b> ${escapeHtml(r.old_value || '-')}</div><div><b>ค่าใหม่:</b> ${escapeHtml(r.new_value || '-')}</div><div class="muted">${formatThaiDateTime(r.created_at)}</div>${r.review_note ? `<div><b>หมายเหตุ Admin:</b> ${escapeHtml(r.review_note)}</div>` : ''}</div>`).join('')}</div>` : empty('ยังไม่มีคำขอ')}
+    </div>
+  </div>`;
+}
+function profileFieldLabel(f) { return ({ phone:'เบอร์โทร', nickname:'ชื่อเล่น', full_name:'ชื่อ-สกุล' }[f] || f || '-'); }
+function profileRequestStatusText(s) { return ({ pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ไม่อนุมัติ' }[s] || s || '-'); }
+function profileRequestBadge(s) { return s === 'approved' ? 'green' : s === 'rejected' ? 'red' : 'orange'; }
+function renderProfileRequestsPage() {
+  if (!isAdmin()) return noPermission();
+  const rows = state.profileChangeRequests || [];
+  return `<div class="card">
+    <div class="section-title"><div><h3>คำขอแก้ไขข้อมูลส่วนตัว</h3><p class="hint">Admin ตรวจคำขอจาก staff ก่อนเปลี่ยนข้อมูลจริงในระบบ</p></div></div>
+    ${rows.length ? `<div class="mobile-cards always-cards">${rows.map(r => {
+      const st = state.staff.find(s => s.id === r.staff_id) || {};
+      return `<div class="mobile-card"><div class="mobile-day-head"><h3>${staffPill(st)}</h3>${badge(profileRequestStatusText(r.status), profileRequestBadge(r.status))}</div>
+        <div><b>ขอแก้:</b> ${profileFieldLabel(r.field_name)}</div>
+        <div><b>ค่าเดิม:</b> ${escapeHtml(r.old_value || '-')}</div>
+        <div><b>ค่าใหม่:</b> ${escapeHtml(r.new_value || '-')}</div>
+        <div><b>เหตุผล:</b> ${escapeHtml(r.note || '-')}</div>
+        <div class="muted">ส่งเมื่อ ${formatThaiDateTime(r.created_at)}</div>
+        ${r.status === 'pending' ? `<div class="actions"><button class="primary-btn" data-approve-profile-request="${r.id}">อนุมัติ</button><button class="ghost-btn danger" data-reject-profile-request="${r.id}">ไม่อนุมัติ</button></div>` : `<div><b>ผู้ตรวจ:</b> ${staffPill(r.reviewed_by)} <span class="muted">${formatThaiDateTime(r.reviewed_at)}</span></div>${r.review_note ? `<div><b>หมายเหตุ:</b> ${escapeHtml(r.review_note)}</div>` : ''}`}
+      </div>`;
+    }).join('')}</div>` : empty('ยังไม่มีคำขอ')}
+  </div>`;
 }
 
 function renderActivitiesPage() {
@@ -1878,6 +1940,7 @@ function renderUsersPage() {
         <label>รหัสพนักงาน <input name="employee_code"></label>
         <label>ประเภท <select name="staff_type"><option>MT</option><option>เคิก</option><option>แพทย์</option></select></label>
         <label>ตำแหน่ง <input name="position" value="MT"></label>
+        <label>เบอร์โทร <input name="phone" placeholder="เช่น 085-xxx-xxxx"></label>
         <label>Role <select name="role"><option>staff</option><option>admin</option></select></label>
         <label>สีประจำตัว <input name="staff_color" type="color" value="#e8f3ff"></label>
         <button class="primary-btn" type="submit">เพิ่มผู้ใช้งาน</button>
@@ -1885,13 +1948,14 @@ function renderUsersPage() {
     </div>
     <div class="card">
       <div class="section-title"><div><h3>ผู้ใช้งานและสิทธิ์</h3><p class="hint">ข้อมูลบัญชี / สิทธิ์ระบบ / สีประจำตัว</p></div><button class="primary-btn" data-save-staff-users>บันทึกข้อมูลผู้ใช้งาน</button></div>
-      <div class="table-wrap users-desktop-table"><table><thead><tr><th>สี</th><th>ชื่อเล่น</th><th>ชื่อ-สกุล</th><th>Email</th><th>รหัสพนักงาน</th><th>ประเภท</th><th>ตำแหน่ง</th><th>Role</th><th>Active</th><th>ลาคลอด</th><th>จัดเวร</th><th>สถานะตำแหน่งรายวัน</th><th>Auto ตำแหน่ง</th><th>Reset</th></tr></thead><tbody>
+      <div class="table-wrap users-desktop-table"><table><thead><tr><th>สี</th><th>ชื่อเล่น</th><th>ชื่อ-สกุล</th><th>Email</th><th>รหัสพนักงาน</th><th>เบอร์โทร</th><th>ประเภท</th><th>ตำแหน่ง</th><th>Role</th><th>Active</th><th>ลาคลอด</th><th>จัดเวร</th><th>สถานะตำแหน่งรายวัน</th><th>Auto ตำแหน่ง</th><th>Reset</th></tr></thead><tbody>
         ${orderedStaff(state.staff).map(s => `<tr data-staff-row="${s.id}">
           <td><input class="color-input" type="color" data-field="staff_color" value="${escapeHtml(staffColor(s))}"><br>${staffPill(s)}</td>
           <td><input data-field="nickname" value="${escapeHtml(s.nickname || '')}"></td>
           <td><input data-field="full_name" value="${escapeHtml(s.full_name || '')}"></td>
           <td><input data-field="email" value="${escapeHtml(s.email || '')}" placeholder="name@mahidol.ac.th"></td>
           <td><input data-field="employee_code" value="${escapeHtml(s.employee_code || '')}"></td>
+          <td><input data-field="phone" value="${escapeHtml(s.phone || '')}" placeholder="เบอร์โทร"></td>
           <td><select data-field="staff_type"><option value="">-</option><option ${s.staff_type==='MT'?'selected':''}>MT</option><option ${s.staff_type==='เคิก'?'selected':''}>เคิก</option><option ${s.staff_type==='แพทย์'?'selected':''}>แพทย์</option></select></td>
           <td><input data-field="position" value="${escapeHtml(s.position || '')}"></td>
           <td><select data-field="role"><option ${s.role==='staff'?'selected':''}>staff</option><option ${s.role==='admin'?'selected':''}>admin</option></select></td>
@@ -1903,7 +1967,7 @@ function renderUsersPage() {
           <td><button class="tiny-btn" data-reset-user-email="${escapeHtml(s.email || '')}">ส่ง reset</button></td>
         </tr>`).join('')}
       </tbody></table></div>
-      <div class="mobile-cards users-mobile-cards">${orderedStaff(state.staff).map(s => `<div class="mobile-card user-mobile-card" data-staff-row="${s.id}"><div class="mobile-day-head">${staffPill(s)}${badge(s.role || 'staff', s.role==='admin'?'purple':'black')}</div><label>ชื่อเล่น <input data-field="nickname" value="${escapeHtml(s.nickname || '')}"></label><label>ชื่อ-สกุล <input data-field="full_name" value="${escapeHtml(s.full_name || '')}"></label><label>Email <input data-field="email" value="${escapeHtml(s.email || '')}"></label><label>รหัสพนักงาน <input data-field="employee_code" value="${escapeHtml(s.employee_code || '')}"></label><div class="grid grid-2"><label>ประเภท <select data-field="staff_type"><option value="">-</option><option ${s.staff_type==='MT'?'selected':''}>MT</option><option ${s.staff_type==='เคิก'?'selected':''}>เคิก</option><option ${s.staff_type==='แพทย์'?'selected':''}>แพทย์</option></select></label><label>Role <select data-field="role"><option ${s.role==='staff'?'selected':''}>staff</option><option ${s.role==='admin'?'selected':''}>admin</option></select></label></div></div>`).join('')}</div>
+      <div class="mobile-cards users-mobile-cards">${orderedStaff(state.staff).map(s => `<div class="mobile-card user-mobile-card" data-staff-row="${s.id}"><div class="mobile-day-head">${staffPill(s)}${badge(s.role || 'staff', s.role==='admin'?'purple':'black')}</div><label>ชื่อเล่น <input data-field="nickname" value="${escapeHtml(s.nickname || '')}"></label><label>ชื่อ-สกุล <input data-field="full_name" value="${escapeHtml(s.full_name || '')}"></label><label>Email <input data-field="email" value="${escapeHtml(s.email || '')}"></label><label>รหัสพนักงาน <input data-field="employee_code" value="${escapeHtml(s.employee_code || '')}"></label><label>เบอร์โทร <input data-field="phone" value="${escapeHtml(s.phone || '')}"></label><div class="grid grid-2"><label>ประเภท <select data-field="staff_type"><option value="">-</option><option ${s.staff_type==='MT'?'selected':''}>MT</option><option ${s.staff_type==='เคิก'?'selected':''}>เคิก</option><option ${s.staff_type==='แพทย์'?'selected':''}>แพทย์</option></select></label><label>Role <select data-field="role"><option ${s.role==='staff'?'selected':''}>staff</option><option ${s.role==='admin'?'selected':''}>admin</option></select></label></div></div>`).join('')}</div>
       <p class="hint">สิทธิ์ตำแหน่งรายวันแยกไปที่เมนู Admin → สิทธิ์ตำแหน่งรายวัน เพื่อให้ใช้ง่ายขึ้นและไม่ยาวเกินหน้า</p>
     </div>
   </div>`;
@@ -1967,6 +2031,7 @@ async function handleSubmit(e) {
   if (e.target.id === 'otForm') { e.preventDefault(); await saveOtRequest(e.target); }
   if (e.target.id === 'dutyTradeForm') { e.preventDefault(); await saveTradeRequest(e.target); }
   if (e.target.id === 'newStaffForm') { e.preventDefault(); await saveNewStaff(e.target); }
+  if (e.target.id === 'profileChangeForm') { e.preventDefault(); await saveProfileChangeRequest(e.target); }
   if (e.target.id === 'holidayForm') { e.preventDefault(); await saveHoliday(e.target); }
 }
 async function handleClick(e) {
@@ -2015,6 +2080,8 @@ async function handleClick(e) {
   if (t.hasAttribute('data-save-staff-users')) { await saveStaffUsers(); return; }
   if (t.hasAttribute('data-save-position-eligibility')) { await savePositionEligibility(); return; }
   if (t.dataset.resetUserEmail !== undefined) { await resetUserPassword(t.dataset.resetUserEmail); return; }
+  if (t.dataset.approveProfileRequest) { await reviewProfileChangeRequest(t.dataset.approveProfileRequest, 'approved'); return; }
+  if (t.dataset.rejectProfileRequest) { await reviewProfileChangeRequest(t.dataset.rejectProfileRequest, 'rejected'); return; }
   if (t.dataset.auditDetail) { showAuditDetail(t.dataset.auditDetail); return; }
 }
 function handleChange(e) {
@@ -2024,6 +2091,7 @@ function handleChange(e) {
   if (e.target.id === 'eligibilityStaffSelect') { state.eligibilityStaffId = e.target.value; renderPage(); }
   if (e.target.id === 'positionMonthInput') { state.positionMonthKey = e.target.value; state.monthPositionDraft = null; renderPage(); }
   if (e.target.id === 'positionMonthViewInput') { state.positionMonthViewKey = e.target.value; renderPage(); }
+  if (e.target.id === 'leaveStaffSelect') { const inp = document.getElementById('leaveContactPhone'); if (inp && !state.editingLeaveId) inp.value = staffPhone(e.target.value) || ''; }
   if (e.target.id === 'tradeTypeSelect') { updateTradeSwapVisibility(); }
   if (e.target.id === 'tradeReceiverSelect') {
     const sel = document.getElementById('tradeSwapSelect');
@@ -2501,6 +2569,47 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 
+
+async function saveProfileChangeRequest(form) {
+  const fd = new FormData(form);
+  const field = fd.get('field_name');
+  const newValue = String(fd.get('new_value') || '').trim();
+  if (!['phone','nickname','full_name'].includes(field)) return showToast('เลือกข้อมูลที่ต้องการแก้ไขไม่ถูกต้อง');
+  if (!newValue) return showToast('กรุณากรอกข้อมูลใหม่');
+  const oldValue = state.profile?.[field] || '';
+  if (String(oldValue) === newValue) return showToast('ข้อมูลใหม่เหมือนข้อมูลเดิม');
+  const row = { staff_id: currentStaffId(), requested_by: currentStaffId(), field_name: field, old_value: oldValue || null, new_value: newValue, note: fd.get('note') || null, status: 'pending' };
+  setBusy(true, 'กำลังส่งคำขอ');
+  const { error } = await sb.from('profile_change_requests').insert(row);
+  setBusy(false);
+  if (error) return showToast(friendlyDbError(error));
+  form.reset();
+  await loadAllData(); renderPage(); showToast('ส่งคำขอให้ Admin แล้ว');
+}
+async function reviewProfileChangeRequest(id, status) {
+  if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้น');
+  const req = state.profileChangeRequests.find(r => r.id === id);
+  if (!req) return showToast('ไม่พบคำขอ');
+  let note = '';
+  if (status === 'rejected') {
+    note = prompt('เหตุผลที่ไม่อนุมัติ (ถ้ามี)', '') || '';
+  }
+  setBusy(true, 'กำลังบันทึกผลตรวจ');
+  let error = null;
+  if (status === 'approved') {
+    const patch = { [req.field_name]: req.new_value, updated_by: currentStaffId() };
+    const r1 = await sb.from('staff_profiles').update(patch).eq('id', req.staff_id);
+    if (r1.error) error = r1.error;
+  }
+  if (!error) {
+    const r2 = await sb.from('profile_change_requests').update({ status, reviewed_by: currentStaffId(), reviewed_at: new Date().toISOString(), review_note: note || null }).eq('id', id);
+    if (r2.error) error = r2.error;
+  }
+  setBusy(false);
+  if (error) return showToast(friendlyDbError(error));
+  await loadProfile(); await loadAllData(); renderPage(); showToast(status === 'approved' ? 'อนุมัติและอัปเดตข้อมูลแล้ว' : 'บันทึกไม่อนุมัติแล้ว');
+}
+
 async function saveStaffUsers() {
   const rows = Array.from(document.querySelectorAll('[data-staff-row]')).map(tr => {
     const get = field => tr.querySelector(`[data-field="${field}"]`)?.value || '';
@@ -2510,6 +2619,7 @@ async function saveStaffUsers() {
       full_name: get('full_name') || null,
       email: get('email') || null,
       employee_code: get('employee_code') || null,
+      phone: get('phone') || null,
       staff_color: get('staff_color') || null,
       staff_type: get('staff_type') || null,
       position: get('position') || null,
@@ -2535,6 +2645,7 @@ async function saveNewStaff(form) {
     full_name: fd.get('full_name'),
     email,
     employee_code: fd.get('employee_code') || null,
+    phone: fd.get('phone') || null,
     staff_color: fd.get('staff_color') || defaultStaffColor(fd.get('nickname')),
     staff_type: fd.get('staff_type') || null,
     position: fd.get('position') || null,
