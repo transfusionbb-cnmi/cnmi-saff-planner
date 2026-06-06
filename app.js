@@ -230,6 +230,8 @@ function friendlyDbError(error) {
   if (msg.includes('violates not-null constraint')) return 'บันทึกไม่สำเร็จ เพราะมีข้อมูลจำเป็นบางช่องว่างอยู่ กรุณาตรวจช่องที่ยังไม่ได้เลือก';
   if (msg.includes('duplicate key')) return 'บันทึกซ้ำกับข้อมูลเดิม กรุณารีเฟรชแล้วลองใหม่';
   if (msg.includes('row-level security')) return 'สิทธิ์ไม่พอสำหรับบันทึกข้อมูลนี้ กรุณาใช้บัญชี Admin หรืออินชาร์จที่ได้รับสิทธิ์';
+  if (msg.includes('admin_save_leave') || msg.includes('function public.admin_save_leave') || msg.includes('Could not find the function')) return 'ยังบันทึกลาแทนไม่ได้ เพราะยังไม่ได้ Run SQL Patch V26 ใน Supabase';
+  if (msg.includes('admin_record_reason') || msg.includes('recorded_by_admin')) return 'ยังบันทึกลาแทนไม่ได้ เพราะฐานข้อมูลยังไม่มีช่องสำหรับ Admin บันทึกแทน กรุณา Run SQL Patch V26';
   return msg || 'เกิดข้อผิดพลาดขณะบันทึกข้อมูล';
 }
 function setBusy(on, msg='กำลังโหลด') {
@@ -1834,7 +1836,30 @@ async function saveLeave(form) {
   if (file && file.size) row.attachment_path = await uploadFile(file, 'leave');
   setBusy(true, 'กำลังบันทึก');
   const id = state.editingLeaveId;
-  const res = id ? await sb.from('leave_requests').update(row).eq('id', id) : await sb.from('leave_requests').insert({ ...row, created_by: currentStaffId(), status: 'active' });
+  let res;
+  if (isAdmin()) {
+    const adminReason = String(row.admin_record_reason || '').trim();
+    if ((row.staff_id !== currentStaffId() || row.start_date < todayStr() || hasPublishedDay) && !adminReason) {
+      setBusy(false);
+      return showToast('กรุณาระบุเหตุผลที่ Admin บันทึกแทน/ย้อนหลัง เพื่อให้ Audit Log ชัดเจน');
+    }
+    res = await sb.rpc('admin_save_leave', {
+      p_id: id || null,
+      p_staff_id: row.staff_id,
+      p_type: row.type,
+      p_start_date: row.start_date,
+      p_end_date: row.end_date,
+      p_leave_period: row.leave_period,
+      p_note: row.note || null,
+      p_contact_phone: row.contact_phone || null,
+      p_swap_with_staff_id: row.swap_with_staff_id || null,
+      p_attachment_path: row.attachment_path || null,
+      p_admin_record_reason: adminReason || null,
+      p_recorded_by_admin: !!row.recorded_by_admin
+    });
+  } else {
+    res = id ? await sb.from('leave_requests').update(row).eq('id', id) : await sb.from('leave_requests').insert({ ...row, created_by: currentStaffId(), status: 'active' });
+  }
   setBusy(false);
   if (res.error) return showToast(friendlyDbError(res.error));
   state.editingLeaveId = null;
