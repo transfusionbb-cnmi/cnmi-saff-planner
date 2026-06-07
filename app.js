@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V37 - staff phone autofill + profile change requests */
+/* CNMI Staff Planner V38 - username login + activity usability */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'ภาพรวมวันนี้', subtitle: 'สรุปภาพรวมทั้งหมดของวันนี้', group: 'staff' },
@@ -27,6 +27,7 @@ const NAV_GROUPS = [
 
 const LEAVE_TYPES = ['ลาพักร้อน','ลากิจ','ลาป่วย','ลาคลอด','ไม่รับเวร','อื่นๆ'];
 const ACTIVITY_TYPES = ['ประชุม','อบรม','ออกหน่วย','ตรวจมาตรฐาน','ซ้อม CODE','อื่นๆ'];
+const ACTIVITY_LOCATIONS = ['ห้องบริจาคโลหิต','คลังเลือด','ห้องบริจาคโลหิต/คลังเลือด','ห้องประชุม 3D','ห้องประชุม ER'];
 const OT_REASONS = ['มาช่วยปั่นเลือด','มาช่วยจ่ายเลือด','มาช่วยออกหน่วย','อยู่ต่อเคลียร์งาน','มาช่วยงาน CQI','อื่นๆ'];
 const HR_STATUSES = ['รอตรวจสอบ','ตรวจสอบแล้ว','รอเอกสาร','ยกเลิก'];
 const OT_STATUSES = ['รออนุมัติ','อนุมัติ','ไม่อนุมัติ','ส่งกลับแก้ไข'];
@@ -412,16 +413,22 @@ function bindGlobalEvents() {
 
   $('loginForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const email = $('loginEmail').value.trim().toLowerCase();
+    const loginId = $('loginEmail').value.trim();
     const password = $('loginPassword').value;
-    if (!requireMahidolEmail(email)) return showToast('ใช้ได้เฉพาะอีเมล @mahidol.ac.th');
     setBusy(true, 'กำลังเข้าสู่ระบบ');
+    let email = '';
+    try {
+      email = await resolveLoginIdentifier(loginId);
+    } catch (err) {
+      setBusy(false);
+      return showToast(err.message || 'ไม่พบชื่อผู้ใช้');
+    }
     const { error } = await sb.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) {
       const msg = String(error.message || '');
       if (msg.toLowerCase().includes('invalid login credentials')) {
-        return showToast('อีเมลหรือรหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ลืมรหัสผ่าน');
+        return showToast('ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ลืมรหัสผ่าน');
       }
       return showToast(msg);
     }
@@ -1135,9 +1142,10 @@ function renderMyProfilePage() {
         <div><span class="muted">ชื่อ-สกุล</span><b>${escapeHtml(p.full_name || '-')}</b></div>
         <div><span class="muted">เบอร์โทร</span><b>${escapeHtml(p.phone || '-')}</b></div>
         <div><span class="muted">Email</span><b>${escapeHtml(p.email || '-')}</b></div>
+        <div><span class="muted">ชื่อผู้ใช้</span><b>${escapeHtml(p.login_name || p.nickname || '-')}</b></div>
       </div>
       <form id="profileChangeForm" class="form-grid compact-form">
-        <label>ต้องการแก้ไข <select name="field_name" required><option value="phone">เบอร์โทร</option><option value="nickname">ชื่อเล่น</option><option value="full_name">ชื่อ-สกุล</option></select></label>
+        <label>ต้องการแก้ไข <select name="field_name" required><option value="phone">เบอร์โทร</option><option value="login_name">ชื่อผู้ใช้</option><option value="nickname">ชื่อเล่น</option><option value="full_name">ชื่อ-สกุล</option></select></label>
         <label>ข้อมูลใหม่ <input name="new_value" required placeholder="กรอกข้อมูลใหม่"></label>
         <label class="wide">เหตุผล/หมายเหตุ <textarea name="note" placeholder="เช่น เปลี่ยนเบอร์โทร / สะกดชื่อผิด"></textarea></label>
         <button class="primary-btn wide" type="submit">ส่งคำขอให้ Admin อนุมัติ</button>
@@ -1149,7 +1157,7 @@ function renderMyProfilePage() {
     </div>
   </div>`;
 }
-function profileFieldLabel(f) { return ({ phone:'เบอร์โทร', nickname:'ชื่อเล่น', full_name:'ชื่อ-สกุล' }[f] || f || '-'); }
+function profileFieldLabel(f) { return ({ phone:'เบอร์โทร', login_name:'ชื่อผู้ใช้', nickname:'ชื่อเล่น', full_name:'ชื่อ-สกุล' }[f] || f || '-'); }
 function profileRequestStatusText(s) { return ({ pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ไม่อนุมัติ' }[s] || s || '-'); }
 function profileRequestBadge(s) { return s === 'approved' ? 'green' : s === 'rejected' ? 'red' : 'orange'; }
 function renderProfileRequestsPage() {
@@ -1181,7 +1189,7 @@ function renderActivitiesPage() {
         <form id="activityForm" class="form-grid">
           <label class="wide">รายละเอียดกิจกรรม <input name="title" value="${escapeHtml(editing?.title || '')}" placeholder="เช่น ประชุมทีม / ออกหน่วยที่..." required></label>
           <label>ประเภท <select name="event_type" required>${ACTIVITY_TYPES.map(t => `<option ${editing?.event_type===t?'selected':''}>${t}</option>`).join('')}</select></label>
-          <label>สถานที่ <input name="location" value="${escapeHtml(editing?.location || '')}" required></label>
+          <label>สถานที่ <input name="location" list="activityLocationList" value="${escapeHtml(editing?.location || '')}" placeholder="เลือกหรือพิมพ์เอง" required></label><datalist id="activityLocationList">${ACTIVITY_LOCATIONS.map(x => `<option value="${escapeHtml(x)}"></option>`).join('')}</datalist>
           <label>วันที่เริ่ม <input name="start_date" type="date" value="${editing?.start_date || todayStr()}" required></label>
           <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${editing?.end_date || todayStr()}" required></label>
           <label>เวลาเริ่ม <input name="start_time" type="time" value="${editing?.start_time || ''}" required></label>
@@ -1189,7 +1197,7 @@ function renderActivitiesPage() {
           <label>ผู้รับผิดชอบ <select name="owner_id" required><option value="">เลือกผู้รับผิดชอบ</option>${staffOptions(editing?.owner_id || currentStaffId())}</select></label>
           <label>เอกสารแนบ <input name="file" type="file"></label>
           <div class="wide"><div class="field-label">ผู้เข้าร่วม</div>${renderParticipantCheckboxes(asArray(editing?.participant_ids))}</div>
-          <label class="wide">รายละเอียด <textarea name="note" required>${escapeHtml(editing?.note || '')}</textarea></label>
+          <label class="wide">หมายเหตุเพิ่มเติม <textarea name="note" placeholder="ถ้ามี เช่น จำนวนคน / รายละเอียดเสริม">${escapeHtml(editing?.note || '')}</textarea></label>
           <button class="primary-btn wide" type="submit">${editing ? 'บันทึกการแก้ไข' : 'บันทึกกิจกรรม'}</button>
         </form>
       </div>
@@ -1937,6 +1945,7 @@ function renderUsersPage() {
         <label>ชื่อเล่น <input name="nickname" required></label>
         <label>ชื่อ-สกุล <input name="full_name" required></label>
         <label>Email Mahidol <input name="email" placeholder="name@mahidol.ac.th" required></label>
+        <label>ชื่อผู้ใช้ <input name="login_name" placeholder="เช่น mas / gift / ball"></label>
         <label>รหัสพนักงาน <input name="employee_code"></label>
         <label>ประเภท <select name="staff_type"><option>MT</option><option>เคิก</option><option>แพทย์</option></select></label>
         <label>ตำแหน่ง <input name="position" value="MT"></label>
@@ -1948,7 +1957,7 @@ function renderUsersPage() {
     </div>
     <div class="card">
       <div class="section-title"><div><h3>ผู้ใช้งานและสิทธิ์</h3><p class="hint">ข้อมูลบัญชี / สิทธิ์ระบบ / สีประจำตัว</p></div><button class="primary-btn" data-save-staff-users>บันทึกข้อมูลผู้ใช้งาน</button></div>
-      <div class="table-wrap users-desktop-table"><table><thead><tr><th>สี</th><th>ชื่อเล่น</th><th>ชื่อ-สกุล</th><th>Email</th><th>รหัสพนักงาน</th><th>เบอร์โทร</th><th>ประเภท</th><th>ตำแหน่ง</th><th>Role</th><th>Active</th><th>ลาคลอด</th><th>จัดเวร</th><th>สถานะตำแหน่งรายวัน</th><th>Auto ตำแหน่ง</th><th>Reset</th></tr></thead><tbody>
+      <div class="table-wrap users-desktop-table"><table><thead><tr><th>สี</th><th>ชื่อเล่น</th><th>ชื่อ-สกุล</th><th>Email</th><th>รหัสพนักงาน</th><th>เบอร์โทร</th><th>ชื่อผู้ใช้</th><th>ประเภท</th><th>ตำแหน่ง</th><th>Role</th><th>Active</th><th>ลาคลอด</th><th>จัดเวร</th><th>สถานะตำแหน่งรายวัน</th><th>Auto ตำแหน่ง</th><th>Reset</th></tr></thead><tbody>
         ${orderedStaff(state.staff).map(s => `<tr data-staff-row="${s.id}">
           <td><input class="color-input" type="color" data-field="staff_color" value="${escapeHtml(staffColor(s))}"><br>${staffPill(s)}</td>
           <td><input data-field="nickname" value="${escapeHtml(s.nickname || '')}"></td>
@@ -1956,6 +1965,7 @@ function renderUsersPage() {
           <td><input data-field="email" value="${escapeHtml(s.email || '')}" placeholder="name@mahidol.ac.th"></td>
           <td><input data-field="employee_code" value="${escapeHtml(s.employee_code || '')}"></td>
           <td><input data-field="phone" value="${escapeHtml(s.phone || '')}" placeholder="เบอร์โทร"></td>
+          <td><input data-field="login_name" value="${escapeHtml(s.login_name || '')}" placeholder="ชื่อผู้ใช้"></td>
           <td><select data-field="staff_type"><option value="">-</option><option ${s.staff_type==='MT'?'selected':''}>MT</option><option ${s.staff_type==='เคิก'?'selected':''}>เคิก</option><option ${s.staff_type==='แพทย์'?'selected':''}>แพทย์</option></select></td>
           <td><input data-field="position" value="${escapeHtml(s.position || '')}"></td>
           <td><select data-field="role"><option ${s.role==='staff'?'selected':''}>staff</option><option ${s.role==='admin'?'selected':''}>admin</option></select></td>
@@ -1967,7 +1977,7 @@ function renderUsersPage() {
           <td><button class="tiny-btn" data-reset-user-email="${escapeHtml(s.email || '')}">ส่ง reset</button></td>
         </tr>`).join('')}
       </tbody></table></div>
-      <div class="mobile-cards users-mobile-cards">${orderedStaff(state.staff).map(s => `<div class="mobile-card user-mobile-card" data-staff-row="${s.id}"><div class="mobile-day-head">${staffPill(s)}${badge(s.role || 'staff', s.role==='admin'?'purple':'black')}</div><label>ชื่อเล่น <input data-field="nickname" value="${escapeHtml(s.nickname || '')}"></label><label>ชื่อ-สกุล <input data-field="full_name" value="${escapeHtml(s.full_name || '')}"></label><label>Email <input data-field="email" value="${escapeHtml(s.email || '')}"></label><label>รหัสพนักงาน <input data-field="employee_code" value="${escapeHtml(s.employee_code || '')}"></label><label>เบอร์โทร <input data-field="phone" value="${escapeHtml(s.phone || '')}"></label><div class="grid grid-2"><label>ประเภท <select data-field="staff_type"><option value="">-</option><option ${s.staff_type==='MT'?'selected':''}>MT</option><option ${s.staff_type==='เคิก'?'selected':''}>เคิก</option><option ${s.staff_type==='แพทย์'?'selected':''}>แพทย์</option></select></label><label>Role <select data-field="role"><option ${s.role==='staff'?'selected':''}>staff</option><option ${s.role==='admin'?'selected':''}>admin</option></select></label></div></div>`).join('')}</div>
+      <div class="mobile-cards users-mobile-cards">${orderedStaff(state.staff).map(s => `<div class="mobile-card user-mobile-card" data-staff-row="${s.id}"><div class="mobile-day-head">${staffPill(s)}${badge(s.role || 'staff', s.role==='admin'?'purple':'black')}</div><label>ชื่อเล่น <input data-field="nickname" value="${escapeHtml(s.nickname || '')}"></label><label>ชื่อ-สกุล <input data-field="full_name" value="${escapeHtml(s.full_name || '')}"></label><label>Email <input data-field="email" value="${escapeHtml(s.email || '')}"></label><label>รหัสพนักงาน <input data-field="employee_code" value="${escapeHtml(s.employee_code || '')}"></label><label>เบอร์โทร <input data-field="phone" value="${escapeHtml(s.phone || '')}"></label><label>ชื่อผู้ใช้ <input data-field="login_name" value="${escapeHtml(s.login_name || '')}" placeholder="ชื่อผู้ใช้"></label><div class="grid grid-2"><label>ประเภท <select data-field="staff_type"><option value="">-</option><option ${s.staff_type==='MT'?'selected':''}>MT</option><option ${s.staff_type==='เคิก'?'selected':''}>เคิก</option><option ${s.staff_type==='แพทย์'?'selected':''}>แพทย์</option></select></label><label>Role <select data-field="role"><option ${s.role==='staff'?'selected':''}>staff</option><option ${s.role==='admin'?'selected':''}>admin</option></select></label></div></div>`).join('')}</div>
       <p class="hint">สิทธิ์ตำแหน่งรายวันแยกไปที่เมนู Admin → สิทธิ์ตำแหน่งรายวัน เพื่อให้ใช้ง่ายขึ้นและไม่ยาวเกินหน้า</p>
     </div>
   </div>`;
@@ -2237,8 +2247,7 @@ async function saveActivity(form) {
   if (!row.start_time) requiredMissing.push('เวลาเริ่ม');
   if (!row.end_time) requiredMissing.push('เวลาสิ้นสุด');
   if (!row.owner_id) requiredMissing.push('ผู้รับผิดชอบ');
-  if (!participants.length) requiredMissing.push('ผู้เข้าร่วม');
-  if (!row.note) requiredMissing.push('รายละเอียด');
+  if (row.event_type === 'ออกหน่วย' && !participants.length) requiredMissing.push('ผู้เข้าร่วมสำหรับออกหน่วย');
   if (requiredMissing.length) return showToast('กรุณากรอก/เลือกให้ครบ ยกเว้นเอกสารแนบ: ' + requiredMissing.join(', '));
   if (row.end_date < row.start_date) return showToast('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');
   if (row.start_date === row.end_date && row.end_time <= row.start_time) return showToast('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม');
@@ -2574,7 +2583,8 @@ async function saveProfileChangeRequest(form) {
   const fd = new FormData(form);
   const field = fd.get('field_name');
   const newValue = String(fd.get('new_value') || '').trim();
-  if (!['phone','nickname','full_name'].includes(field)) return showToast('เลือกข้อมูลที่ต้องการแก้ไขไม่ถูกต้อง');
+  if (!['phone','login_name','nickname','full_name'].includes(field)) return showToast('เลือกข้อมูลที่ต้องการแก้ไขไม่ถูกต้อง');
+  if (field === 'login_name' && !/^[a-zA-Z0-9._-]{2,30}$/.test(newValue)) return showToast('ชื่อผู้ใช้ควรเป็นอังกฤษ/ตัวเลข 2–30 ตัว เช่น mas หรือ gift');
   if (!newValue) return showToast('กรุณากรอกข้อมูลใหม่');
   const oldValue = state.profile?.[field] || '';
   if (String(oldValue) === newValue) return showToast('ข้อมูลใหม่เหมือนข้อมูลเดิม');
@@ -2620,6 +2630,7 @@ async function saveStaffUsers() {
       email: get('email') || null,
       employee_code: get('employee_code') || null,
       phone: get('phone') || null,
+      login_name: get('login_name') || null,
       staff_color: get('staff_color') || null,
       staff_type: get('staff_type') || null,
       position: get('position') || null,
@@ -2646,6 +2657,7 @@ async function saveNewStaff(form) {
     email,
     employee_code: fd.get('employee_code') || null,
     phone: fd.get('phone') || null,
+    login_name: String(fd.get('login_name') || '').trim() || null,
     staff_color: fd.get('staff_color') || defaultStaffColor(fd.get('nickname')),
     staff_type: fd.get('staff_type') || null,
     position: fd.get('position') || null,
