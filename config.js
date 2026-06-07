@@ -19,6 +19,8 @@ window.CNMI_CONFIG = {
     radiusMeters: 500
   },
 
-  // ปิดรับแก้วันลา/ไม่รับเวรของเดือนปัจจุบัน ตั้งแต่วันที่ 5 ของเดือน เวลา 23:59 เป็นต้นไป
-  ROSTER_CLOSE_DAY: 5
-  };
+    // Staff ปิดรับแก้ลา/ไม่รับเวรของเดือนปัจจุบัน ตั้งแต่วันที่ 5 เวลา 23:59
+    CURRENT_MONTH_CLOSE_DAY: 5,
+
+    // Admin สามารถเพิ่ม/แก้/ยกเลิก/ลบ รายการลาแทน staff ได้เสมอ
+    ADMIN_BYPASS_LEAVE_CLOSE_RULE: true
