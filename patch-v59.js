@@ -762,3 +762,80 @@
   }, 800);
   console.info(`CNMI Staff Planner ${PATCH} loaded`);
 })();
+
+/* V69 sidebar-only fix: real close/open without touching requests or duty logic */
+(function(){
+  const PATCH = 'v69-sidebar-only';
+  function byId(id){ return document.getElementById(id); }
+  function injectSidebarOnlyStyle(){
+    if (document.getElementById('v69-sidebar-only-style')) return;
+    const css = document.createElement('style');
+    css.id = 'v69-sidebar-only-style';
+    css.textContent = `
+      body.cnmi-sidebar-hidden #sidebar.sidebar{
+        display:none!important;width:0!important;min-width:0!important;max-width:0!important;
+        padding:0!important;margin:0!important;border:0!important;overflow:hidden!important;
+      }
+      body.cnmi-sidebar-hidden #appView.app-view{
+        display:grid!important;grid-template-columns:minmax(0,1fr)!important;
+      }
+      body.cnmi-sidebar-hidden .main-panel{
+        grid-column:1 / -1!important;width:100%!important;max-width:none!important;margin-left:0!important;
+      }
+      body.cnmi-sidebar-hidden .topbar{left:0!important;}
+      @media (max-width:820px){
+        body:not(.sidebar-open):not(.cnmi-sidebar-hidden) #sidebar.sidebar:not(.open){
+          transform:translateX(-105%)!important;pointer-events:none!important;
+        }
+        body.sidebar-open #sidebar.sidebar.open{
+          transform:translateX(0)!important;pointer-events:auto!important;
+        }
+        body.cnmi-sidebar-hidden #sidebar.sidebar{display:none!important;}
+      }
+    `;
+    document.head.appendChild(css);
+  }
+  function isSmallLayout(){ return window.matchMedia('(max-width: 820px)').matches; }
+  function normalizeSidebarClasses(){
+    const sidebar = byId('sidebar');
+    if (!sidebar) return null;
+    sidebar.classList.remove('collapsed');
+    document.body.classList.remove('sidebar-collapsed','cnmi-sidebar-collapsed');
+    return sidebar;
+  }
+  function toggleSidebar(e){
+    const btn = e.target && e.target.closest ? e.target.closest('#mobileMenuBtn') : null;
+    if (!btn) return;
+    injectSidebarOnlyStyle();
+    const sidebar = normalizeSidebarClasses();
+    if (!sidebar) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    if (isSmallLayout()) {
+      // จอแคบ: ปุ่มสามขีดทำหน้าที่เปิด/ปิด drawer จริง ไม่ปล่อยให้แถบ sidebar ค้างทับหน้า
+      document.body.classList.remove('cnmi-sidebar-hidden');
+      const opened = sidebar.classList.contains('open') || document.body.classList.contains('sidebar-open');
+      sidebar.classList.toggle('open', !opened);
+      document.body.classList.toggle('sidebar-open', !opened);
+      return false;
+    }
+
+    // จอคอม: ซ่อน sidebar ทั้งแถบและให้พื้นที่หลักกินเต็มจอ
+    sidebar.classList.remove('open');
+    document.body.classList.remove('sidebar-open');
+    document.body.classList.toggle('cnmi-sidebar-hidden');
+    return false;
+  }
+  injectSidebarOnlyStyle();
+  window.addEventListener('click', toggleSidebar, true);
+  window.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') {
+      const sidebar = byId('sidebar');
+      sidebar?.classList.remove('open');
+      document.body.classList.remove('sidebar-open');
+    }
+  }, true);
+  console.info(`CNMI Staff Planner ${PATCH} loaded`);
+})();

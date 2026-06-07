@@ -909,3 +909,12 @@ body.cnmi-sidebar-hidden .app-view{display:grid!important;grid-template-columns:
 body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!important;max-width:none!important;margin-left:0!important;}
 body.cnmi-sidebar-hidden .topbar{left:0!important;}
 body.cnmi-sidebar-hidden .page-content{max-width:none!important;}
+
+/* V69 sidebar-only fix: keep drawer behavior clean and remove old collapsed strip */
+body.cnmi-sidebar-hidden #sidebar.sidebar{display:none!important;width:0!important;min-width:0!important;max-width:0!important;padding:0!important;margin:0!important;border:0!important;overflow:hidden!important;}
+body.cnmi-sidebar-hidden #appView.app-view{display:grid!important;grid-template-columns:minmax(0,1fr)!important;}
+body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!important;max-width:none!important;margin-left:0!important;}
+@media (max-width:820px){
+  body:not(.sidebar-open):not(.cnmi-sidebar-hidden) #sidebar.sidebar:not(.open){transform:translateX(-105%)!important;pointer-events:none!important;}
+  body.sidebar-open #sidebar.sidebar.open{transform:translateX(0)!important;pointer-events:auto!important;}
+}
