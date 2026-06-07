@@ -354,6 +354,37 @@ function requireMahidolEmail(email) {
   const domain = CFG.ALLOWED_DOMAIN || 'mahidol.ac.th';
   return String(email || '').toLowerCase().endsWith('@' + domain.toLowerCase());
 }
+
+async function resolveLoginIdentifier(loginId) {
+  const raw = String(loginId || '').trim();
+  if (!raw) throw new Error('กรุณากรอกชื่อผู้ใช้หรืออีเมล');
+
+  // ถ้ากรอกเป็นอีเมล ให้ใช้ Login ได้ทันที แต่ยังบังคับโดเมน Mahidol
+  if (raw.includes('@')) {
+    const email = raw.toLowerCase();
+    if (!requireMahidolEmail(email)) throw new Error('ใช้ได้เฉพาะอีเมล @mahidol.ac.th');
+    return email;
+  }
+
+  // ถ้ากรอกเป็นชื่อผู้ใช้สั้น ๆ ให้ไปหา email จริงจาก staff_profiles
+  const username = raw.toLowerCase();
+  if (!/^[a-zA-Z0-9._-]{2,30}$/.test(username)) {
+    throw new Error('ชื่อผู้ใช้ควรเป็นอังกฤษ/ตัวเลข 2–30 ตัว หรือใช้อีเมล Mahidol');
+  }
+
+  const { data, error } = await sb
+    .from('staff_profiles')
+    .select('email, login_name, is_active')
+    .ilike('login_name', username)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message || 'ค้นหาชื่อผู้ใช้ไม่สำเร็จ');
+  if (!data || !data.email) throw new Error('ไม่พบชื่อผู้ใช้นี้ กรุณาตรวจสอบกับ Admin');
+  if (data.is_active === false) throw new Error('บัญชีนี้ถูกปิดใช้งาน กรุณาติดต่อ Admin');
+  if (!requireMahidolEmail(data.email)) throw new Error('บัญชีนี้ไม่ได้ใช้อีเมล Mahidol กรุณาติดต่อ Admin');
+  return String(data.email).toLowerCase();
+}
+
 async function requestPasswordSetupLink(email) {
   const redirectTo = authRedirectUrl('recovery');
 
@@ -2047,7 +2078,7 @@ function renderUsersPage() {
         <label>ชื่อเล่น <input name="nickname" required></label>
         <label>ชื่อ-สกุล <input name="full_name" required></label>
         <label>Email Mahidol <input name="email" placeholder="name@mahidol.ac.th" required></label>
-        <label>ชื่อผู้ใช้ <input name="login_name" placeholder="เช่น mas / gift / ball"></label>
+        <label>ชื่อผู้ใช้ <input name="login_name" placeholder="เช่น user / gift / ball"></label>
         <label>รหัสพนักงาน <input name="employee_code"></label>
         <label>ประเภท <select name="staff_type"><option>MT</option><option>เคิก</option><option>แพทย์</option></select></label>
         <label>ตำแหน่ง <input name="position" value="MT"></label>
@@ -2686,7 +2717,7 @@ async function saveProfileChangeRequest(form) {
   const field = fd.get('field_name');
   const newValue = String(fd.get('new_value') || '').trim();
   if (!['phone','login_name','nickname','full_name'].includes(field)) return showToast('เลือกข้อมูลที่ต้องการแก้ไขไม่ถูกต้อง');
-  if (field === 'login_name' && !/^[a-zA-Z0-9._-]{2,30}$/.test(newValue)) return showToast('ชื่อผู้ใช้ควรเป็นอังกฤษ/ตัวเลข 2–30 ตัว เช่น mas หรือ gift');
+  if (field === 'login_name' && !/^[a-zA-Z0-9._-]{2,30}$/.test(newValue)) return showToast('ชื่อผู้ใช้ควรเป็นอังกฤษ/ตัวเลข 2–30 ตัว เช่น user หรือ gift');
   if (!newValue) return showToast('กรุณากรอกข้อมูลใหม่');
   const oldValue = state.profile?.[field] || '';
   if (String(oldValue) === newValue) return showToast('ข้อมูลใหม่เหมือนข้อมูลเดิม');
