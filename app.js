@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V47 - profile/calendar/hr/month-position fixes */
+/* CNMI Staff Planner V53 - profile request visibility + app modal fixes */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'ภาพรวมวันนี้', subtitle: 'สรุปภาพรวมทั้งหมดของวันนี้', group: 'staff' },
@@ -789,7 +789,15 @@ async function loadProfileChangeRequests() {
 
   // V52: ใช้ RPC ใหม่ก่อน แล้วค่อย fallback รุ่นเก่า/direct query
   // สาเหตุที่แก้: บางฐานมีข้อมูลใน profile_change_requests แล้ว แต่หน้าเว็บไม่แสดง เพราะ RLS/RPC รุ่นเก่าคืนค่าว่าง
+  const directMyFilter = [
+    staffId ? `staff_id.eq.${staffId}` : '',
+    staffId ? `requested_by.eq.${staffId}` : '',
+    userId ? `requested_by.eq.${userId}` : '',
+    userId ? `staff_id.eq.${userId}` : ''
+  ].filter(Boolean).join(',');
+
   const attempts = [
+    () => sb.rpc('list_profile_change_requests_v53', { p_staff_id: staffId, p_user_email: email, p_user_id: userId, p_is_admin: isAdmin() }),
     () => sb.rpc('list_profile_change_requests_v52', { p_staff_id: staffId, p_user_email: email, p_user_id: userId, p_is_admin: isAdmin() }),
     () => sb.rpc('list_profile_change_requests_v51', { p_staff_id: staffId, p_user_email: email, p_is_admin: isAdmin() }),
     () => sb.rpc('list_profile_change_requests_v50', { p_staff_id: staffId, p_user_email: email, p_is_admin: isAdmin() }),
@@ -797,7 +805,9 @@ async function loadProfileChangeRequests() {
     () => sb.rpc('list_profile_change_requests_v47', { p_staff_id: staffId, p_is_admin: isAdmin() }),
     () => isAdmin()
       ? sb.from('profile_change_requests').select('*').order('created_at', { ascending:false })
-      : sb.from('profile_change_requests').select('*').or(`staff_id.eq.${staffId},requested_by.eq.${staffId}`).order('created_at', { ascending:false })
+      : (directMyFilter
+          ? sb.from('profile_change_requests').select('*').or(directMyFilter).order('created_at', { ascending:false })
+          : Promise.resolve({ data: [], error: null }))
   ];
 
   for (const fn of attempts) {
@@ -815,7 +825,13 @@ async function loadProfileChangeRequests() {
   }
 
   rows.sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-  state.profileChangeRequests = isAdmin() ? rows : rows.filter(r => String(r.staff_id) === String(staffId) || String(r.requested_by) === String(staffId));
+  state.profileChangeRequests = isAdmin() ? rows : rows.filter(r => {
+    const staffMatch = staffId && (String(r.staff_id) === String(staffId) || String(r.requested_by) === String(staffId));
+    const userMatch = userId && (String(r.staff_id) === String(userId) || String(r.requested_by) === String(userId));
+    const emailMatch = email && String(r.email || r.user_email || r.request_email || '').toLowerCase() === String(email).toLowerCase();
+    return staffMatch || userMatch || emailMatch;
+  });
+  console.info('[profile_change_requests] loaded rows:', rows.length, 'visible rows:', state.profileChangeRequests.length, { isAdmin: isAdmin(), staffId, userId, email });
 }
 
 function renderNav() {
@@ -1381,7 +1397,15 @@ function isBackdatedForStaff(date) {
 function renderMyProfilePage() {
   const p = state.profile || {};
   const myId = currentStaffId();
-  const myReqs = (state.profileChangeRequests || []).filter(r => r.staff_id === myId || r.requested_by === myId).slice(0, 10);
+  const myUserId = state.session?.user?.id || null;
+  const myEmail = String(state.profile?.email || state.session?.user?.email || '').toLowerCase();
+  const myReqs = (state.profileChangeRequests || []).filter(r =>
+    String(r.staff_id || '') === String(myId || '') ||
+    String(r.requested_by || '') === String(myId || '') ||
+    String(r.staff_id || '') === String(myUserId || '') ||
+    String(r.requested_by || '') === String(myUserId || '') ||
+    (!!myEmail && String(r.email || r.user_email || r.request_email || '').toLowerCase() === myEmail)
+  ).slice(0, 10);
   return `<div class="grid grid-2">
     <div class="card">
       <div class="section-title"><div><h3>ข้อมูลส่วนตัว</h3><p class="hint">ข้อมูลจริงใช้จากตารางผู้ใช้งาน ถ้าต้องการแก้ ให้ส่งคำขอให้ Admin อนุมัติ</p></div></div>
@@ -1414,7 +1438,7 @@ function renderProfileRequestsPage() {
   return `<div class="card">
     <div class="section-title"><div><h3>คำขอแก้ไขข้อมูลส่วนตัว</h3><p class="hint">Admin ตรวจคำขอจาก staff ก่อนเปลี่ยนข้อมูลจริงในระบบ</p></div></div>
     ${rows.length ? `<div class="mobile-cards always-cards">${rows.map(r => {
-      const st = state.staff.find(s => s.id === r.staff_id) || {};
+      const st = state.staff.find(s => String(s.id) === String(r.staff_id) || String(s.id) === String(r.requested_by) || String(s.user_id || '') === String(r.requested_by) || String(s.email || '').toLowerCase() === String(r.email || r.user_email || r.request_email || '').toLowerCase()) || {};
       return `<div class="mobile-card"><div class="mobile-day-head"><h3>${staffPill(st)}</h3>${badge(profileRequestStatusText(r.status), profileRequestBadge(r.status))}</div>
         <div><b>ขอแก้:</b> ${profileFieldLabel(r.field_name)}</div>
         <div><b>ค่าเดิม:</b> ${escapeHtml(r.old_value || '-')}</div>
@@ -2998,11 +3022,15 @@ async function saveProfileChangeRequest(form) {
   const oldValue = state.profile?.[field] || '';
   if (String(oldValue) === newValue) return showToast('ข้อมูลใหม่เหมือนข้อมูลเดิม');
   setBusy(true, 'กำลังส่งคำขอ');
-  const { data, error } = await sb.rpc('submit_profile_change_request_v47', {
-    p_field_name: field,
-    p_new_value: newValue,
-    p_note: fd.get('note') || null
-  });
+  let data = null;
+  let error = null;
+  const submitPayload = { p_field_name: field, p_new_value: newValue, p_note: fd.get('note') || null };
+  for (const fn of ['submit_profile_change_request_v53', 'submit_profile_change_request_v47']) {
+    const res = await sb.rpc(fn, submitPayload);
+    if (!res.error) { data = res.data; error = null; break; }
+    error = res.error;
+    console.warn('submit profile change skipped:', fn, res.error.message || res.error);
+  }
   setBusy(false);
   if (error) return showToast(friendlyDbError(error));
   form.reset();
@@ -3019,11 +3047,14 @@ async function reviewProfileChangeRequest(id, status) {
     note = await promptDialog('เหตุผลที่ไม่อนุมัติ (ถ้ามี)', 'ไม่อนุมัติคำขอ') || '';
   }
   setBusy(true, 'กำลังบันทึกผลตรวจ');
-  const { error } = await sb.rpc('review_profile_change_request_v47', {
-    p_request_id: id,
-    p_status: status,
-    p_review_note: note || null
-  });
+  let error = null;
+  const reviewPayload = { p_request_id: id, p_status: status, p_review_note: note || null };
+  for (const fn of ['review_profile_change_request_v53', 'review_profile_change_request_v47']) {
+    const res = await sb.rpc(fn, reviewPayload);
+    if (!res.error) { error = null; break; }
+    error = res.error;
+    console.warn('review profile change skipped:', fn, res.error.message || res.error);
+  }
   setBusy(false);
   if (error) return showToast(friendlyDbError(error));
   await loadProfile(); await loadAllData(); renderPage(); showToast(status === 'approved' ? 'อนุมัติและอัปเดตข้อมูลแล้ว' : 'บันทึกไม่อนุมัติแล้ว');
