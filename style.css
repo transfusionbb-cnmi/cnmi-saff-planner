@@ -901,3 +901,11 @@ body.modal-open { overflow: hidden; }
   th, td { padding: 10px 12px; }
   .profile-info-list > div { padding: 10px 0; }
 }
+
+
+/* V68 sidebar real hide fallback */
+body.cnmi-sidebar-hidden .sidebar{display:none!important;width:0!important;min-width:0!important;max-width:0!important;padding:0!important;margin:0!important;border:0!important;overflow:hidden!important;}
+body.cnmi-sidebar-hidden .app-view{display:grid!important;grid-template-columns:minmax(0,1fr)!important;}
+body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!important;max-width:none!important;margin-left:0!important;}
+body.cnmi-sidebar-hidden .topbar{left:0!important;}
+body.cnmi-sidebar-hidden .page-content{max-width:none!important;}

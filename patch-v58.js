@@ -223,15 +223,15 @@
   document.addEventListener('click', async function(e){
     if (e.target.closest('[data-v58-close-modal]')) { $id('modal')?.classList.add('hidden'); return; }
     const menuBtn = e.target.closest('#mobileMenuBtn');
-    if (menuBtn && window.innerWidth > 900) {
+    // V68 sidebar-only fix: on desktop/not-touch device, the hamburger must hide the sidebar completely.
+    // Do not use the old collapsed mode because it leaves a side strip and pushes content strangely.
+    if (menuBtn && !window.matchMedia('(pointer: coarse)').matches) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      document.body.classList.remove('cnmi-sidebar-collapsed');
       const sidebar = $id('sidebar') || document.getElementById('sidebar');
-      if (sidebar) {
-        sidebar.classList.toggle('collapsed');
-        document.body.classList.toggle('sidebar-collapsed', sidebar.classList.contains('collapsed'));
-      }
+      sidebar?.classList.remove('open','collapsed');
+      document.body.classList.remove('sidebar-open','sidebar-collapsed','cnmi-sidebar-collapsed');
+      document.body.classList.toggle('cnmi-sidebar-hidden');
       return;
     }
     if (e.target.closest('[data-refresh-profile-requests]')) { state.profileChangeRequestsLoaded=false; await loadProfileChangeRequests(); renderPage(); }

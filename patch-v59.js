@@ -527,13 +527,12 @@
     const css = document.createElement('style');
     css.id = 'v67-profile-sidebar-style';
     css.textContent = `
-      @media (min-width:821px){
-        body.cnmi-sidebar-hidden .sidebar{display:none!important;width:0!important;min-width:0!important;padding:0!important;border:0!important;overflow:hidden!important;}
-        body.cnmi-sidebar-hidden .app-view{display:grid!important;grid-template-columns:minmax(0,1fr)!important;}
-        body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!important;max-width:none!important;margin-left:0!important;}
-        body.cnmi-sidebar-hidden .topbar{left:0!important;}
-        body.cnmi-sidebar-hidden .page-content{max-width:none!important;}
-      }
+      /* V68 sidebar-only fix: when hidden, remove sidebar from layout completely on desktop browsers. */
+      body.cnmi-sidebar-hidden .sidebar{display:none!important;width:0!important;min-width:0!important;max-width:0!important;padding:0!important;margin:0!important;border:0!important;overflow:hidden!important;}
+      body.cnmi-sidebar-hidden .app-view{display:grid!important;grid-template-columns:minmax(0,1fr)!important;}
+      body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!important;max-width:none!important;margin-left:0!important;}
+      body.cnmi-sidebar-hidden .topbar{left:0!important;}
+      body.cnmi-sidebar-hidden .page-content{max-width:none!important;}
       .v66-request-list{display:grid;gap:14px;}
       .v66-request-card{line-height:1.55;}
       .v66-request-card .request-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;}
@@ -737,7 +736,7 @@
     const btn = e.target.closest('#mobileMenuBtn');
     if (!btn) return;
     const sidebar = $id('sidebar');
-    if (window.innerWidth > 820) {
+    if (!window.matchMedia('(pointer: coarse)').matches) {
       e.preventDefault();
       e.stopImmediatePropagation();
       sidebar?.classList.remove('open','collapsed');
