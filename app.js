@@ -3662,3 +3662,446 @@ function bindGlobalEvents() {
   document.body.addEventListener('change', handleChange);
   document.body.addEventListener('submit', handleSubmit);
 }
+
+/* =========================================================
+   V57 hotfix: restore profile request display, no-duty quota,
+   dashboard duty order, activity list UX, sidebar/logout polish
+   ========================================================= */
+(function () {
+  const VERSION = 'V57';
+  const WEEKEND_NO_DUTY_LIMIT = 2;
+  const WEEKDAY_NO_DUTY_LIMIT = 5;
+
+  function s(v) { return String(v ?? '').trim(); }
+  function low(v) { return s(v).toLowerCase(); }
+  function idEq(a,b) { return s(a) && s(a) === s(b); }
+  function isPending(r) { return low(r?.status || 'pending') === 'pending'; }
+  function isFinal(r) { return ['approved','rejected'].includes(low(r?.status || '')); }
+  function statusClass(st) { return low(st) === 'approved' ? 'green' : low(st) === 'rejected' ? 'red' : 'orange'; }
+  function statusText(st) { return ({ approved:'อนุมัติแล้ว', rejected:'ไม่อนุมัติ', pending:'รออนุมัติ' }[low(st)] || st || 'รออนุมัติ'); }
+  function cleanMonth(v) { return s(v || state.profileSummaryFilterMonth || state.monthKey || monthKey(new Date())); }
+
+  function normalizeRequest(row) {
+    if (!row) return row;
+    return {
+      ...row,
+      id: row.id || row.request_id,
+      staff_id: row.staff_id || row.staffId,
+      requested_by: row.requested_by || row.requestedBy,
+      requested_by_email: row.requested_by_email || row.email || row.user_email || row.request_email || row.requester_email || row.staff_email,
+      staff_email: row.staff_email || row.email || row.user_email || row.request_email || row.requester_email,
+      staff_nickname: row.staff_nickname || row.nickname,
+      staff_full_name: row.staff_full_name || row.full_name,
+      field_name: row.field_name || row.fieldName,
+      old_value: row.old_value ?? row.oldValue ?? '',
+      new_value: row.new_value ?? row.newValue ?? '',
+      note: row.note ?? '',
+      status: row.status || 'pending',
+      reviewed_by: row.reviewed_by || row.reviewedBy,
+      reviewed_at: row.reviewed_at || row.reviewedAt,
+      review_note: row.review_note || row.reviewNote || '',
+      created_at: row.created_at || row.createdAt
+    };
+  }
+
+  function requestStaff(row) {
+    const r = normalizeRequest(row);
+    const emailCandidates = [r.staff_email, r.requested_by_email].map(low).filter(Boolean);
+    return (state.staff || []).find(st =>
+      idEq(st.id, r.staff_id) || idEq(st.id, r.requested_by) || idEq(st.user_id, r.requested_by) ||
+      emailCandidates.includes(low(st.email))
+    ) || null;
+  }
+
+  function requestIsMine(row) {
+    const r = normalizeRequest(row);
+    const me = state.profile || {};
+    const staffId = s(currentStaffId());
+    const userId = s(state.session?.user?.id);
+    const email = low(me.email || state.session?.user?.email);
+    const st = requestStaff(r);
+    return idEq(r.staff_id, staffId) || idEq(r.requested_by, staffId) || idEq(r.requested_by, userId) ||
+      idEq(st?.id, staffId) || idEq(st?.user_id, userId) ||
+      (!!email && [r.staff_email, r.requested_by_email, st?.email].map(low).includes(email));
+  }
+
+  async function rpcRows(name, args) {
+    try {
+      const res = await sb.rpc(name, args || {});
+      if (!res?.error) return res.data || [];
+      console.warn(`[${VERSION}] ${name} skipped:`, res.error.message || res.error);
+    } catch (err) {
+      console.warn(`[${VERSION}] ${name} failed:`, err);
+    }
+    return [];
+  }
+
+  window.loadProfileChangeRequests = async function loadProfileChangeRequestsV57() {
+    const staffId = currentStaffId();
+    const email = state.profile?.email || state.session?.user?.email || null;
+    const userId = state.session?.user?.id || null;
+    const admin = isAdmin();
+    const collected = [];
+    const seen = new Set();
+    const add = (arr) => (arr || []).forEach(raw => {
+      const r = normalizeRequest(raw);
+      if (!r) return;
+      const key = r.id || `${r.staff_id || ''}|${r.requested_by || ''}|${r.field_name || ''}|${r.new_value || ''}|${r.created_at || ''}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      collected.push(r);
+    });
+
+    add(await rpcRows('list_profile_change_requests_v57', { p_staff_id: staffId, p_user_email: email, p_user_id: userId, p_is_admin: admin }));
+    if (!collected.length) add(await rpcRows('list_profile_change_requests_v56', { p_staff_id: staffId, p_user_email: email, p_user_id: userId, p_is_admin: admin }));
+    if (!collected.length) add(await rpcRows('list_profile_change_requests_v54', { p_staff_id: staffId, p_user_email: email, p_user_id: userId, p_is_admin: admin }));
+    if (!collected.length) add(await rpcRows('list_profile_change_requests_v52', { p_staff_id: staffId, p_user_email: email, p_user_id: userId, p_is_admin: admin }));
+    if (!collected.length) {
+      try {
+        const q = await sb.from('profile_change_requests').select('*').order('created_at', { ascending:false });
+        if (!q.error) add(q.data || []);
+        else console.warn(`[${VERSION}] direct profile_change_requests skipped:`, q.error.message || q.error);
+      } catch (err) { console.warn(`[${VERSION}] direct profile_change_requests failed`, err); }
+    }
+
+    collected.sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    state.profileChangeRequests = admin ? collected : collected.filter(requestIsMine);
+    console.info(`[profile_change_requests ${VERSION}] loaded rows:`, collected.length, 'visible:', state.profileChangeRequests.length, { staffId, userId, email, admin });
+  };
+
+  function requestCard(row, adminMode=false, summaryMode=false) {
+    const r = normalizeRequest(row);
+    const st = requestStaff(r);
+    const who = st ? staffPill(st) : `<span class="staff-color-pill">${escapeHtml(r.staff_nickname || r.staff_full_name || r.staff_email || r.requested_by_email || 'ไม่พบชื่อผู้ส่ง')}</span>`;
+    const action = adminMode && isPending(r) ? `<div class="actions request-actions"><button class="primary-btn" data-approve-profile-request="${r.id}">อนุมัติ</button><button class="ghost-btn danger" data-reject-profile-request="${r.id}">ไม่อนุมัติ</button></div>` : '';
+    return `<div class="mobile-card request-card v57-request-card">
+      <div class="request-head"><div>${adminMode || summaryMode ? who : `<b>${profileFieldLabel(r.field_name)}</b>`}</div>${badge(statusText(r.status), statusClass(r.status))}</div>
+      ${adminMode || summaryMode ? `<div><b>ขอแก้:</b> ${escapeHtml(profileFieldLabel(r.field_name))}</div>` : ''}
+      <div><b>ค่าเดิม:</b> ${escapeHtml(r.old_value || '-')}</div>
+      <div><b>ค่าใหม่:</b> ${escapeHtml(r.new_value || '-')}</div>
+      <div><b>เหตุผล/หมายเหตุ:</b> ${escapeHtml(r.note || '-')}</div>
+      <div class="muted">ส่งเมื่อ ${formatThaiDateTime(r.created_at)}</div>
+      ${r.reviewed_at ? `<div class="muted">ตรวจเมื่อ ${formatThaiDateTime(r.reviewed_at)} ${r.reviewed_by ? `โดย ${staffPill(r.reviewed_by)}` : ''}</div>` : ''}
+      ${r.review_note ? `<div><b>หมายเหตุ Admin:</b> ${escapeHtml(r.review_note)}</div>` : ''}
+      ${action}
+    </div>`;
+  }
+
+  window.renderMyProfilePage = function renderMyProfilePageV57() {
+    const p = state.profile || {};
+    const myReqs = (state.profileChangeRequests || []).map(normalizeRequest).filter(requestIsMine).slice(0, 20);
+    return `<div class="grid grid-2 profile-page-grid v57-profile-page" id="myProfilePage">
+      <div class="card profile-card-readable">
+        <div class="section-title"><h3>ข้อมูลส่วนตัว</h3></div>
+        <p class="hint">ข้อมูลจริงใช้จากตารางผู้ใช้งาน ถ้าต้องการแก้ ให้ส่งคำขอให้ Admin อนุมัติ</p>
+        <div class="profile-info-list">
+          <div><span>ชื่อเล่น</span><b>${escapeHtml(p.nickname || '-')}</b></div>
+          <div><span>ชื่อ-สกุล</span><b>${escapeHtml(p.full_name || '-')}</b></div>
+          <div><span>เบอร์โทร</span><b>${escapeHtml(p.phone || '-')}</b></div>
+          <div><span>Email</span><b>${escapeHtml(p.email || '-')}</b></div>
+          <div><span>ชื่อผู้ใช้</span><b>${escapeHtml(p.login_name || '-')}</b></div>
+        </div>
+        <form id="profileChangeForm" class="form-grid compact-form">
+          <div class="form-grid two-cols">
+            <label>ต้องการแก้ไข <select name="field_name" required><option value="phone">เบอร์โทร</option><option value="login_name">ชื่อผู้ใช้</option><option value="nickname">ชื่อเล่น</option><option value="full_name">ชื่อ-สกุล</option></select></label>
+            <label>ข้อมูลใหม่ <input name="new_value" required placeholder="กรอกข้อมูลใหม่"></label>
+          </div>
+          <label>เหตุผล/หมายเหตุ <textarea name="note" placeholder="เช่น เปลี่ยนเบอร์โทร / สะกดชื่อผิด"></textarea></label>
+          <button class="primary-btn full-btn" type="submit">ส่งคำขอให้ Admin อนุมัติ</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="section-title"><h3>คำขอล่าสุดของฉัน</h3><button class="ghost-btn" type="button" onclick="loadProfileChangeRequests().then(renderPage)">รีเฟรช</button></div>
+        ${myReqs.length ? `<div class="mobile-cards always-cards">${myReqs.map(r => requestCard(r, false, false)).join('')}</div>` : empty('ยังไม่มีคำขอ')}
+      </div>
+    </div>`;
+  };
+
+  window.renderProfileRequestsPage = function renderProfileRequestsPageV57() {
+    if (!isAdmin()) return noPermission();
+    const rows = (state.profileChangeRequests || []).map(normalizeRequest).filter(isPending);
+    return `<div class="card">
+      <div class="section-title"><div><h3>คำขอแก้ไขข้อมูลส่วนตัว</h3><p class="hint">แสดงเฉพาะรายการที่รออนุมัติ</p></div><button class="ghost-btn" type="button" onclick="loadProfileChangeRequests().then(renderPage)">รีเฟรชคำขอ</button></div>
+      ${rows.length ? `<div class="mobile-cards always-cards v57-request-list">${rows.map(r => requestCard(r, true, false)).join('')}</div>` : empty('ไม่มีคำขอรออนุมัติ')}
+    </div>`;
+  };
+
+  window.renderProfileRequestSummaryPage = function renderProfileRequestSummaryPageV57() {
+    if (!isAdmin()) return noPermission();
+    const month = cleanMonth(state.profileSummaryFilterMonth);
+    const staff = state.profileSummaryFilterStaff || '';
+    const rows = (state.profileChangeRequests || []).map(normalizeRequest)
+      .filter(isFinal)
+      .filter(r => !month || String(r.reviewed_at || r.created_at || '').slice(0,7) === month)
+      .filter(r => !staff || String(r.staff_id) === String(staff) || String(requestStaff(r)?.id) === String(staff));
+    return `<div class="card">
+      <div class="section-title"><div><h3>สรุปคำขอแก้ไขข้อมูลส่วนตัว</h3><p class="hint">เลือกคน/เดือนก่อน ระบบจะแสดงเฉพาะรายการที่อนุมัติหรือไม่อนุมัติแล้ว</p></div><button class="ghost-btn" type="button" onclick="loadProfileChangeRequests().then(renderPage)">รีเฟรช</button></div>
+      <div class="toolbar compact-filter">
+        <label>คน <select id="profileSummaryFilterStaff"><option value="">ทุกคน</option>${orderedStaff(state.staff).map(st => `<option value="${st.id}" ${staff===st.id?'selected':''}>${escapeHtml(st.nickname || st.full_name)}</option>`).join('')}</select></label>
+        <label>เดือน <input type="month" id="profileSummaryFilterMonth" value="${month}"></label>
+      </div>
+      ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>คน</th><th>ขอแก้</th><th>ค่าใหม่</th><th>สถานะ</th><th>ผู้ตรวจ/เวลา</th><th>ย้อนกลับ</th></tr></thead><tbody>${rows.map(r => `<tr>
+        <td>${requestStaff(r) ? staffPill(requestStaff(r)) : escapeHtml(r.staff_nickname || r.staff_email || '-')}</td>
+        <td>${escapeHtml(profileFieldLabel(r.field_name))}<br><span class="muted">เดิม: ${escapeHtml(r.old_value || '-')}</span></td>
+        <td>${escapeHtml(r.new_value || '-')}</td>
+        <td>${badge(statusText(r.status), statusClass(r.status))}</td>
+        <td>${r.reviewed_by ? staffPill(r.reviewed_by) : '-'}<br><span class="muted">${formatThaiDateTime(r.reviewed_at)}</span></td>
+        <td>${low(r.status)==='approved' ? `<button class="tiny-btn danger" data-revert-profile-request="${r.id}">ย้อนกลับ</button>` : '-'}</td>
+      </tr>`).join('')}</tbody></table></div>` : empty('ไม่พบข้อมูลตามตัวกรอง')}
+    </div>`;
+  };
+
+  function ensureProfileSummaryNav() {
+    if (!NAV_ITEMS.some(x => x.id === 'profileRequestSummary')) {
+      const idx = NAV_ITEMS.findIndex(x => x.id === 'profileRequests');
+      NAV_ITEMS.splice(idx >= 0 ? idx + 1 : NAV_ITEMS.length, 0, { id:'profileRequestSummary', icon:'📄', title:'สรุปคำขอแก้ไขข้อมูลส่วนตัว', subtitle:'รายการที่อนุมัติ/ไม่อนุมัติแล้ว', group:'admin' });
+    }
+  }
+  ensureProfileSummaryNav();
+
+  window.renderPage = function renderPageV57() {
+    const item = NAV_ITEMS.find(x => x.id === state.page) || NAV_ITEMS[0];
+    $('pageTitle').textContent = item.title;
+    $('pageSubtitle').textContent = item.subtitle;
+    renderNav();
+    const pages = {
+      dashboard: renderDashboard, calendar: renderCalendar, leave: renderLeavePage, myProfile: renderMyProfilePage,
+      activities: renderActivitiesPage, hr: renderHrPage, hrSummary: renderHrSummaryPage, scheduler: renderSchedulerPage,
+      schedule: renderMonthlySchedulePage, tradeRequests: renderTradeRequestsPage, positions: renderPositionsPage,
+      ot: renderOtPage, audit: renderAuditPage, profileRequests: renderProfileRequestsPage,
+      profileRequestSummary: renderProfileRequestSummaryPage, users: renderUsersPage, eligibility: renderEligibilityPage,
+      positionMonth: renderPositionMonthPage, positionMonthView: renderPositionMonthViewPage
+    };
+    $('pageContent').innerHTML = (pages[state.page] || renderDashboard)();
+  };
+
+  window.resolveLoginIdentifier = async function resolveLoginIdentifierV57(loginId) {
+    const raw = s(loginId);
+    if (!raw) throw new Error('กรุณากรอกชื่อผู้ใช้หรืออีเมล');
+    if (raw.includes('@')) {
+      const email = low(raw);
+      if (!requireMahidolEmail(email)) throw new Error('ใช้ได้เฉพาะอีเมล @mahidol.ac.th');
+      return email;
+    }
+    if (!/^[a-zA-Z0-9._-]+$/.test(raw)) throw new Error('ชื่อผู้ใช้ใช้ได้เฉพาะอังกฤษ ตัวเลข จุด ขีดกลาง หรือขีดล่าง');
+    for (const fn of ['resolve_login_identifier_v57', 'resolve_login_identifier_v56']) {
+      try {
+        const r = await sb.rpc(fn, { p_identifier: raw });
+        if (!r.error && r.data) return low(r.data);
+      } catch (_) {}
+    }
+    throw new Error('ไม่พบชื่อผู้ใช้นี้ กรุณาตรวจสอบกับ Admin');
+  };
+
+  window.dashboardDutySortOrder = function dashboardDutySortOrderV57(date) {
+    if (isHolidayDate(date)) return ['ชบด1','ชบด2','ชบด3'];
+    if (isWeekend(date)) return ['ชบด1','ชบด2','ชบด3','ช3A','ช3B','ช9-เคิก','ช9-MT'];
+    return ['ชบด1','ชบด2','ชบด3','ช4A','ช4B'];
+  };
+  window.sortDashboardDuties = function sortDashboardDutiesV57(rows, date) {
+    const order = dashboardDutySortOrder(date);
+    return [...(rows || [])].filter(r => order.includes(r.duty_code)).sort((a,b) => order.indexOf(a.duty_code) - order.indexOf(b.duty_code));
+  };
+
+  window.renderActivitiesPage = function renderActivitiesPageV57() {
+    const editing = state.editingActivityId ? state.activities.find(x => x.id === state.editingActivityId) : null;
+    const activityMonth = state.activityFilterMonth || state.monthKey || monthKey(new Date());
+    const activityType = state.activityFilterType || '';
+    const rows = [...(state.activities || [])]
+      .filter(r => !activityMonth || String(r.start_date || '').slice(0,7) === activityMonth || String(r.end_date || '').slice(0,7) === activityMonth)
+      .filter(r => !activityType || r.event_type === activityType)
+      .sort((a,b) => String(a.start_date || '').localeCompare(String(b.start_date || '')) || String(a.start_time || '').localeCompare(String(b.start_time || '')));
+    return `<div class="grid grid-2 activities-v57">
+      <div class="card">
+        <div class="section-title"><h3>${editing ? 'แก้ไขกิจกรรม' : 'เพิ่มกิจกรรมหน่วยงาน'}</h3>${editing ? '<button class="ghost-btn" data-cancel-edit-activity>ยกเลิกแก้ไข</button>' : ''}</div>
+        <form id="activityForm" class="form-grid">
+          <label class="wide">รายละเอียดกิจกรรม <input name="title" value="${escapeHtml(editing?.title || '')}" placeholder="เช่น ประชุมทีม / ออกหน่วยที่..." required></label>
+          <label>ประเภท <select name="event_type" required>${ACTIVITY_TYPES.map(t => `<option ${editing?.event_type===t?'selected':''}>${t}</option>`).join('')}</select></label>
+          <label>สถานที่ <input name="location" list="activityLocationList" value="${escapeHtml(editing?.location || '')}" placeholder="เลือกหรือพิมพ์เอง" required></label><datalist id="activityLocationList">${ACTIVITY_LOCATIONS.map(x => `<option value="${escapeHtml(x)}"></option>`).join('')}</datalist>
+          <label>วันที่เริ่ม <input name="start_date" type="date" value="${editing?.start_date || todayStr()}" required></label>
+          <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${editing?.end_date || todayStr()}" required></label>
+          <label>เวลาเริ่ม <input name="start_time" type="time" value="${editing?.start_time || ''}" required></label>
+          <label>เวลาสิ้นสุด <input name="end_time" type="time" value="${editing?.end_time || ''}" required></label>
+          <label>ผู้รับผิดชอบ <select name="owner_id" required><option value="">เลือกผู้รับผิดชอบ</option>${staffOptions(editing?.owner_id || currentStaffId())}</select></label>
+          <label>เอกสารแนบ <input name="file" type="file"></label>
+          <div class="wide"><div class="field-label">ผู้เข้าร่วม</div>${renderParticipantCheckboxes(asArray(editing?.participant_ids))}</div>
+          <label class="wide">หมายเหตุเพิ่มเติม <textarea name="note" placeholder="ถ้ามี เช่น จำนวนคน / รายละเอียดเสริม">${escapeHtml(editing?.note || '')}</textarea></label>
+          <button class="primary-btn wide" type="submit">${editing ? 'บันทึกการแก้ไข' : 'บันทึกกิจกรรม'}</button>
+        </form>
+      </div>
+      <div class="card activity-list-card">
+        <div class="section-title"><h3>กิจกรรมทั้งหมด</h3></div>
+        <div class="toolbar compact-filter">
+          <label>เดือน <input type="month" id="activityFilterMonth" value="${activityMonth}"></label>
+          <label>ประเภท <select id="activityFilterType"><option value="">ทุกประเภท</option>${ACTIVITY_TYPES.map(t => `<option value="${t}" ${activityType===t?'selected':''}>${t}</option>`).join('')}</select></label>
+        </div>
+        ${rows.length ? renderActivityTableV57(rows) : empty('ไม่พบกิจกรรมตามตัวกรอง')}
+      </div>
+    </div>`;
+  };
+
+  function renderActivityTableV57(rows) {
+    return `<div class="activity-card-list">${rows.map(r => {
+      const participants = asArray(r.participant_ids).map(staffNick).filter(Boolean).join(', ') || '-';
+      return `<div class="activity-row-card">
+        <div class="activity-row-head"><div><b>${escapeHtml(r.title)}</b><br>${badge(r.event_type, activityClass(r.event_type))}</div><span class="muted">${formatThaiDate(r.start_date)}</span></div>
+        <div class="activity-row-detail"><span>เวลา</span><b>${escapeHtml([r.start_time, r.end_time].filter(Boolean).join(' - ') || '-')}</b></div>
+        <div class="activity-row-detail"><span>สถานที่</span><b>${escapeHtml(r.location || '-')}</b></div>
+        <div class="activity-row-detail"><span>ผู้รับผิดชอบ</span><b>${escapeHtml(staffNick(r.owner_id) || '-')}</b></div>
+        <div class="activity-row-detail"><span>ผู้เข้าร่วม</span><b>${escapeHtml(participants)}</b></div>
+        <div class="actions">${(isAdmin() || r.created_by === currentStaffId() || r.owner_id === currentStaffId()) ? `<button class="tiny-btn" data-edit-activity="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-delete-activity="${r.id}">ลบ</button>` : '<span class="muted">ดูอย่างเดียว</span>'}</div>
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  function daysInRange(start, end) { return datesBetween(start, end); }
+  function noDutyCountsV57(staffId, mk, excludeId='') {
+    let weekend = 0, weekday = 0;
+    (state.leaves || []).filter(l => l.type === 'ไม่รับเวร' && low(l.status || 'active') !== 'cancelled' && idEq(l.staff_id, staffId) && !idEq(l.id, excludeId)).forEach(l => {
+      daysInRange(l.start_date, l.end_date).forEach(d => {
+        if (String(d).slice(0,7) !== mk) return;
+        if (isWeekend(d)) weekend += 1; else weekday += 1;
+      });
+    });
+    return { weekend, weekday };
+  }
+  function requestedNoDutyCountsV57(row, mk) {
+    let weekend = 0, weekday = 0;
+    daysInRange(row.start_date, row.end_date).forEach(d => {
+      if (String(d).slice(0,7) !== mk) return;
+      if (isWeekend(d)) weekend += 1; else weekday += 1;
+    });
+    return { weekend, weekday };
+  }
+  window.validateNoDutyLimit = function validateNoDutyLimitV57(row, excludeId='') {
+    if (isAdmin() || row.type !== 'ไม่รับเวร') return null;
+    const months = Array.from(new Set(daysInRange(row.start_date, row.end_date).map(d => String(d).slice(0,7))));
+    for (const mk of months) {
+      const oldC = noDutyCountsV57(row.staff_id, mk, excludeId);
+      const newC = requestedNoDutyCountsV57(row, mk);
+      if (oldC.weekend + newC.weekend > WEEKEND_NO_DUTY_LIMIT) return 'เดือนนี้ไม่รับเวรเสาร์-อาทิตย์ครบ 2 วันแล้ว';
+      if (oldC.weekday + newC.weekday > WEEKDAY_NO_DUTY_LIMIT) return 'เดือนนี้ไม่รับเวรวันธรรมดาครบ 5 วันแล้ว';
+    }
+    return null;
+  };
+
+  const oldHandleChange = window.handleChange || handleChange;
+  window.handleChange = function handleChangeV57(e) {
+    const t = e.target;
+    if (t.id === 'profileSummaryFilterStaff') { state.profileSummaryFilterStaff = t.value; renderPage(); return; }
+    if (t.id === 'profileSummaryFilterMonth') { state.profileSummaryFilterMonth = t.value; renderPage(); return; }
+    if (t.id === 'activityFilterMonth') { state.activityFilterMonth = t.value; renderPage(); return; }
+    if (t.id === 'activityFilterType') { state.activityFilterType = t.value; renderPage(); return; }
+    return oldHandleChange(e);
+  };
+
+  const oldHandleClick = window.handleClick || handleClick;
+  window.handleClick = async function handleClickV57(e) {
+    const t = e.target.closest('button, [data-page], [data-revert-profile-request]');
+    if (t?.dataset?.revertProfileRequest) {
+      if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้น', { tone:'error' });
+      const id = t.dataset.revertProfileRequest;
+      const ok = await confirmDialog('ยืนยันย้อนกลับ', 'ย้อนข้อมูลกลับเป็นค่าเดิมของคำขอนี้หรือไม่?');
+      if (!ok) return;
+      const req = (state.profileChangeRequests || []).map(normalizeRequest).find(r => String(r.id) === String(id));
+      if (!req) return showToast('ไม่พบคำขอ', { tone:'error' });
+      if (!req.old_value && req.field_name !== 'login_name') return showToast('ไม่มีค่าเดิมสำหรับย้อนกลับ กรุณาแก้ในเมนูผู้ใช้งานและสิทธิ์', { tone:'error' });
+      const patch = { updated_at: new Date().toISOString() };
+      patch[req.field_name] = req.old_value || null;
+      const { error } = await sb.from('staff_profiles').update(patch).eq('id', req.staff_id);
+      if (error) return showToast(friendlyDbError(error), { tone:'error' });
+      await loadAllData(); renderPage(); showToast('ย้อนกลับข้อมูลแล้ว');
+      return;
+    }
+    return oldHandleClick(e);
+  };
+
+  window.showToast = function showToastV57(msg, opts={}) {
+    const text = String(msg || 'ดำเนินการเรียบร้อย');
+    const errorWords = /(ไม่สำเร็จ|ผิดพลาด|error|กรุณา|ไม่ได้|ไม่พบ|สิทธิ์ไม่พอ|ล้มเหลว|ไม่ถูกต้อง|หมดอายุ|ไม่สมบูรณ์|ปฏิเสธ|denied|invalid|failed|ครบ\s*\d+\s*วัน|ลิงก์)/i;
+    const tone = opts.tone || (errorWords.test(text) ? 'error' : 'success');
+    const title = opts.title || (tone === 'error' ? 'แจ้งเตือน' : 'สำเร็จ');
+    showModal(`<div class="app-alert ${tone}"><div class="app-alert-icon">${tone === 'error' ? '!' : '✓'}</div><h2>${escapeHtml(title)}</h2><p>${escapeHtml(text)}</p><div class="confirm-actions"><button class="primary-btn" data-app-alert-ok>ตกลง</button></div></div>`, { small:true });
+  };
+
+  window.bindGlobalEvents = function bindGlobalEventsV57() {
+    $('modalClose').addEventListener('click', closeModal);
+    $('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+    $('mobileMenuBtn').addEventListener('click', () => {
+      const sidebar = $('sidebar');
+      if (window.innerWidth > 820) {
+        sidebar.classList.toggle('collapsed');
+        document.body.classList.toggle('sidebar-collapsed', sidebar.classList.contains('collapsed'));
+      } else {
+        sidebar.classList.toggle('open');
+        document.body.classList.toggle('sidebar-open', sidebar.classList.contains('open'));
+      }
+    });
+    document.addEventListener('click', e => {
+      if (window.innerWidth > 820) return;
+      const sidebar = $('sidebar'); const btn = $('mobileMenuBtn');
+      if (sidebar?.classList.contains('open') && !sidebar.contains(e.target) && btn && !btn.contains(e.target)) {
+        sidebar.classList.remove('open'); document.body.classList.remove('sidebar-open');
+      }
+    });
+    $('reloadBtn').addEventListener('click', async () => { await loadAllData(); renderPage(); });
+    $('logoutBtn').addEventListener('click', async () => { if (sb) { await logAuth('LOGOUT'); clearCachedAppSession(); await sb.auth.signOut(); } });
+
+    $('loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const loginId = $('loginEmail').value.trim(); const password = $('loginPassword').value;
+      setBusy(true, 'กำลังเข้าสู่ระบบ');
+      let email = '';
+      try { email = await resolveLoginIdentifier(loginId); }
+      catch (err) { setBusy(false); return showToast(err.message || 'ไม่พบชื่อผู้ใช้', { tone:'error' }); }
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      setBusy(false);
+      if (error) {
+        const msg = String(error.message || '');
+        if (msg.toLowerCase().includes('invalid login credentials')) return showToast('ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ลืมรหัสผ่าน', { tone:'error' });
+        return showToast(msg, { tone:'error' });
+      }
+    });
+
+    $('setupPasswordForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const email = $('setupPasswordEmail').value.trim().toLowerCase();
+      if (!requireMahidolEmail(email)) return showToast('ใช้ได้เฉพาะอีเมล @mahidol.ac.th', { tone:'error' });
+      setBusy(true, 'กำลังส่งลิงก์ตั้งรหัสผ่านใหม่');
+      try {
+        const result = await requestPasswordSetupLink(email);
+        showToast(result?.sentBy === 'MailApp' ? 'ส่งอีเมลตั้งรหัสผ่านแล้ว กรุณาเช็ก Inbox / Spam' : 'ถ้าอีเมลนี้อยู่ในรายชื่อเจ้าหน้าที่ ระบบจะส่งลิงก์ให้ตั้งรหัสผ่านใหม่');
+      } catch (err) { showToast(err.message || 'ส่งลิงก์ไม่สำเร็จ', { tone:'error' }); }
+      finally { setBusy(false); }
+    });
+
+    $('resetPasswordForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const loginName = s($('recoveryLoginName')?.value); const password = $('newPassword').value;
+      if (!loginName) return showToast('กรุณาตั้งชื่อผู้ใช้', { tone:'error' });
+      if (!/^[a-zA-Z0-9._-]+$/.test(loginName)) return showToast('ชื่อผู้ใช้ใช้ได้เฉพาะอังกฤษ ตัวเลข จุด ขีดกลาง หรือขีดล่าง', { tone:'error' });
+      if (!password) return showToast('กรุณากรอกรหัสผ่านใหม่', { tone:'error' });
+      const { data: beforeUpdate } = await sb.auth.getSession();
+      const recoveryEmail = beforeUpdate?.session?.user?.email || state.session?.user?.email || '';
+      if (!recoveryEmail) return showToast('ลิงก์หมดอายุหรือไม่สมบูรณ์ กรุณาขอลิงก์ตั้งรหัสผ่านใหม่อีกครั้ง', { tone:'error' });
+      setBusy(true, 'กำลังบันทึกชื่อผู้ใช้และรหัสผ่าน');
+      try {
+        let r = await sb.rpc('set_initial_login_name_v56', { p_email: recoveryEmail, p_login_name: loginName });
+        if (r.error) r = await sb.rpc('set_initial_login_name_v44', { p_email: recoveryEmail, p_login_name: loginName });
+        if (r.error) throw r.error;
+        RECOVERY_INTENT = false;
+        if (window.history?.replaceState) window.history.replaceState({}, document.title, authRedirectUrl());
+        const { error } = await sb.auth.updateUser({ password });
+        if (error) throw error;
+        $('resetPasswordForm').classList.add('hidden');
+        const { data } = await sb.auth.getSession(); state.session = data.session;
+        showToast('บันทึกชื่อผู้ใช้และรหัสผ่านแล้ว'); await enterApp();
+      } catch (err) { RECOVERY_INTENT = true; showToast(err.message || 'บันทึกไม่สำเร็จ', { tone:'error' }); }
+      finally { setBusy(false); }
+    });
+
+    document.body.addEventListener('click', handleClick);
+    document.body.addEventListener('change', handleChange);
+    document.body.addEventListener('submit', handleSubmit);
+  };
+})();
