@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { id: 'hr', icon: '🧾', title: 'ตรวจสอบ HR', subtitle: 'Admin ตรวจว่าแจ้งใน HR แล้วหรือยัง', group: 'admin' },
   { id: 'hrSummary', icon: '✅', title: 'สรุปตรวจสอบ HR แล้ว', subtitle: 'รายการที่ Admin ตรวจสอบ HR แล้ว ย้อนกลับมาดูได้', group: 'admin' },
   { id: 'scheduler', icon: '🧩', title: 'จัดตารางเวร', subtitle: 'สร้างร่าง Auto Assign และบันทึกตาราง', group: 'admin' },
-  { id: 'positionMonth', icon: '🗓️', title: 'จัดตำแหน่งรายเดือน', subtitle: 'Admin วาง default ทั้งเดือนก่อนให้อินชาร์จปรับรายวัน', group: 'admin' },
+  { id: 'positionMonth', icon: '🗓️', title: 'จัดตำแหน่งรายเดือน', subtitle: 'Admin วางแผนรายเดือนก่อนให้อินชาร์จปรับรายวัน', group: 'admin' },
   { id: 'profileRequests', icon: '📝', title: 'คำขอแก้ไขข้อมูลส่วนตัว', subtitle: 'Admin อนุมัติชื่อ/ชื่อเล่น/เบอร์โทร', group: 'admin' },
   { id: 'users', icon: '👥', title: 'ผู้ใช้งานและสิทธิ์', subtitle: 'เพิ่ม/แก้ไขเจ้าหน้าที่ เฉพาะ Admin', group: 'admin' },
   { id: 'eligibility', icon: '✅', title: 'สิทธิ์ตำแหน่งรายวัน', subtitle: 'กำหนดว่าแต่ละคนขึ้นตำแหน่งไหนได้', group: 'admin' }
@@ -757,11 +757,9 @@ async function loadProfileChangeRequests() {
   const rows = [];
   const addRows = (arr) => (arr || []).forEach(r => { if (r && !rows.some(x => x.id === r.id)) rows.push(r); });
 
-  // V49: ดึงหลายทาง เพื่อกันเคสข้อมูลมีใน Supabase แต่หน้าเว็บไม่แสดงจาก RLS/RPC version เก่า
+  // V50: ใช้ RPC เดียวที่เป็น security definer ก่อน เพื่อลด 404/blank จาก RLS และ function รุ่นเก่า
   const attempts = [
-    () => sb.rpc('list_profile_change_requests_v49', { p_staff_id: staffId, p_user_email: email, p_is_admin: isAdmin() }),
-    () => sb.rpc('list_profile_change_requests_v47', { p_staff_id: staffId, p_is_admin: isAdmin() }),
-    () => sb.rpc('list_profile_change_requests_v46'),
+    () => sb.rpc('list_profile_change_requests_v50', { p_staff_id: staffId, p_user_email: email, p_is_admin: isAdmin() }),
     () => sb.from('profile_change_requests').select('*').order('created_at', { ascending:false })
   ];
   for (const fn of attempts) {
@@ -1493,9 +1491,10 @@ function renderSchedulerPage() {
     <div class="card">
       <div class="toolbar">
         <label>เดือน <input type="month" id="rosterMonthInput" value="${state.monthKey}"></label>
-        <button class="primary-btn" data-generate-roster>สร้างร่าง</button>
         <button class="soft-btn" data-auto-assign>สร้างร่าง Auto Assign</button>
         <button class="primary-btn" data-save-roster>บันทึก</button>
+        <button class="ghost-btn danger" data-clear-roster-month>ล้างข้อมูลเดือนนี้</button>
+        <button class="ghost-btn" data-restore-roster-month>ย้อนกลับข้อมูลล่าสุด</button>
         <span>${badge(month?.status || 'ยังไม่สร้าง', month?.status==='published'?'green':month?.status==='locked'?'red':'black')}</span>
       </div>
       <form id="holidayForm" class="form-grid compact-form">
@@ -1552,7 +1551,7 @@ function dutyRuleForDate(date) {
 }
 function allowedDutyCodesForDate(date) { return dutyRuleForDate(date).map(x => x.code); }
 function renderRosterGrid(assignments) {
-  if (!assignments.length) return empty('กด “สร้างร่าง” เพื่อเริ่มจัดเวร');
+  if (!assignments.length) return empty('กด “สร้างร่าง Auto Assign” เพื่อเริ่มจัดเวร');
   const { y, m } = getMonthRange(state.monthKey);
   const last = new Date(y, m, 0).getDate();
   const desktopTable = `<div class="table-wrap roster-table-wrap"><table class="roster-table"><thead><tr><th>วันที่</th>${DUTY_COLUMNS.map(c => `<th>${escapeHtml(DUTY_LABEL[c] || c)}</th>`).join('')}</tr></thead><tbody>
@@ -1781,10 +1780,9 @@ function renderPositionsPage() {
     <div class="toolbar">
       <label>วันที่ <input type="date" id="positionDateInput" value="${date}"></label>
       ${isAdmin() ? `<label>อินชาร์จประจำเดือน <select id="inchargeSelect"><option value="">ไม่ระบุ</option>${staffOptions(incharge)}</select></label><button class="soft-btn" data-save-incharge>บันทึกอินชาร์จ</button>` : `<span>${badge('อินชาร์จ: ' + staffNick(incharge), 'blue')}</span>`}
-      ${badge(isPublished ? 'ประกาศแล้ว' : 'ยังไม่ประกาศ', isPublished ? 'green' : 'orange')}
-      ${canManage && !noPosition ? '<button class="soft-btn" data-auto-positions>จัดตำแหน่งอัตโนมัติ</button><button class="primary-btn" data-save-positions>บันทึกตำแหน่งวันนี้</button><button class="soft-btn" data-publish-positions>ประกาศตารางวันนี้</button>' : ''}
+      ${canManage && !noPosition ? '<button class="primary-btn" data-save-positions>บันทึกตำแหน่งวันนี้</button>' : ''}
     </div>
-    <div class="notice soft-notice">อินชาร์จตรวจตำแหน่งของวันนี้ ปรับตามคนลา/งานจริง แล้วกดประกาศก่อนเริ่มงาน หากมีคนลาหลังประกาศให้แจ้งอินชาร์จหรือหัวหน้าเพื่อปรับหน้างาน</div>
+    <div class="notice soft-notice">ตรวจตำแหน่งของวันนี้ให้ตรงกับคนลาและงานจริง แล้วกดบันทึกตำแหน่งวันนี้ หากมีคนลาหลังจากบันทึกแล้ว ให้ปรับหน้างานและบันทึกใหม่อีกครั้ง</div>
     ${noPosition ? `<div class="notice">วันนี้เป็น${isHolidayDate(date) ? 'วันหยุดราชการ' : 'วันเสาร์-อาทิตย์'} จึงไม่ต้องจัดตำแหน่งรายวัน</div>` : ''}
     ${!noPosition && hasOuting(date) ? `<div class="notice">วันนี้มีออกหน่วย: คนที่ถูกติ๊กในกิจกรรมจะถูกจัดลงชุดออกหน่วย ส่วนคนที่เหลือจะถูกเกลี่ยไปตำแหน่งห้อง Blood Bank</div>` : ''}
     ${noPosition ? empty('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : renderDailyPositionList(rows, date, canManage)}
@@ -1817,11 +1815,13 @@ function renderPositionMonthPage() {
   const savedCount = state.positions.filter(x => x.work_date?.startsWith(key)).length;
   const workingDays = dates.filter(d => !isNoPositionDay(d)).length;
   return `<div class="card monthly-position-page">
-    <div class="section-title"><div><h3>จัดตำแหน่งรายเดือน ${key}</h3><p class="hint">รูปแบบ Excel: แถวเป็นเจ้าหน้าที่ คอลัมน์เป็นวันที่ และในช่องคือ “ตำแหน่งของคนนั้นในวันนั้น”</p></div></div>
+    <div class="section-title"><div><h3>จัดตำแหน่งรายเดือน ${key}</h3></div></div>
     <div class="toolbar">
       <label>เดือน <input type="month" id="positionMonthInput" value="${key}"></label>
-      <button class="soft-btn" data-generate-month-positions>สร้าง default ทั้งเดือน</button>
-      <button class="primary-btn" data-save-month-positions>บันทึก default ทั้งเดือน</button>
+      <button class="soft-btn" data-generate-month-positions>สร้างแผนทั้งเดือน</button>
+      <button class="primary-btn" data-save-month-positions>บันทึกแผนทั้งเดือน</button>
+      <button class="ghost-btn danger" data-clear-month-positions>ล้างข้อมูลเดือนนี้</button>
+      <button class="ghost-btn" data-restore-month-positions>ย้อนกลับข้อมูลล่าสุด</button>
       <span>${badge(`มีข้อมูล ${savedCount} รายการ`, savedCount ? 'green' : 'black')}</span>
       <span>${badge(`วันทำงาน ${workingDays} วัน`, 'blue')}</span>
     </div>
@@ -1851,7 +1851,6 @@ function renderMonthPositionSummaryHint(rows, dates) {
   const stats = buildMonthPositionSummary(rows, dates);
   const staffCount = Object.keys(stats).length;
   return `<div class="month-position-summary-hint compact-summary">
-    <span class="hint">กดชื่อเจ้าหน้าที่ในคอลัมน์ซ้ายเพื่อดูสรุปรายคน</span>
     <span>${badge(`มีสรุป ${staffCount} คน`, staffCount ? 'blue' : 'black')}</span>
   </div>`;
 }
@@ -1918,7 +1917,7 @@ function positionDisplayMap(rows) {
   return map;
 }
 function renderMonthPositionMatrix(rows, dates) {
-  if (!rows.length) return empty('ยังไม่มี default รายเดือน กด “สร้าง default ทั้งเดือน” ก่อน');
+  if (!rows.length) return empty('ยังไม่มีแผนรายเดือน กด “สร้างแผนทั้งเดือน” ก่อน');
   const byCell = {};
   rows.forEach((r, idx) => {
     if (!r.staff_id || !r.work_date) return;
@@ -1929,7 +1928,7 @@ function renderMonthPositionMatrix(rows, dates) {
   const canEdit = isAdmin() && state.page === 'positionMonth';
   const displayStaff = orderedStaff(state.staff.filter(s => isDailyPositionEnabled(s) || rows.some(r => r.staff_id === s.id)));
   return `<div class="monthly-matrix-wrap">
-    <div class="matrix-legend"><span class="legend-box weekend"></span> WEEKEND/HOLIDAY = ไม่จัดตำแหน่ง <span class="legend-box outing"></span> ออกหน่วย <span class="legend-box leave"></span> มีลา/ไม่รับเวร ${canEdit ? '<span class="hint">Admin เลือกตำแหน่งในช่องได้ แล้วกดบันทึก default ทั้งเดือน</span>' : ''}</div>
+    <div class="matrix-legend"><span class="legend-box weekend"></span> WEEKEND/HOLIDAY = ไม่จัดตำแหน่ง <span class="legend-box outing"></span> ออกหน่วย <span class="legend-box leave"></span> มีลา/ไม่รับเวร ${canEdit ? '<span class="hint">Admin เลือกตำแหน่งในช่องได้ แล้วกดบันทึกแผนทั้งเดือน</span>' : ''}</div>
     <div class="table-wrap month-position-matrix"><table><thead><tr><th class="sticky-col staff-col">เจ้าหน้าที่</th>${dates.map(date => {
       const d = parseDate(date);
       const cls = isHolidayDate(date) ? 'holiday-head' : isWeekend(date) ? 'weekend-head' : hasOuting(date) ? 'outing-head' : '';
@@ -1984,7 +1983,7 @@ function applyMonthPositionEdit(value, encoded) {
   state.monthPositionDraft.rows = rows;
   rebalanceMonthPositionDraft();
   renderPage();
-  showToast(otherRow ? 'สลับตำแหน่งให้แล้ว กดบันทึก default ทั้งเดือนเพื่อบันทึกจริง' : 'ปรับตำแหน่งในร่างแล้ว กดบันทึก default ทั้งเดือนเพื่อบันทึกจริง');
+  showToast(otherRow ? 'สลับตำแหน่งให้แล้ว กดบันทึกแผนทั้งเดือนเพื่อบันทึกจริง' : 'ปรับตำแหน่งในร่างแล้ว กดบันทึกแผนทั้งเดือนเพื่อบันทึกจริง');
 }
 function rebalanceMonthPositionDraft() {
   if (!state.monthPositionDraft?.rows) return;
@@ -2338,6 +2337,8 @@ async function handleClick(e) {
   if (t.hasAttribute('data-generate-roster')) { state.rosterDraft = { monthKey: state.monthKey, assignments: generateEmptyAssignments(state.monthKey) }; renderPage(); return; }
   if (t.hasAttribute('data-auto-assign')) { autoAssignRoster(); renderPage(); return; }
   if (t.hasAttribute('data-save-roster')) { await saveRosterDraft('draft'); return; }
+  if (t.hasAttribute('data-clear-roster-month')) { await clearRosterMonth(); return; }
+  if (t.hasAttribute('data-restore-roster-month')) { state.rosterDraft = null; await loadAllData(); renderPage(); showToast('ย้อนกลับข้อมูลล่าสุดแล้ว'); return; }
   if (t.hasAttribute('data-publish-roster')) { await saveRosterDraft('published'); return; }
   if (t.hasAttribute('data-lock-roster')) { await saveRosterDraft('locked'); return; }
   if (t.dataset.clearSlot) { updateDraftSlot(t.dataset.clearSlot, { staff_id:null }); renderPage(); return; }
@@ -2355,8 +2356,10 @@ async function handleClick(e) {
   if (t.hasAttribute('data-save-incharge')) { await saveIncharge(); return; }
   if (t.hasAttribute('data-save-positions')) { await savePositions(); return; }
   if (t.hasAttribute('data-publish-positions')) { await publishPositionsForDay(); return; }
-  if (t.hasAttribute('data-generate-month-positions')) { state.monthPositionDraft = buildMonthlyPositionDraft(state.positionMonthKey || state.monthKey); renderPage(); showToast('สร้าง default ตำแหน่งรายเดือนแล้ว ตรวจทานก่อนบันทึก'); return; }
+  if (t.hasAttribute('data-generate-month-positions')) { state.monthPositionDraft = buildMonthlyPositionDraft(state.positionMonthKey || state.monthKey); renderPage(); showToast('สร้างแผนตำแหน่งรายเดือนแล้ว ตรวจทานก่อนบันทึก'); return; }
   if (t.hasAttribute('data-save-month-positions')) { await saveMonthlyPositions(); return; }
+  if (t.hasAttribute('data-clear-month-positions')) { await clearMonthlyPositions(); return; }
+  if (t.hasAttribute('data-restore-month-positions')) { state.monthPositionDraft = null; await loadAllData(); renderPage(); showToast('ย้อนกลับข้อมูลล่าสุดแล้ว'); return; }
   if (t.hasAttribute('data-check-in')) { await checkIn(); return; }
   if (t.dataset.otStatus) { const [id,status] = t.dataset.otStatus.split('|'); await updateOtStatus(id,status); return; }
   if (t.hasAttribute('data-export-ot-excel')) { exportTable('otSummaryTable', `OT_${state.monthKey}.xlsx`); return; }
@@ -2720,6 +2723,40 @@ function adjacentDutyPenalty(staffId, date, assignments) {
   return hasAdjacentDuty(staffId, date, assignments) ? 1 : 0;
 }
 function isWeekend(date) { const d = parseDate(date).getDay(); return d === 0 || d === 6; }
+
+async function clearRosterMonth() {
+  if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้น');
+  const key = state.monthKey;
+  if (!confirm(`ล้างตารางเวรเดือน ${key} ทั้งหมดหรือไม่?`)) return;
+  const { y, m } = getMonthRange(key);
+  const month = state.rosterMonths.find(x => x.year === y && x.month === m);
+  if (month?.id) {
+    const delA = await sb.from('roster_assignments').delete().eq('roster_month_id', month.id);
+    if (delA.error) return showToast(friendlyDbError(delA.error));
+    const delM = await sb.from('roster_months').delete().eq('id', month.id);
+    if (delM.error) return showToast(friendlyDbError(delM.error));
+  }
+  state.rosterDraft = null;
+  await loadAllData();
+  renderPage();
+  showToast('ล้างตารางเวรเดือนนี้แล้ว');
+}
+
+async function clearMonthlyPositions() {
+  if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้น');
+  const key = state.positionMonthKey || state.monthKey;
+  if (!confirm(`ล้างแผนตำแหน่งรายเดือน ${key} ทั้งหมดหรือไม่?`)) return;
+  const { start, end } = getMonthRange(key);
+  const del = await sb.from('daily_positions').delete().gte('work_date', start).lte('work_date', end);
+  if (del.error) return showToast(friendlyDbError(del.error));
+  const st = await sb.from('daily_position_day_status').delete().gte('work_date', start).lte('work_date', end);
+  if (st.error) return showToast(friendlyDbError(st.error));
+  state.monthPositionDraft = null;
+  await loadAllData();
+  renderPage();
+  showToast('ล้างแผนตำแหน่งเดือนนี้แล้ว');
+}
+
 async function saveRosterDraft(status='draft') {
   if (!state.rosterDraft || !state.rosterDraft.assignments.length) return showToast('ยังไม่มีร่างตาราง');
   const { y, m } = getMonthRange(state.monthKey);
@@ -2794,7 +2831,7 @@ async function saveMonthlyPositions() {
   state.monthPositionDraft = { monthKey:key, rows };
   await loadAllData();
   state.monthPositionDraft = null;
-  renderPage(); showToast('บันทึก default ตำแหน่งรายเดือนแล้ว ข้อมูลหลังบันทึกจะตรงกับ draft ที่เห็นก่อนกดบันทึก');
+  renderPage(); showToast('บันทึกแผนตำแหน่งรายเดือนแล้ว ข้อมูลหลังบันทึกจะตรงกับร่างที่เห็นก่อนกดบันทึก');
 }
 function autoAssignPositions() {
   const date = $('positionDateInput')?.value || state.positionDate || todayStr();
