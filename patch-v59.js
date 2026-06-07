@@ -485,23 +485,8 @@
     $id('pageContent').innerHTML = (pages[state.page] || renderDashboard)();
   };
 
-  // ปุ่มสามขีด: บนคอมให้ยุบ sidebar แบบคง layout, บนมือถือให้เป็น drawer
-  document.addEventListener('click', function(e){
-    const btn = e.target.closest('#mobileMenuBtn');
-    if (!btn) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    const sidebar = $id('sidebar');
-    document.body.classList.remove('cnmi-sidebar-collapsed');
-    if (window.innerWidth > 820) {
-      sidebar?.classList.toggle('collapsed');
-      document.body.classList.toggle('sidebar-collapsed', sidebar?.classList.contains('collapsed'));
-      sidebar?.classList.remove('open'); document.body.classList.remove('sidebar-open');
-    } else {
-      sidebar?.classList.toggle('open');
-      document.body.classList.toggle('sidebar-open', sidebar?.classList.contains('open'));
-    }
-  }, true);
+  // V67 note: ปุ่มสามขีดเดิมของ V65 ถูกปิดไว้ เพราะชนกับ V66/V67 แล้วทำให้ sidebar เหลือเป็นแถบแทรกกลางจอ
+  // ใช้ handler ด้านท้ายไฟล์แทนเท่านั้น
 
   document.addEventListener('click', async function(e){
     if (e.target.closest('[data-v65-refresh-profile]')) { e.preventDefault(); state.profileChangeRequestsLoaded = false; await loadProfileChangeRequests(); renderPage(); }
@@ -528,7 +513,7 @@
    3) ปุ่มสามขีดบนคอม = ซ่อน/แสดง sidebar จริง ไม่ให้ content ไปทับ sidebar
 */
 (function(){
-  const PATCH = 'V66_ONLY_PROFILE_REQUESTS_AND_SIDEBAR';
+  const PATCH = 'V67_ONLY_PROFILE_REQUESTS_AND_SIDEBAR';
   const $id = (id)=>document.getElementById(id);
   const txt = (v)=>String(v ?? '').trim();
   const same = (a,b)=>txt(a) !== '' && txt(a) === txt(b);
@@ -538,15 +523,16 @@
   const isFinal = (r)=>['approved','rejected'].includes(statusOf(r));
 
   function injectV66Style(){
-    if ($id('v66-profile-sidebar-style')) return;
+    if ($id('v67-profile-sidebar-style')) return;
     const css = document.createElement('style');
-    css.id = 'v66-profile-sidebar-style';
+    css.id = 'v67-profile-sidebar-style';
     css.textContent = `
       @media (min-width:821px){
-        body.cnmi-sidebar-hidden .sidebar{display:none!important;}
-        body.cnmi-sidebar-hidden .app-view{grid-template-columns:minmax(0,1fr)!important;}
-        body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!important;}
+        body.cnmi-sidebar-hidden .sidebar{display:none!important;width:0!important;min-width:0!important;padding:0!important;border:0!important;overflow:hidden!important;}
+        body.cnmi-sidebar-hidden .app-view{display:grid!important;grid-template-columns:minmax(0,1fr)!important;}
+        body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!important;max-width:none!important;margin-left:0!important;}
         body.cnmi-sidebar-hidden .topbar{left:0!important;}
+        body.cnmi-sidebar-hidden .page-content{max-width:none!important;}
       }
       .v66-request-list{display:grid;gap:14px;}
       .v66-request-card{line-height:1.55;}
