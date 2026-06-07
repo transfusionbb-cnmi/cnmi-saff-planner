@@ -521,3 +521,259 @@
   }, 500);
   console.info(`CNMI Staff Planner ${PATCH} loaded`);
 })();
+
+/* V66: แก้เฉพาะ 3 จุดตามที่ขอ
+   1) คำขอล่าสุดของฉัน / Admin คำขอแก้ไขข้อมูลส่วนตัว ดึงจาก profile_change_requests ให้ชัวร์ขึ้น
+   2) เหลือเมนูสรุปคำขอแก้ไขข้อมูลส่วนตัวตัวเดียว
+   3) ปุ่มสามขีดบนคอม = ซ่อน/แสดง sidebar จริง ไม่ให้ content ไปทับ sidebar
+*/
+(function(){
+  const PATCH = 'V66_ONLY_PROFILE_REQUESTS_AND_SIDEBAR';
+  const $id = (id)=>document.getElementById(id);
+  const txt = (v)=>String(v ?? '').trim();
+  const same = (a,b)=>txt(a) !== '' && txt(a) === txt(b);
+  const esc = (v)=>{ try { return escapeHtml(v); } catch(e){ return txt(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); } };
+  const statusOf = (r)=>txt(r?.status || 'pending').toLowerCase();
+  const isPending = (r)=>statusOf(r) === 'pending';
+  const isFinal = (r)=>['approved','rejected'].includes(statusOf(r));
+
+  function injectV66Style(){
+    if ($id('v66-profile-sidebar-style')) return;
+    const css = document.createElement('style');
+    css.id = 'v66-profile-sidebar-style';
+    css.textContent = `
+      @media (min-width:821px){
+        body.cnmi-sidebar-hidden .sidebar{display:none!important;}
+        body.cnmi-sidebar-hidden .app-view{grid-template-columns:minmax(0,1fr)!important;}
+        body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!important;}
+        body.cnmi-sidebar-hidden .topbar{left:0!important;}
+      }
+      .v66-request-list{display:grid;gap:14px;}
+      .v66-request-card{line-height:1.55;}
+      .v66-request-card .request-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;}
+      .v66-profile-page .profile-info-list>div{grid-template-columns:120px minmax(0,1fr);}
+    `;
+    document.head.appendChild(css);
+  }
+
+  function normalizeReq(row){
+    row = row || {};
+    return {
+      ...row,
+      id: row.id || row.request_id,
+      staff_id: row.staff_id || row.staffId,
+      requested_by: row.requested_by || row.requestedBy,
+      requested_by_email: row.requested_by_email || row.staff_email || row.email,
+      staff_email: row.staff_email || row.email,
+      staff_nickname: row.staff_nickname || row.nickname,
+      staff_full_name: row.staff_full_name || row.full_name,
+      field_name: row.field_name || row.fieldName,
+      old_value: row.old_value ?? row.oldValue ?? '',
+      new_value: row.new_value ?? row.newValue ?? '',
+      note: row.note ?? row.request_note ?? '',
+      review_note: row.review_note ?? row.reviewNote ?? '',
+      reviewed_by: row.reviewed_by || row.reviewedBy,
+      reviewed_at: row.reviewed_at || row.reviewedAt,
+      created_at: row.created_at || row.createdAt,
+      status: row.status || 'pending'
+    };
+  }
+  function currentIds(){
+    const me = state.profile || {};
+    return {
+      staffId: txt(me.id || (typeof currentStaffId === 'function' ? currentStaffId() : '')),
+      userId: txt(state.session?.user?.id || me.user_id || ''),
+      email: txt(me.email || state.session?.user?.email || '').toLowerCase(),
+      admin: typeof isAdmin === 'function' ? isAdmin() : false
+    };
+  }
+  function reqStaff(r){
+    r = normalizeReq(r);
+    return (state.staff || []).find(s => same(s.id,r.staff_id) || same(s.id,r.requested_by) || same(s.user_id,r.requested_by) || txt(s.email).toLowerCase() === txt(r.requested_by_email || r.staff_email).toLowerCase());
+  }
+  function belongsToMe(row){
+    const r = normalizeReq(row);
+    const ids = currentIds();
+    const reqEmail = txt(r.requested_by_email || r.staff_email || '').toLowerCase();
+    return same(r.staff_id, ids.staffId) || same(r.requested_by, ids.staffId) || same(r.requested_by, ids.userId) || (!!ids.email && ids.email === reqEmail);
+  }
+  function fieldLabel(f){ return ({phone:'เบอร์โทร', login_name:'ชื่อผู้ใช้', nickname:'ชื่อเล่น', full_name:'ชื่อ-สกุล'}[txt(f)] || txt(f) || '-'); }
+  function statusText(s){ return ({pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ไม่อนุมัติ'}[txt(s || 'pending').toLowerCase()] || s || '-'); }
+  function statusBadge(s){ const x=txt(s || 'pending').toLowerCase(); return x==='approved'?'green':x==='rejected'?'red':'orange'; }
+  function staffLabel(r){
+    const s = reqStaff(r);
+    if (s) return staffPill(s);
+    r = normalizeReq(r);
+    return `<span class="staff-color-pill">${esc(r.staff_nickname || r.staff_full_name || r.requested_by_email || r.staff_email || 'ไม่พบชื่อผู้ส่ง')}</span>`;
+  }
+
+  async function rpcRows(name, params){
+    try {
+      const res = await sb.rpc(name, params);
+      if (res?.error) { console.warn(`[${PATCH}] ${name} skipped:`, res.error.message || res.error); return []; }
+      return Array.isArray(res?.data) ? res.data : (res?.data ? [res.data] : []);
+    } catch(err){ console.warn(`[${PATCH}] ${name} failed`, err); return []; }
+  }
+
+  window.loadProfileChangeRequests = loadProfileChangeRequests = async function loadProfileChangeRequestsV66(){
+    const ids = currentIds();
+    const rows = [];
+    const seen = new Set();
+    const add = (arr)=> (arr || []).forEach(raw=>{
+      const r = normalizeReq(raw);
+      const key = r.id || `${r.staff_id}|${r.requested_by}|${r.field_name}|${r.new_value}|${r.created_at}`;
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      rows.push(r);
+    });
+
+    // ไม่ break เมื่อเจอข้อมูล เพื่อไม่ให้ RPC รุ่นใดรุ่นหนึ่งคืนข้อมูลไม่ครบแล้วบังข้อมูลจริง
+    const rpcNames = ['list_profile_change_requests_v57','list_profile_change_requests_v56','list_profile_change_requests_v54','list_profile_change_requests_v52','list_profile_change_requests_v51','list_profile_change_requests_v50','list_profile_change_requests_v49','list_profile_change_requests_v47'];
+    for (const name of rpcNames) {
+      add(await rpcRows(name, { p_staff_id: ids.staffId || null, p_user_email: ids.email || null, p_user_id: ids.userId || null, p_is_admin: ids.admin }));
+      add(await rpcRows(name, { p_staff_id: ids.staffId || null, p_user_email: ids.email || null, p_is_admin: ids.admin }));
+    }
+
+    try {
+      const q = ids.admin
+        ? await sb.from('profile_change_requests').select('*').order('created_at', { ascending:false })
+        : await sb.from('profile_change_requests').select('*').or(`staff_id.eq.${ids.staffId},requested_by.eq.${ids.staffId},requested_by.eq.${ids.userId},requested_by_email.eq.${ids.email},staff_email.eq.${ids.email}`).order('created_at', { ascending:false });
+      if (!q.error) add(q.data || []); else console.warn(`[${PATCH}] direct select skipped:`, q.error.message || q.error);
+    } catch(err){ console.warn(`[${PATCH}] direct select failed`, err); }
+
+    rows.sort((a,b)=>new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    state.profileChangeRequests = ids.admin ? rows : rows.filter(belongsToMe);
+    state.profileChangeRequestsLoaded = true;
+    console.info(`[${PATCH}] profile_change_requests`, { all: rows.length, visible: state.profileChangeRequests.length, ...ids });
+  };
+
+  function loadingBlock(){
+    if (state.profileChangeRequestsLoaded && Array.isArray(state.profileChangeRequests)) return '';
+    setTimeout(async()=>{ await loadProfileChangeRequests(); if(['myProfile','profileRequests','profileRequestsSummary'].includes(state.page)) renderPage(); }, 30);
+    return `<div class="card"><div class="muted">กำลังโหลดคำขอ...</div></div>`;
+  }
+  function reqCard(row, mode){
+    const r = normalizeReq(row);
+    const final = isFinal(r);
+    return `<div class="mobile-card request-card v66-request-card">
+      <div class="request-head"><div>${mode==='me' ? `<b>${esc(fieldLabel(r.field_name))}</b>` : staffLabel(r)}</div>${badge(statusText(r.status), statusBadge(r.status))}</div>
+      ${mode==='me' ? '' : `<div><b>ขอแก้:</b> ${esc(fieldLabel(r.field_name))}</div>`}
+      <div><b>ค่าเดิม:</b> ${esc(r.old_value || '-')}</div>
+      <div><b>ค่าใหม่:</b> ${esc(r.new_value || '-')}</div>
+      <div><b>เหตุผล/หมายเหตุ:</b> ${esc(r.note || '-')}</div>
+      <div class="muted">ส่งเมื่อ ${formatThaiDateTime(r.created_at)}</div>
+      ${final ? `<div class="muted">ตรวจเมื่อ ${formatThaiDateTime(r.reviewed_at)}</div>${r.review_note ? `<div><b>หมายเหตุ Admin:</b> ${esc(r.review_note)}</div>` : ''}` : ''}
+      ${mode==='admin' && isPending(r) ? `<div class="actions request-actions"><button class="primary-btn" data-approve-profile-request="${esc(r.id)}">อนุมัติ</button><button class="ghost-btn danger" data-reject-profile-request="${esc(r.id)}">ไม่อนุมัติ</button></div>` : ''}
+    </div>`;
+  }
+
+  window.renderMyProfilePage = renderMyProfilePage = function renderMyProfilePageV66(){
+    const p = state.profile || {};
+    const loading = loadingBlock();
+    const rows = (state.profileChangeRequests || []).filter(belongsToMe).slice(0,20);
+    return `<div class="grid grid-2 profile-page-grid v66-profile-page" id="myProfilePage">
+      <div class="card profile-card-readable"><div class="section-title"><h3>ข้อมูลส่วนตัว</h3></div><p class="hint">ข้อมูลจริงใช้จากตารางผู้ใช้งาน ถ้าต้องการแก้ ให้ส่งคำขอให้ Admin อนุมัติ</p>
+        <div class="profile-info-list"><div><span>ชื่อเล่น</span><b>${esc(p.nickname || '-')}</b></div><div><span>ชื่อ-สกุล</span><b>${esc(p.full_name || '-')}</b></div><div><span>เบอร์โทร</span><b>${esc(p.phone || '-')}</b></div><div><span>Email</span><b>${esc(p.email || '-')}</b></div><div><span>ชื่อผู้ใช้</span><b>${esc(p.login_name || '-')}</b></div></div>
+        <form id="profileChangeForm" class="form-grid compact-form v65-profile-form"><label>ต้องการแก้ไข <select name="field_name" required><option value="phone">เบอร์โทร</option><option value="login_name">ชื่อผู้ใช้</option><option value="nickname">ชื่อเล่น</option><option value="full_name">ชื่อ-สกุล</option></select></label><label>ข้อมูลใหม่ <input name="new_value" required placeholder="กรอกข้อมูลใหม่"></label><label class="wide">เหตุผล/หมายเหตุ <textarea name="note" placeholder="เช่น เปลี่ยนเบอร์โทร / สะกดชื่อผิด"></textarea></label><button class="primary-btn wide" type="submit">ส่งคำขอให้ Admin อนุมัติ</button></form>
+      </div>
+      <div class="card"><div class="section-title"><h3>คำขอล่าสุดของฉัน</h3><button class="ghost-btn" type="button" data-v66-refresh-profile>รีเฟรช</button></div>${loading || `<div class="mobile-cards always-cards v66-request-list">${rows.length ? rows.map(r=>reqCard(r,'me')).join('') : empty('ยังไม่มีคำขอ')}</div>`}</div>
+    </div>`;
+  };
+
+  window.renderProfileRequestsPage = renderProfileRequestsPage = function renderProfileRequestsPageV66(){
+    if (!(typeof isAdmin === 'function' && isAdmin())) return noPermission();
+    const loading = loadingBlock();
+    const rows = (state.profileChangeRequests || []).map(normalizeReq).filter(isPending);
+    return `<div class="card"><div class="section-title"><div><h3>คำขอแก้ไขข้อมูลส่วนตัว</h3><p class="hint">แสดงเฉพาะรายการที่รออนุมัติ</p></div><button class="ghost-btn" type="button" data-v66-refresh-profile>รีเฟรชคำขอ</button></div></div>${loading || `<div class="mobile-cards always-cards v66-request-list">${rows.length ? rows.map(r=>reqCard(r,'admin')).join('') : empty('ไม่มีคำขอรออนุมัติ')}</div>`}`;
+  };
+
+  window.renderProfileRequestsSummaryPage = renderProfileRequestsSummaryPage = function renderProfileRequestsSummaryPageV66(){
+    if (!(typeof isAdmin === 'function' && isAdmin())) return noPermission();
+    const loading = loadingBlock();
+    const month = state.profileSummaryFilterMonth || '';
+    const sid = state.profileSummaryFilterStaff || '';
+    const rows = (state.profileChangeRequests || []).map(normalizeReq).filter(isFinal)
+      .filter(r=>!month || txt(r.reviewed_at || r.created_at).slice(0,7) === month)
+      .filter(r=>!sid || same(r.staff_id,sid) || same(reqStaff(r)?.id,sid) || same(r.requested_by,sid));
+    return `<div class="card"><div class="section-title"><div><h3>สรุปคำขอแก้ไขข้อมูลส่วนตัว</h3><p class="hint">กรองตามคนหรือเดือน เพื่อดูรายการที่อนุมัติ/ไม่อนุมัติแล้ว</p></div><button class="ghost-btn" type="button" data-v66-refresh-profile>รีเฟรช</button></div><div class="toolbar compact-filter"><label>คน <select id="profileSummaryFilterStaff"><option value="">ทุกคน</option>${orderedStaff(state.staff||[]).map(s=>`<option value="${esc(s.id)}" ${same(sid,s.id)?'selected':''}>${esc(s.nickname || s.full_name || s.email || '-')}</option>`).join('')}</select></label><label>เดือน <input id="profileSummaryFilterMonth" type="month" value="${esc(month)}"></label></div></div>${loading || `<div class="mobile-cards always-cards v66-request-list">${rows.length ? rows.map(r=>reqCard(r,'summary')).join('') : empty('ไม่พบข้อมูลตามตัวกรอง')}</div>`}`;
+  };
+  window.renderProfileRequestSummaryPage = window.renderProfileRequestsSummaryPage;
+
+  const oldSave = window.saveProfileChangeRequest || saveProfileChangeRequest;
+  window.saveProfileChangeRequest = saveProfileChangeRequest = async function saveProfileChangeRequestV66(form){
+    const fd = new FormData(form);
+    const field = txt(fd.get('field_name'));
+    const newValue = txt(fd.get('new_value'));
+    if (!['phone','login_name','nickname','full_name'].includes(field)) return showToast('เลือกข้อมูลที่ต้องการแก้ไขไม่ถูกต้อง');
+    if (!newValue) return showToast('กรุณากรอกข้อมูลใหม่');
+    if (field === 'login_name' && !/^[a-zA-Z0-9._-]{1,30}$/.test(newValue)) return showToast('ชื่อผู้ใช้ควรเป็นอังกฤษ/ตัวเลข เช่น user หรือ gift123 หรือ 012345');
+    setBusy(true, 'กำลังส่งคำขอ');
+    let res = await sb.rpc('submit_profile_change_request_v57', { p_field_name: field, p_new_value: newValue, p_note: fd.get('note') || null });
+    if (res?.error) res = await sb.rpc('submit_profile_change_request_v47', { p_field_name: field, p_new_value: newValue, p_note: fd.get('note') || null });
+    setBusy(false);
+    if (res?.error) return showToast(friendlyDbError(res.error));
+    form.reset();
+    state.profileChangeRequestsLoaded = false;
+    await loadProfileChangeRequests();
+    renderPage();
+    showToast('ส่งคำขอให้ Admin แล้ว');
+  };
+
+  function sanitizeProfileNavV66(){
+    for (let i=NAV_ITEMS.length-1;i>=0;i--) {
+      const x = NAV_ITEMS[i] || {};
+      if (x.id === 'profileRequestSummary' || x.id === 'profileRequestsSummary' || x.title === 'สรุปคำขอแก้ไขข้อมูลส่วนตัว') NAV_ITEMS.splice(i,1);
+    }
+    const idx = NAV_ITEMS.findIndex(x=>x.id === 'profileRequests');
+    NAV_ITEMS.splice(idx >= 0 ? idx + 1 : NAV_ITEMS.length, 0, { id:'profileRequestsSummary', icon:'📄', title:'สรุปคำขอแก้ไขข้อมูลส่วนตัว', subtitle:'รายการที่อนุมัติ/ไม่อนุมัติแล้ว', group:'admin' });
+    if (state.page === 'profileRequestSummary') state.page = 'profileRequestsSummary';
+  }
+
+  window.renderPage = renderPage = function renderPageV66(){
+    injectV66Style();
+    sanitizeProfileNavV66();
+    const item = NAV_ITEMS.find(x=>x.id===state.page) || NAV_ITEMS[0];
+    $id('pageTitle').textContent = item.title;
+    $id('pageSubtitle').textContent = item.subtitle || '';
+    renderNav();
+    const pages = {
+      dashboard:renderDashboard, calendar:renderCalendar, leave:renderLeavePage, myProfile:renderMyProfilePage,
+      activities:renderActivitiesPage, hr:renderHrPage, hrSummary:renderHrSummaryPage, scheduler:renderSchedulerPage,
+      schedule:renderMonthlySchedulePage, tradeRequests:renderTradeRequestsPage, positions:renderPositionsPage, ot:renderOtPage,
+      audit:renderAuditPage, profileRequests:renderProfileRequestsPage, profileRequestsSummary:renderProfileRequestsSummaryPage,
+      profileRequestSummary:renderProfileRequestsSummaryPage, users:renderUsersPage, eligibility:renderEligibilityPage,
+      positionMonth:renderPositionMonthPage, positionMonthView:renderPositionMonthViewPage
+    };
+    $id('pageContent').innerHTML = (pages[state.page] || renderDashboard)();
+  };
+
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('#mobileMenuBtn');
+    if (!btn) return;
+    const sidebar = $id('sidebar');
+    if (window.innerWidth > 820) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      sidebar?.classList.remove('open','collapsed');
+      document.body.classList.remove('sidebar-open','sidebar-collapsed','cnmi-sidebar-collapsed');
+      document.body.classList.toggle('cnmi-sidebar-hidden');
+    }
+  }, true);
+
+  document.addEventListener('click', async function(e){
+    if (e.target.closest('[data-v66-refresh-profile]')) { e.preventDefault(); state.profileChangeRequestsLoaded=false; await loadProfileChangeRequests(); renderPage(); }
+  }, true);
+  document.addEventListener('change', function(e){
+    if (e.target.id === 'profileSummaryFilterStaff') { state.profileSummaryFilterStaff = e.target.value || ''; renderPage(); }
+    if (e.target.id === 'profileSummaryFilterMonth') { state.profileSummaryFilterMonth = e.target.value || ''; renderPage(); }
+  }, true);
+
+  setTimeout(async()=>{
+    try {
+      injectV66Style(); sanitizeProfileNavV66();
+      if (state?.session?.user) await loadProfileChangeRequests();
+      if (['myProfile','profileRequests','profileRequestsSummary','profileRequestSummary'].includes(state.page)) renderPage(); else renderNav();
+    } catch(err){ console.warn(`[${PATCH}] init failed`, err); }
+  }, 800);
+  console.info(`CNMI Staff Planner ${PATCH} loaded`);
+})();
