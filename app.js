@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V38 - username login + activity usability */
+/* CNMI Staff Planner V39 - stable login after refresh */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'ภาพรวมวันนี้', subtitle: 'สรุปภาพรวมทั้งหมดของวันนี้', group: 'staff' },
@@ -243,6 +243,56 @@ const INITIAL_AUTH_URL = `${window.location.search || ''}${window.location.hash 
 let RECOVERY_INTENT = /(^|[?#&])type=(recovery|password_recovery|invite)(&|$)/.test(INITIAL_AUTH_URL)
   || /(^|[?#&])mode=(recovery|set-password)(&|$)/.test(INITIAL_AUTH_URL);
 
+
+// V39: keep login stable after refresh / mobile sleep.
+// Supabase already persists its own token, but this app-level cache prevents a temporary
+// profile lookup hiccup from forcing a logout and gives us a safe profile fallback.
+const APP_SESSION_CACHE_KEY = 'cnmiDutyAppSession.v39';
+const APP_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+function safeStorage() {
+  try {
+    const k = '__cnmi_storage_test__';
+    window.localStorage.setItem(k, '1');
+    window.localStorage.removeItem(k);
+    return window.localStorage;
+  } catch (_) {
+    return null;
+  }
+}
+function cacheAppSession() {
+  const storage = safeStorage();
+  if (!storage || !state.session?.user || !state.profile) return;
+  const payload = {
+    saved_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + APP_SESSION_TTL_MS).toISOString(),
+    user_id: state.session.user.id,
+    email: state.session.user.email || state.profile.email || '',
+    profile: state.profile
+  };
+  try { storage.setItem(APP_SESSION_CACHE_KEY, JSON.stringify(payload)); } catch (_) {}
+}
+function readCachedAppSession(user) {
+  const storage = safeStorage();
+  if (!storage || !user?.id) return null;
+  try {
+    const raw = storage.getItem(APP_SESSION_CACHE_KEY);
+    if (!raw) return null;
+    const payload = JSON.parse(raw);
+    if (!payload?.expires_at || new Date(payload.expires_at).getTime() < Date.now()) {
+      storage.removeItem(APP_SESSION_CACHE_KEY);
+      return null;
+    }
+    if (payload.user_id !== user.id) return null;
+    return payload;
+  } catch (_) {
+    return null;
+  }
+}
+function clearCachedAppSession() {
+  const storage = safeStorage();
+  try { storage?.removeItem(APP_SESSION_CACHE_KEY); } catch (_) {}
+}
+
 function authRedirectUrl(mode='') {
   const base = window.location.origin + window.location.pathname;
   return mode ? `${base}?mode=${encodeURIComponent(mode)}` : base;
@@ -355,7 +405,13 @@ async function init() {
   const recoveryAtPageOpen = RECOVERY_INTENT;
 
   sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: window.localStorage,
+      flowType: 'pkce'
+    }
   });
 
   sb.auth.onAuthStateChange(async (event, session) => {
@@ -409,7 +465,14 @@ function bindGlobalEvents() {
     }
   });
   $('reloadBtn').addEventListener('click', async () => { await loadAllData(); renderPage(); });
-  $('logoutBtn').addEventListener('click', async () => { if (sb) { await logAuth('LOGOUT'); sessionStorage.removeItem('cnmi_login_audit_' + (state.session?.user?.id || '')); await sb.auth.signOut(); } });
+  $('logoutBtn').addEventListener('click', async () => {
+    if (sb) {
+      await logAuth('LOGOUT');
+      sessionStorage.removeItem('cnmi_login_audit_' + (state.session?.user?.id || ''));
+      clearCachedAppSession();
+      await sb.auth.signOut();
+    }
+  });
 
   $('loginForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -498,17 +561,46 @@ function showResetPasswordPanel() {
 
 async function enterApp() {
   setBusy(true, 'กำลังโหลดข้อมูล');
-  await loadProfile();
-  if (!state.profile?.is_active) {
+  try {
+    await loadProfile();
+  } catch (err) {
+    console.warn('loadProfile failed, trying cached session', err);
+    const cached = readCachedAppSession(state.session?.user);
+    if (cached?.profile) state.profile = cached.profile;
+    else {
+      showToast('โหลดข้อมูลผู้ใช้ไม่สำเร็จ แต่ระบบยังไม่ออกจากบัญชีให้เอง กรุณากดรีเฟรชอีกครั้ง');
+      setBusy(false);
+      return;
+    }
+  }
+
+  if (state.profile && state.profile.is_active === false) {
+    clearCachedAppSession();
     await sb.auth.signOut();
-    showToast('บัญชีนี้ยังไม่ได้อยู่ใน whitelist หรือยังไม่ได้เปิดใช้งาน กรุณาให้ Admin ตรวจ staff_profiles');
+    showToast('บัญชีนี้ถูกปิดใช้งาน กรุณาให้ Admin ตรวจผู้ใช้งานและสิทธิ์');
     setBusy(false);
     return;
   }
+  if (!state.profile) {
+    const cached = readCachedAppSession(state.session?.user);
+    if (cached?.profile) state.profile = cached.profile;
+  }
+  if (!state.profile) {
+    showToast('ไม่พบข้อมูลผู้ใช้ในระบบ กรุณาให้ Admin ตรวจผู้ใช้งานและสิทธิ์');
+    setBusy(false);
+    return;
+  }
+
+  cacheAppSession();
   $('authView').classList.add('hidden');
   $('appView').classList.remove('hidden');
   renderNav();
-  await loadAllData();
+  try {
+    await loadAllData();
+  } catch (err) {
+    console.warn('loadAllData failed after session restore', err);
+    showToast('โหลดข้อมูลบางส่วนไม่สำเร็จ กรุณากดรีเฟรชอีกครั้ง');
+  }
   await logAuthOnce();
   renderPage();
   setBusy(false);
@@ -534,9 +626,19 @@ function showLoginPanel() {
 async function loadProfile() {
   const user = state.session?.user;
   if (!user) return;
-  const { data, error } = await sb.from('staff_profiles').select('*').eq('user_id', user.id).maybeSingle();
+  let { data, error } = await sb.from('staff_profiles').select('*').eq('user_id', user.id).maybeSingle();
   if (error) throw new Error(error.message);
+
+  // Some older staff rows were linked by email before user_id was filled.
+  // Do not sign out on refresh just because user_id lookup misses once.
+  if (!data && user.email) {
+    const byEmail = await sb.from('staff_profiles').select('*').ilike('email', user.email).maybeSingle();
+    if (byEmail.error) throw new Error(byEmail.error.message);
+    data = byEmail.data;
+  }
+
   state.profile = data;
+  if (state.profile) cacheAppSession();
 }
 async function logAuthOnce() {
   const key = 'cnmi_login_audit_' + (state.session?.user?.id || '');
