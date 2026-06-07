@@ -178,20 +178,15 @@
     </div>`;
   };
 
-  // Trade modal: กรณีตกลงกันเอง / จ่ายกันเอง ต้องไม่ทำให้ staff เข้าใจว่าเปลี่ยนตารางหรือเปลี่ยนสิทธิ์ OT
+  // Trade modal: ช่วยอธิบาย flow กรณีตกลงกันเองให้ staff เข้าใจว่าแตะ/ยืนยันได้ แต่ตารางจะเปลี่ยนหลัง Admin บันทึก
   const oldShowTradeModal = window.showTradeModal;
   window.showTradeModal = function showTradeModalV59(slotId){
     if (oldShowTradeModal) oldShowTradeModal(slotId);
     setTimeout(()=>{
       const body = $id('modalBody');
-      if (!body) return;
-      // ลบกล่องอธิบายเดิมที่อาจทำให้เข้าใจผิดหรือซ้ำกัน
-      body.querySelectorAll('.trade-selfpay-note').forEach(el => el.remove());
-      body.querySelectorAll('.soft-notice').forEach(el => {
-        if ((el.textContent || '').includes('ตกลงกันเอง') || (el.textContent || '').includes('จ่ายกันเอง')) el.remove();
-      });
+      if (!body || body.querySelector('.trade-selfpay-note')) return;
       const rateWrap = body.querySelector('#tradeRateWrap');
-      if (rateWrap) rateWrap.insertAdjacentHTML('afterend', `<div class="wide trade-selfpay-note notice soft-notice"><b>กรณีจ่ายกันเอง:</b> ระบบจะบันทึกว่าใครมาทำแทนจริงเท่านั้น ไม่เปลี่ยนตารางเวรหลัก และไม่เปลี่ยนคนที่ได้ OT</div>`);
+      if (rateWrap) rateWrap.insertAdjacentHTML('afterend', `<div class="wide trade-selfpay-note"><b>กรณีตกลงกันเอง / จ่ายกันเอง:</b> อีกฝ่ายกดยืนยันในแอพได้ตามปกติ จากนั้น Admin ต้องกด “บันทึกเปลี่ยนเวร” ก่อน ตารางจึงเปลี่ยนเป็นชื่อคนที่มาทำเวรจริง และคนนั้นใช้ลงชื่ออยู่เวรวันนั้นได้</div>`);
     },0);
   };
 
@@ -271,28 +266,5 @@
 
   const oldRenderPage = window.renderPage || renderPage;
   window.renderPage = renderPage = function renderPageV59(){ injectStyle(); return oldRenderPage(); };
-
-
-  // Keep only one admin profile summary menu. Use the V58 working page id: profileRequestsSummary.
-  function cleanupProfileSummaryMenuV59(){
-    if (!Array.isArray(NAV_ITEMS)) return;
-    for (let i = NAV_ITEMS.length - 1; i >= 0; i--) {
-      if (NAV_ITEMS[i]?.id === 'profileRequestSummary') NAV_ITEMS.splice(i, 1);
-    }
-    const seen = new Set();
-    for (let i = NAV_ITEMS.length - 1; i >= 0; i--) {
-      const item = NAV_ITEMS[i];
-      if (item?.id !== 'profileRequestsSummary') continue;
-      if (seen.has(item.id)) NAV_ITEMS.splice(i, 1);
-      else seen.add(item.id);
-    }
-  }
-  const oldRenderPageV59Safe = renderPage;
-  renderPage = function renderPageV59Safe(){
-    cleanupProfileSummaryMenuV59();
-    return oldRenderPageV59Safe();
-  };
-  setTimeout(()=>{ try { cleanupProfileSummaryMenuV59(); if (typeof renderNav === 'function') renderNav(); } catch(e){} }, 100);
-
   console.info(`CNMI Staff Planner ${PATCH} loaded`);
 })();
