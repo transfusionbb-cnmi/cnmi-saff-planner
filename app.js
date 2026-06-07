@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V53 - profile request visibility + app modal fixes */
+/* CNMI Staff Planner V47 - profile/calendar/hr/month-position fixes */
 const CFG = window.CNMI_CONFIG || {};
 const NAV_ITEMS = [
   { id: 'dashboard', icon: '📊', title: 'ภาพรวมวันนี้', subtitle: 'สรุปภาพรวมทั้งหมดของวันนี้', group: 'staff' },
@@ -789,15 +789,7 @@ async function loadProfileChangeRequests() {
 
   // V52: ใช้ RPC ใหม่ก่อน แล้วค่อย fallback รุ่นเก่า/direct query
   // สาเหตุที่แก้: บางฐานมีข้อมูลใน profile_change_requests แล้ว แต่หน้าเว็บไม่แสดง เพราะ RLS/RPC รุ่นเก่าคืนค่าว่าง
-  const directMyFilter = [
-    staffId ? `staff_id.eq.${staffId}` : '',
-    staffId ? `requested_by.eq.${staffId}` : '',
-    userId ? `requested_by.eq.${userId}` : '',
-    userId ? `staff_id.eq.${userId}` : ''
-  ].filter(Boolean).join(',');
-
   const attempts = [
-    () => sb.rpc('list_profile_change_requests_v53', { p_staff_id: staffId, p_user_email: email, p_user_id: userId, p_is_admin: isAdmin() }),
     () => sb.rpc('list_profile_change_requests_v52', { p_staff_id: staffId, p_user_email: email, p_user_id: userId, p_is_admin: isAdmin() }),
     () => sb.rpc('list_profile_change_requests_v51', { p_staff_id: staffId, p_user_email: email, p_is_admin: isAdmin() }),
     () => sb.rpc('list_profile_change_requests_v50', { p_staff_id: staffId, p_user_email: email, p_is_admin: isAdmin() }),
@@ -805,9 +797,7 @@ async function loadProfileChangeRequests() {
     () => sb.rpc('list_profile_change_requests_v47', { p_staff_id: staffId, p_is_admin: isAdmin() }),
     () => isAdmin()
       ? sb.from('profile_change_requests').select('*').order('created_at', { ascending:false })
-      : (directMyFilter
-          ? sb.from('profile_change_requests').select('*').or(directMyFilter).order('created_at', { ascending:false })
-          : Promise.resolve({ data: [], error: null }))
+      : sb.from('profile_change_requests').select('*').or(`staff_id.eq.${staffId},requested_by.eq.${staffId}`).order('created_at', { ascending:false })
   ];
 
   for (const fn of attempts) {
@@ -825,13 +815,7 @@ async function loadProfileChangeRequests() {
   }
 
   rows.sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-  state.profileChangeRequests = isAdmin() ? rows : rows.filter(r => {
-    const staffMatch = staffId && (String(r.staff_id) === String(staffId) || String(r.requested_by) === String(staffId));
-    const userMatch = userId && (String(r.staff_id) === String(userId) || String(r.requested_by) === String(userId));
-    const emailMatch = email && String(r.email || r.user_email || r.request_email || '').toLowerCase() === String(email).toLowerCase();
-    return staffMatch || userMatch || emailMatch;
-  });
-  console.info('[profile_change_requests] loaded rows:', rows.length, 'visible rows:', state.profileChangeRequests.length, { isAdmin: isAdmin(), staffId, userId, email });
+  state.profileChangeRequests = isAdmin() ? rows : rows.filter(r => String(r.staff_id) === String(staffId) || String(r.requested_by) === String(staffId));
 }
 
 function renderNav() {
@@ -1397,15 +1381,7 @@ function isBackdatedForStaff(date) {
 function renderMyProfilePage() {
   const p = state.profile || {};
   const myId = currentStaffId();
-  const myUserId = state.session?.user?.id || null;
-  const myEmail = String(state.profile?.email || state.session?.user?.email || '').toLowerCase();
-  const myReqs = (state.profileChangeRequests || []).filter(r =>
-    String(r.staff_id || '') === String(myId || '') ||
-    String(r.requested_by || '') === String(myId || '') ||
-    String(r.staff_id || '') === String(myUserId || '') ||
-    String(r.requested_by || '') === String(myUserId || '') ||
-    (!!myEmail && String(r.email || r.user_email || r.request_email || '').toLowerCase() === myEmail)
-  ).slice(0, 10);
+  const myReqs = (state.profileChangeRequests || []).filter(r => r.staff_id === myId || r.requested_by === myId).slice(0, 10);
   return `<div class="grid grid-2">
     <div class="card">
       <div class="section-title"><div><h3>ข้อมูลส่วนตัว</h3><p class="hint">ข้อมูลจริงใช้จากตารางผู้ใช้งาน ถ้าต้องการแก้ ให้ส่งคำขอให้ Admin อนุมัติ</p></div></div>
@@ -1438,7 +1414,7 @@ function renderProfileRequestsPage() {
   return `<div class="card">
     <div class="section-title"><div><h3>คำขอแก้ไขข้อมูลส่วนตัว</h3><p class="hint">Admin ตรวจคำขอจาก staff ก่อนเปลี่ยนข้อมูลจริงในระบบ</p></div></div>
     ${rows.length ? `<div class="mobile-cards always-cards">${rows.map(r => {
-      const st = state.staff.find(s => String(s.id) === String(r.staff_id) || String(s.id) === String(r.requested_by) || String(s.user_id || '') === String(r.requested_by) || String(s.email || '').toLowerCase() === String(r.email || r.user_email || r.request_email || '').toLowerCase()) || {};
+      const st = state.staff.find(s => s.id === r.staff_id) || {};
       return `<div class="mobile-card"><div class="mobile-day-head"><h3>${staffPill(st)}</h3>${badge(profileRequestStatusText(r.status), profileRequestBadge(r.status))}</div>
         <div><b>ขอแก้:</b> ${profileFieldLabel(r.field_name)}</div>
         <div><b>ค่าเดิม:</b> ${escapeHtml(r.old_value || '-')}</div>
@@ -3022,15 +2998,11 @@ async function saveProfileChangeRequest(form) {
   const oldValue = state.profile?.[field] || '';
   if (String(oldValue) === newValue) return showToast('ข้อมูลใหม่เหมือนข้อมูลเดิม');
   setBusy(true, 'กำลังส่งคำขอ');
-  let data = null;
-  let error = null;
-  const submitPayload = { p_field_name: field, p_new_value: newValue, p_note: fd.get('note') || null };
-  for (const fn of ['submit_profile_change_request_v53', 'submit_profile_change_request_v47']) {
-    const res = await sb.rpc(fn, submitPayload);
-    if (!res.error) { data = res.data; error = null; break; }
-    error = res.error;
-    console.warn('submit profile change skipped:', fn, res.error.message || res.error);
-  }
+  const { data, error } = await sb.rpc('submit_profile_change_request_v47', {
+    p_field_name: field,
+    p_new_value: newValue,
+    p_note: fd.get('note') || null
+  });
   setBusy(false);
   if (error) return showToast(friendlyDbError(error));
   form.reset();
@@ -3047,14 +3019,11 @@ async function reviewProfileChangeRequest(id, status) {
     note = await promptDialog('เหตุผลที่ไม่อนุมัติ (ถ้ามี)', 'ไม่อนุมัติคำขอ') || '';
   }
   setBusy(true, 'กำลังบันทึกผลตรวจ');
-  let error = null;
-  const reviewPayload = { p_request_id: id, p_status: status, p_review_note: note || null };
-  for (const fn of ['review_profile_change_request_v53', 'review_profile_change_request_v47']) {
-    const res = await sb.rpc(fn, reviewPayload);
-    if (!res.error) { error = null; break; }
-    error = res.error;
-    console.warn('review profile change skipped:', fn, res.error.message || res.error);
-  }
+  const { error } = await sb.rpc('review_profile_change_request_v47', {
+    p_request_id: id,
+    p_status: status,
+    p_review_note: note || null
+  });
   setBusy(false);
   if (error) return showToast(friendlyDbError(error));
   await loadProfile(); await loadAllData(); renderPage(); showToast(status === 'approved' ? 'อนุมัติและอัปเดตข้อมูลแล้ว' : 'บันทึกไม่อนุมัติแล้ว');
@@ -3283,4 +3252,413 @@ function showAuditDetail(id) {
   const a = state.auditLogs.find(x => x.id === id);
   if (!a) return;
   showModal(`<h2>รายละเอียดประวัติ</h2><p><b>${escapeHtml(auditActionLabel(a))}</b> • ${escapeHtml(tableLabel(a.table_name))} • ${formatThaiDateTime(a.created_at)}</p><p>${escapeHtml(auditSummary(a))}</p><details><summary>ข้อมูลเทคนิคสำหรับตรวจสอบย้อนหลัง</summary><div class="grid grid-2"><div><h3>ก่อนแก้ไข</h3><pre>${escapeHtml(JSON.stringify(a.old_data, null, 2))}</pre></div><div><h3>หลังแก้ไข</h3><pre>${escapeHtml(JSON.stringify(a.new_data, null, 2))}</pre></div></div></details>`);
+}
+
+
+/* =========================================================
+   V56 hotfix: login username, profile request visibility,
+   no-duty limits, safer popups, mobile sidebar polish
+   ========================================================= */
+
+function showToast(msg, opts={}) {
+  const text = String(msg || 'ดำเนินการเรียบร้อย');
+  const errorWords = /(ไม่สำเร็จ|ผิดพลาด|error|กรุณา|ไม่ได้|ไม่พบ|สิทธิ์ไม่พอ|ล้มเหลว|ไม่ถูกต้อง|หมดอายุ|ไม่สมบูรณ์|ปฏิเสธ|denied|invalid|failed|ครบ\s*\d+\s*วัน)/i;
+  const tone = opts.tone || (errorWords.test(text) ? 'error' : 'success');
+  const title = opts.title || (tone === 'error' ? 'แจ้งเตือน' : 'สำเร็จ');
+  showModal(`
+    <div class="app-alert ${tone}">
+      <div class="app-alert-icon">${tone === 'error' ? '!' : '✓'}</div>
+      <h2>${escapeHtml(title)}</h2>
+      <p>${escapeHtml(text)}</p>
+      <div class="confirm-actions"><button class="primary-btn" data-app-alert-ok>ตกลง</button></div>
+    </div>
+  `, { small:true });
+}
+
+function authUrlHasExpiredOtp() {
+  const raw = `${window.location.search || ''}${window.location.hash || ''}`;
+  return /error_code=otp_expired|error=access_denied/i.test(raw);
+}
+
+async function resolveLoginIdentifier(loginId) {
+  const raw = String(loginId || '').trim();
+  if (!raw) throw new Error('กรุณากรอกชื่อผู้ใช้หรืออีเมล');
+  if (raw.includes('@')) {
+    const email = raw.toLowerCase();
+    if (!requireMahidolEmail(email)) throw new Error('ใช้ได้เฉพาะอีเมล @mahidol.ac.th');
+    return email;
+  }
+  const username = raw.toLowerCase();
+  if (!/^[a-zA-Z0-9._-]{1,30}$/.test(username)) {
+    throw new Error('ชื่อผู้ใช้ใช้ได้เฉพาะอังกฤษ ตัวเลข จุด ขีดกลาง หรือขีดล่าง');
+  }
+  // ใช้ RPC เป็นหลัก เพราะหน้า Login ยังไม่มี session และ RLS อาจซ่อน staff_profiles จาก anon
+  try {
+    const r = await sb.rpc('resolve_login_identifier_v56', { p_identifier: username });
+    if (!r.error && r.data) return String(r.data).toLowerCase();
+  } catch (_) {}
+
+  const { data, error } = await sb
+    .from('staff_profiles')
+    .select('email, login_name, is_active')
+    .ilike('login_name', username)
+    .limit(2);
+  if (error) throw new Error(error.message || 'ค้นหาชื่อผู้ใช้ไม่สำเร็จ');
+  const rows = data || [];
+  if (!rows.length || !rows[0].email) throw new Error('ไม่พบชื่อผู้ใช้นี้ กรุณาตรวจสอบกับ Admin');
+  if (rows.length > 1) throw new Error('ชื่อผู้ใช้นี้ซ้ำในระบบ กรุณาให้ Admin ตรวจผู้ใช้งานและสิทธิ์');
+  if (rows[0].is_active === false) throw new Error('บัญชีนี้ถูกปิดใช้งาน กรุณาติดต่อ Admin');
+  if (!requireMahidolEmail(rows[0].email)) throw new Error('บัญชีนี้ไม่ได้ใช้อีเมล Mahidol กรุณาติดต่อ Admin');
+  return String(rows[0].email).toLowerCase();
+}
+
+function normalizeProfileRequest(r) {
+  if (!r) return r;
+  return {
+    ...r,
+    id: r.id || r.request_id,
+    staff_id: r.staff_id || r.staffId,
+    requested_by: r.requested_by || r.requestedBy,
+    field_name: r.field_name || r.fieldName,
+    old_value: r.old_value ?? r.oldValue ?? '',
+    new_value: r.new_value ?? r.newValue ?? '',
+    review_note: r.review_note ?? r.reviewNote ?? '',
+    reviewed_by: r.reviewed_by || r.reviewedBy,
+    reviewed_at: r.reviewed_at || r.reviewedAt,
+    created_at: r.created_at || r.createdAt,
+    status: r.status || 'pending'
+  };
+}
+function profileRequestBelongsToMe(r) {
+  const req = normalizeProfileRequest(r);
+  const staffId = String(currentStaffId() || '');
+  const userId = String(state.session?.user?.id || '');
+  const email = String(state.profile?.email || state.session?.user?.email || '').toLowerCase();
+  const requestedByEmail = String(req.requested_by_email || req.email || '').toLowerCase();
+  return String(req.staff_id || '') === staffId
+    || String(req.requested_by || '') === staffId
+    || String(req.requested_by || '') === userId
+    || (email && requestedByEmail === email);
+}
+async function loadProfileChangeRequests() {
+  const staffId = currentStaffId();
+  const email = state.profile?.email || state.session?.user?.email || null;
+  const userId = state.session?.user?.id || null;
+  const rows = [];
+  const seen = new Set();
+  const addRows = (arr) => (arr || []).forEach(row => {
+    const r = normalizeProfileRequest(row);
+    if (!r) return;
+    const key = r.id || `${r.staff_id || ''}|${r.requested_by || ''}|${r.field_name || ''}|${r.new_value || ''}|${r.created_at || ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push(r);
+  });
+  const attempts = [
+    () => sb.rpc('list_profile_change_requests_v56', { p_staff_id: staffId, p_user_email: email, p_user_id: userId, p_is_admin: isAdmin() }),
+    () => sb.rpc('list_profile_change_requests_v52', { p_staff_id: staffId, p_user_email: email, p_user_id: userId, p_is_admin: isAdmin() }),
+    () => sb.rpc('list_profile_change_requests_v51', { p_staff_id: staffId, p_user_email: email, p_is_admin: isAdmin() }),
+    () => sb.rpc('list_profile_change_requests_v50', { p_staff_id: staffId, p_user_email: email, p_is_admin: isAdmin() }),
+    () => isAdmin()
+      ? sb.from('profile_change_requests').select('*').order('created_at', { ascending:false })
+      : sb.from('profile_change_requests').select('*').or(`staff_id.eq.${staffId},requested_by.eq.${staffId},requested_by.eq.${userId}`).order('created_at', { ascending:false })
+  ];
+  for (const fn of attempts) {
+    try {
+      const res = await fn();
+      if (res?.error) { console.warn('profile change request load skipped:', res.error.message || res.error); continue; }
+      addRows(res.data || []);
+      if ((res.data || []).length) break;
+    } catch (err) { console.warn('profile change request load attempt failed', err); }
+  }
+  rows.sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  state.profileChangeRequests = isAdmin() ? rows : rows.filter(profileRequestBelongsToMe);
+  console.info('[profile_change_requests v56] rows:', rows.length, 'visible:', state.profileChangeRequests.length, { staffId, userId, email, isAdmin:isAdmin() });
+}
+
+function renderMyProfilePage() {
+  const p = state.profile || {};
+  const myReqs = (state.profileChangeRequests || []).filter(profileRequestBelongsToMe).slice(0, 10);
+  return `<div class="grid grid-2 profile-page-grid">
+    <div class="card profile-card-readable">
+      <div class="section-title"><div><h3>ข้อมูลส่วนตัว</h3><p class="hint">ข้อมูลจริงใช้จากตารางผู้ใช้งาน ถ้าต้องการแก้ ให้ส่งคำขอให้ Admin อนุมัติ</p></div></div>
+      <div class="profile-info-grid profile-info-readable">
+        <div><span class="muted">ชื่อเล่น</span><b>${escapeHtml(p.nickname || '-')}</b></div>
+        <div><span class="muted">ชื่อ-สกุล</span><b>${escapeHtml(p.full_name || '-')}</b></div>
+        <div><span class="muted">เบอร์โทร</span><b>${escapeHtml(p.phone || '-')}</b></div>
+        <div><span class="muted">Email</span><b>${escapeHtml(p.email || '-')}</b></div>
+        <div><span class="muted">ชื่อผู้ใช้</span><b>${escapeHtml(p.login_name || '-')}</b></div>
+      </div>
+      <form id="profileChangeForm" class="form-grid compact-form">
+        <label>ต้องการแก้ไข <select name="field_name" required><option value="phone">เบอร์โทร</option><option value="login_name">ชื่อผู้ใช้</option><option value="nickname">ชื่อเล่น</option><option value="full_name">ชื่อ-สกุล</option></select></label>
+        <label>ข้อมูลใหม่ <input name="new_value" required placeholder="กรอกข้อมูลใหม่"></label>
+        <label class="wide">เหตุผล/หมายเหตุ <textarea name="note" placeholder="เช่น เปลี่ยนเบอร์โทร / สะกดชื่อผิด"></textarea></label>
+        <button class="primary-btn wide" type="submit">ส่งคำขอให้ Admin อนุมัติ</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="section-title"><h3>คำขอล่าสุดของฉัน</h3><button class="ghost-btn" type="button" id="refreshProfileRequestsBtn" onclick="loadAllData().then(renderPage)">รีเฟรช</button></div>
+      ${myReqs.length ? `<div class="mobile-cards always-cards">${myReqs.map(raw => { const r = normalizeProfileRequest(raw); return `<div class="mobile-card request-card"><div class="mobile-day-head"><b>${profileFieldLabel(r.field_name)}</b>${badge(profileRequestStatusText(r.status), profileRequestBadge(r.status))}</div>
+        <div><b>ค่าเดิม:</b> ${escapeHtml(r.old_value || '-')}</div>
+        <div><b>ค่าใหม่:</b> ${escapeHtml(r.new_value || '-')}</div>
+        <div><b>เหตุผล:</b> ${escapeHtml(r.note || '-')}</div>
+        <div class="muted">ส่งเมื่อ ${formatThaiDateTime(r.created_at)}</div>
+        ${r.reviewed_at ? `<div class="muted">ตรวจเมื่อ ${formatThaiDateTime(r.reviewed_at)}</div>` : ''}
+      </div>`; }).join('')}</div>` : empty('ยังไม่มีคำขอ')}
+    </div>
+  </div>`;
+}
+
+function renderProfileRequestsPage() {
+  if (!isAdmin()) return noPermission();
+  const rows = (state.profileChangeRequests || []).map(normalizeProfileRequest).filter(r => r.status === 'pending');
+  return `<div class="card">
+    <div class="section-title"><div><h3>คำขอแก้ไขข้อมูลส่วนตัว</h3><p class="hint">Admin ตรวจคำขอจาก staff ก่อนเปลี่ยนข้อมูลจริงในระบบ</p></div><button class="ghost-btn" type="button" onclick="loadAllData().then(renderPage)">รีเฟรชคำขอ</button></div>
+    ${rows.length ? `<div class="mobile-cards always-cards">${rows.map(r => {
+      const st = state.staff.find(s => String(s.id) === String(r.staff_id)) || {};
+      return `<div class="mobile-card request-card"><div class="mobile-day-head"><h3>${staffPill(st || r.staff_id)}</h3>${badge(profileRequestStatusText(r.status), profileRequestBadge(r.status))}</div>
+        <div><b>ขอแก้:</b> ${profileFieldLabel(r.field_name)}</div>
+        <div><b>ค่าเดิม:</b> ${escapeHtml(r.old_value || '-')}</div>
+        <div><b>ค่าใหม่:</b> ${escapeHtml(r.new_value || '-')}</div>
+        <div><b>เหตุผล:</b> ${escapeHtml(r.note || '-')}</div>
+        <div class="muted">ส่งเมื่อ ${formatThaiDateTime(r.created_at)}</div>
+        <div class="actions"><button class="primary-btn" data-approve-profile-request="${r.id}">อนุมัติ</button><button class="ghost-btn danger" data-reject-profile-request="${r.id}">ไม่อนุมัติ</button></div>
+      </div>`;
+    }).join('')}</div>` : empty('ไม่มีคำขอรออนุมัติ')}
+  </div>`;
+}
+
+function noDutyLimitCounts(staffId, monthKey, excludeId='') {
+  const rows = (state.leaves || []).filter(l => l.type === 'ไม่รับเวร' && l.status !== 'cancelled' && String(l.staff_id) === String(staffId) && String(l.id || '') !== String(excludeId || ''));
+  let weekend = 0, weekday = 0;
+  rows.forEach(l => daysBetween(l.start_date, l.end_date).forEach(date => {
+    if (!String(date).startsWith(monthKey)) return;
+    if (isWeekend(date)) weekend += 1; else weekday += 1;
+  }));
+  return { weekend, weekday };
+}
+function noDutyRequestedCounts(start, end, monthKey) {
+  let weekend = 0, weekday = 0;
+  daysBetween(start, end).forEach(date => {
+    if (!String(date).startsWith(monthKey)) return;
+    if (isWeekend(date)) weekend += 1; else weekday += 1;
+  });
+  return { weekend, weekday };
+}
+function validateNoDutyLimit(row, excludeId='') {
+  if (isAdmin()) return null;
+  if (row.type !== 'ไม่รับเวร') return null;
+  const months = Array.from(new Set(daysBetween(row.start_date, row.end_date).map(d => d.slice(0,7))));
+  for (const m of months) {
+    const oldCount = noDutyLimitCounts(row.staff_id, m, excludeId);
+    const newCount = noDutyRequestedCounts(row.start_date, row.end_date, m);
+    if (oldCount.weekend + newCount.weekend > 2) return 'เดือนนี้ไม่รับเวรเสาร์-อาทิตย์ครบ 2 วันแล้ว';
+    if (oldCount.weekday + newCount.weekday > 5) return 'เดือนนี้ไม่รับเวรวันธรรมดาครบ 5 วันแล้ว';
+  }
+  return null;
+}
+
+async function saveLeave(form) {
+  const fd = new FormData(form);
+  const row = {
+    staff_id: isAdmin() ? (fd.get('staff_id') || currentStaffId()) : currentStaffId(),
+    type: fd.get('type'),
+    start_date: fd.get('start_date'),
+    end_date: fd.get('end_date'),
+    leave_period: fd.get('leave_period') || 'เต็มวัน',
+    note: fd.get('note'),
+    contact_phone: fd.get('contact_phone'),
+    updated_by: currentStaffId()
+  };
+  if (isAdmin()) {
+    const isBackdated = row.start_date < todayStr();
+    row.recorded_by_admin = row.staff_id !== currentStaffId() || isBackdated;
+    row.admin_record_reason = String(fd.get('admin_record_reason') || '').trim() || null;
+  }
+  if (row.end_date < row.start_date) return showToast('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');
+  const requestedDates = datesBetween(row.start_date, row.end_date);
+  if (!isAdmin()) {
+    if (row.start_date < todayStr()) return showToast('Staff ไม่สามารถบันทึกย้อนหลังได้ กรุณาให้ Admin บันทึกแทน');
+    if (row.type === 'ไม่รับเวร' && requestedDates.some(isNoDutyLockedForDate)) return showToast('พ้นกำหนดแก้ไข “ไม่รับเวร” ของเดือนนี้แล้ว กรุณาแจ้งอินชาร์จหรือหัวหน้าให้บันทึกแทน');
+    const limitMsg = validateNoDutyLimit(row, state.editingLeaveId || '');
+    if (limitMsg) return showToast(limitMsg, { tone:'error' });
+  }
+  const hasPublishedDay = requestedDates.some(positionDayPublished);
+  if (hasPublishedDay && !isAdmin()) {
+    row.note = [row.note, '[ระบบเตือน] วันที่ขอลามีการประกาศตารางตำแหน่งแล้ว กรุณาแจ้งอินชาร์จหรือหัวหน้า'].filter(Boolean).join(' | ');
+    showToast('วันที่ขอลามีการประกาศตำแหน่งแล้ว กรุณาแจ้งอินชาร์จหรือหัวหน้าเพื่อปรับหน้างาน');
+  }
+  if (hasPublishedDay && isAdmin()) {
+    row.recorded_by_admin = true;
+    row.admin_record_reason = row.admin_record_reason || 'Admin บันทึก/แก้ไขรายการหลังประกาศตารางตำแหน่งรายวัน';
+  }
+  const file = fd.get('file');
+  if (file && file.size) row.attachment_path = await uploadFile(file, 'leave');
+  setBusy(true, 'กำลังบันทึก');
+  const id = state.editingLeaveId;
+  let res;
+  if (isAdmin()) {
+    const adminReason = String(row.admin_record_reason || '').trim();
+    if ((row.staff_id !== currentStaffId() || row.start_date < todayStr() || hasPublishedDay) && !adminReason) {
+      setBusy(false); return showToast('กรุณาระบุเหตุผลที่ Admin บันทึกแทน/ย้อนหลัง เพื่อให้ Audit Log ชัดเจน');
+    }
+    res = await sb.rpc('admin_upsert_leave_v32', { p_id: id || null, p_staff_id: row.staff_id, p_type: row.type, p_start_date: row.start_date, p_end_date: row.end_date, p_leave_period: row.leave_period, p_note: row.note || null, p_contact_phone: row.contact_phone || null, p_attachment_path: row.attachment_path || null, p_admin_record_reason: adminReason || null, p_recorded_by_admin: true });
+    if (res.error && (String(res.error.message || '').includes('admin_upsert_leave_v32') || String(res.error.message || '').includes('Could not find the function') || String(res.error.message || '').includes('schema cache'))) {
+      const directRow = { ...row, recorded_by_admin: true, admin_record_reason: adminReason || row.admin_record_reason || 'Admin บันทึกแทน', updated_by: currentStaffId() };
+      res = id ? await sb.from('leave_requests').update(directRow).eq('id', id) : await sb.from('leave_requests').insert({ ...directRow, created_by: currentStaffId(), status: 'active' });
+    }
+  } else {
+    res = id ? await sb.from('leave_requests').update(row).eq('id', id) : await sb.from('leave_requests').insert({ ...row, created_by: currentStaffId(), status: 'active' });
+  }
+  setBusy(false);
+  if (res.error) return showToast(friendlyDbError(res.error));
+  state.editingLeaveId = null;
+  await loadAllData(); renderPage();
+  const backdated = isAdmin() && row.start_date < todayStr();
+  showToast(backdated ? 'บันทึกลาย้อนหลังแทนเจ้าหน้าที่แล้ว' : 'บันทึกแล้ว');
+}
+
+async function saveProfileChangeRequest(form) {
+  const fd = new FormData(form);
+  const field = fd.get('field_name');
+  const newValue = String(fd.get('new_value') || '').trim();
+  if (!['phone','login_name','nickname','full_name'].includes(field)) return showToast('เลือกข้อมูลที่ต้องการแก้ไขไม่ถูกต้อง');
+  if (field === 'login_name' && !/^[a-zA-Z0-9._-]{1,30}$/.test(newValue)) return showToast('ชื่อผู้ใช้ใช้ได้เฉพาะอังกฤษ ตัวเลข จุด ขีดกลาง หรือขีดล่าง');
+  if (!newValue) return showToast('กรุณากรอกข้อมูลใหม่');
+  const oldValue = state.profile?.[field] || '';
+  if (String(oldValue) === newValue) return showToast('ข้อมูลใหม่เหมือนข้อมูลเดิม');
+  setBusy(true, 'กำลังส่งคำขอ');
+  let res = await sb.rpc('submit_profile_change_request_v56', { p_field_name: field, p_new_value: newValue, p_note: fd.get('note') || null });
+  if (res.error) res = await sb.rpc('submit_profile_change_request_v47', { p_field_name: field, p_new_value: newValue, p_note: fd.get('note') || null });
+  setBusy(false);
+  if (res.error) return showToast(friendlyDbError(res.error));
+  form.reset();
+  await loadAllData();
+  if (res.data) {
+    const d = Array.isArray(res.data) ? res.data[0] : res.data;
+    if (d && !state.profileChangeRequests.some(r => r.id === d.id)) state.profileChangeRequests.unshift(normalizeProfileRequest(d));
+  }
+  renderPage(); showToast('ส่งคำขอให้ Admin แล้ว');
+}
+
+async function reviewProfileChangeRequest(id, status) {
+  if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้น');
+  const req = state.profileChangeRequests.find(r => String(r.id) === String(id));
+  if (!req) return showToast('ไม่พบคำขอ');
+  let note = '';
+  if (status === 'rejected') note = await promptDialog('เหตุผลที่ไม่อนุมัติ (ถ้ามี)', 'ไม่อนุมัติคำขอ') || '';
+  setBusy(true, 'กำลังบันทึกผลตรวจ');
+  let res = await sb.rpc('review_profile_change_request_v56', { p_request_id: id, p_status: status, p_review_note: note || null });
+  if (res.error) res = await sb.rpc('review_profile_change_request_v47', { p_request_id: id, p_status: status, p_review_note: note || null });
+  setBusy(false);
+  if (res.error) return showToast(friendlyDbError(res.error));
+  await loadProfile(); await loadAllData(); renderPage(); showToast(status === 'approved' ? 'อนุมัติและอัปเดตข้อมูลแล้ว' : 'บันทึกไม่อนุมัติแล้ว');
+}
+
+// ถ้าเปิดลิงก์ที่ Supabase แจ้งว่า token หมดอายุ ให้บอกตรง ๆ และไม่แสดงเครื่องหมายถูกผิดบริบท
+if (authUrlHasExpiredOtp()) {
+  setTimeout(() => showToast('ลิงก์นี้หมดอายุหรือถูกใช้ไปแล้ว กรุณาขอลิงก์ตั้งรหัสผ่านใหม่อีกครั้ง', { tone:'error' }), 700);
+}
+
+
+// V56: override global bindings so hamburger collapses sidebar on desktop and opens drawer on mobile
+function bindGlobalEvents() {
+  $('modalClose').addEventListener('click', closeModal);
+  $('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+  $('mobileMenuBtn').addEventListener('click', () => {
+    const sidebar = $('sidebar');
+    if (window.innerWidth > 820) {
+      sidebar.classList.toggle('collapsed');
+      document.body.classList.toggle('sidebar-collapsed', sidebar.classList.contains('collapsed'));
+      return;
+    }
+    sidebar.classList.toggle('open');
+    document.body.classList.toggle('sidebar-open', sidebar.classList.contains('open'));
+  });
+  document.addEventListener('click', e => {
+    if (window.innerWidth > 820) return;
+    const sidebar = $('sidebar');
+    const btn = $('mobileMenuBtn');
+    if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && !btn.contains(e.target)) {
+      sidebar.classList.remove('open');
+      document.body.classList.remove('sidebar-open');
+    }
+  });
+  $('reloadBtn').addEventListener('click', async () => { await loadAllData(); renderPage(); });
+  $('logoutBtn').addEventListener('click', async () => {
+    if (sb) {
+      await logAuth('LOGOUT');
+      sessionStorage.removeItem('cnmi_login_audit_' + (state.session?.user?.id || ''));
+      clearCachedAppSession();
+      await sb.auth.signOut();
+    }
+  });
+
+  $('loginForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const loginId = $('loginEmail').value.trim();
+    const password = $('loginPassword').value;
+    setBusy(true, 'กำลังเข้าสู่ระบบ');
+    let email = '';
+    try { email = await resolveLoginIdentifier(loginId); }
+    catch (err) { setBusy(false); return showToast(err.message || 'ไม่พบชื่อผู้ใช้', { tone:'error' }); }
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    setBusy(false);
+    if (error) {
+      const msg = String(error.message || '');
+      if (msg.toLowerCase().includes('invalid login credentials')) {
+        const hint = loginId.includes('@')
+          ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ลืมรหัสผ่าน'
+          : 'ชื่อผู้ใช้นี้มีในระบบแล้ว แต่รหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ลืมรหัสผ่าน';
+        return showToast(hint, { tone:'error' });
+      }
+      return showToast(msg, { tone:'error' });
+    }
+  });
+
+  $('setupPasswordForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const email = $('setupPasswordEmail').value.trim().toLowerCase();
+    if (!requireMahidolEmail(email)) return showToast('ใช้ได้เฉพาะอีเมล @mahidol.ac.th', { tone:'error' });
+    setBusy(true, 'กำลังส่งลิงก์ตั้งรหัสผ่านใหม่');
+    try {
+      const result = await requestPasswordSetupLink(email);
+      showToast(result?.sentBy === 'MailApp' ? 'ส่งอีเมลตั้งรหัสผ่านแล้ว กรุณาเช็ก Inbox / Spam' : 'ถ้าอีเมลนี้อยู่ในรายชื่อเจ้าหน้าที่ ระบบจะส่งลิงก์ให้ตั้งรหัสผ่านใหม่');
+    } catch (err) { showToast(err.message || 'ส่งลิงก์ไม่สำเร็จ', { tone:'error' }); }
+    finally { setBusy(false); }
+  });
+
+  $('resetPasswordForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const loginName = String($('recoveryLoginName')?.value || '').trim();
+    const password = $('newPassword').value;
+    if (!loginName) return showToast('กรุณาตั้งชื่อผู้ใช้', { tone:'error' });
+    if (!/^[a-zA-Z0-9._-]+$/.test(loginName)) return showToast('ชื่อผู้ใช้ใช้ได้เฉพาะอังกฤษ ตัวเลข จุด ขีดกลาง หรือขีดล่าง', { tone:'error' });
+    if (!password) return showToast('กรุณากรอกรหัสผ่านใหม่', { tone:'error' });
+    const { data: beforeUpdate } = await sb.auth.getSession();
+    const recoveryEmail = beforeUpdate?.session?.user?.email || state.session?.user?.email || '';
+    if (!recoveryEmail) return showToast('ลิงก์หมดอายุหรือไม่สมบูรณ์ กรุณาขอลิงก์ตั้งรหัสผ่านใหม่อีกครั้ง', { tone:'error' });
+    setBusy(true, 'กำลังบันทึกชื่อผู้ใช้และรหัสผ่าน');
+    try {
+      let r = await sb.rpc('set_initial_login_name_v56', { p_email: recoveryEmail, p_login_name: loginName });
+      if (r.error) r = await sb.rpc('set_initial_login_name_v44', { p_email: recoveryEmail, p_login_name: loginName });
+      if (r.error) throw r.error;
+      RECOVERY_INTENT = false;
+      if (window.history?.replaceState) window.history.replaceState({}, document.title, authRedirectUrl());
+      const { error } = await sb.auth.updateUser({ password });
+      if (error) throw error;
+      $('resetPasswordForm').classList.add('hidden');
+      const { data } = await sb.auth.getSession();
+      state.session = data.session;
+      showToast('บันทึกชื่อผู้ใช้และรหัสผ่านแล้ว');
+      await enterApp();
+    } catch (err) {
+      RECOVERY_INTENT = true;
+      showToast(err.message || 'บันทึกไม่สำเร็จ', { tone:'error' });
+    } finally { setBusy(false); }
+  });
+
+  document.body.addEventListener('click', handleClick);
+  document.body.addEventListener('change', handleChange);
+  document.body.addEventListener('submit', handleSubmit);
 }
