@@ -491,7 +491,7 @@ async function init() {
       autoRefreshToken: true,
       detectSessionInUrl: true,
       storage: window.localStorage,
-      flowType: 'pkce'
+      flowType: 'implicit'
     }
   });
 
@@ -3713,6 +3713,12 @@ function bindGlobalEvents() {
   document.body.addEventListener('click', handleClick);
   document.body.addEventListener('change', handleChange);
   document.body.addEventListener('submit', handleSubmit);
+  // V75: keep manual drag/drop active after auth/sidebar override.
+  document.body.dataset.v75DndGuard = '1';
+  document.body.addEventListener('dragstart', handleDragStart);
+  document.body.addEventListener('dragover', handleDragOver);
+  document.body.addEventListener('dragleave', handleDragLeave);
+  document.body.addEventListener('drop', handleDrop);
 }
 
 /* =========================================================
@@ -4165,5 +4171,11 @@ function bindGlobalEvents() {
     document.body.addEventListener('click', handleClick);
     document.body.addEventListener('change', handleChange);
     document.body.addEventListener('submit', handleSubmit);
+    // V75: restore drag/drop listeners that were accidentally omitted by later sidebar/login override.
+    document.body.dataset.v75DndGuard = '1';
+    document.body.addEventListener('dragstart', handleDragStart);
+    document.body.addEventListener('dragover', handleDragOver);
+    document.body.addEventListener('dragleave', handleDragLeave);
+    document.body.addEventListener('drop', handleDrop);
   };
 })();
