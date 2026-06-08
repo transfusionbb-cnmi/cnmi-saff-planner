@@ -319,7 +319,10 @@ function clearCachedAppSession() {
 }
 
 function authRedirectUrl(mode='') {
-  const base = window.location.origin + window.location.pathname;
+  // V72: ใช้ URL ของหน้าเว็บปัจจุบันจริง ๆ เสมอ และตัด query/hash เก่าออก
+  // ช่วยลดปัญหาลิงก์ตั้งรหัสผ่านย้อนกลับผิด path หลัง deploy หลาย branch/folder
+  const path = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+  const base = window.location.origin + path;
   return mode ? `${base}?mode=${encodeURIComponent(mode)}` : base;
 }
 
@@ -515,7 +518,16 @@ async function init() {
     if (session?.user) await enterApp();
   });
 
-  const { data } = await sb.auth.getSession();
+  // V72: หลัง refresh หรือกลับมาจาก Gmail/Safari บางครั้ง Supabase คืน session ช้ากว่าหน้าเว็บโหลด
+  // จึงรอ restore token สั้น ๆ ก่อนตัดสินว่าไม่มี session จริง เพื่อลดอาการเด้งกลับหน้า Login
+  let { data } = await sb.auth.getSession();
+  if (!data?.session) {
+    for (const waitMs of [200, 500, 900, 1300]) {
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+      const retry = await sb.auth.getSession();
+      if (retry.data?.session) { data = retry.data; break; }
+    }
+  }
   state.session = data.session;
 
   if (RECOVERY_INTENT || isPasswordRecoveryUrl()) {
