@@ -1179,3 +1179,118 @@ body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!imp
   .month-filter-v110 { width: 100%; justify-content: space-between; }
   .month-filter-v110 input[type="month"] { flex: 1; min-width: 150px; }
 }
+
+/* V111: mobile-only roster views */
+@media (max-width: 820px) {
+  .mobile-schedule-view-v111 { display:block; }
+  .mobile-only-roster-v111 { margin-top: 12px; }
+  .excel-roster-wrap-v111 { max-height: 72vh; overflow: auto; border-radius: 22px; }
+  .excel-roster-table-v111 { min-width: 1180px !important; }
+  .excel-roster-table-v111 th,
+  .excel-roster-table-v111 td {
+    min-width: 64px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+  }
+  .excel-roster-table-v111 thead th {
+    height: 44px !important;
+    min-height: 44px !important;
+  }
+  .excel-roster-table-v111 .staff-col,
+  .excel-roster-table-v111 th.staff-name-cell {
+    min-width: 112px !important;
+    width: 112px !important;
+    max-width: 112px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    text-align: center !important;
+  }
+  .excel-roster-table-v111 th.staff-name-cell b {
+    font-size: 13px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 96px;
+    margin: 0 auto;
+  }
+  .excel-roster-table-v111 .excel-duty-cell-btn {
+    min-height: 34px !important;
+    height: 34px !important;
+    max-height: 36px !important;
+    font-size: 10.5px !important;
+    line-height: 1.05 !important;
+  }
+  .mobile-day-calendar-v111 {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .mobile-day-calendar-v111 .schedule-day-card {
+    min-height: 132px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+  .mobile-day-calendar-v111 .mobile-day-head b { font-size: 22px; }
+  .mobile-day-calendar-v111 .mobile-duty-line {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 6px;
+    align-items: center;
+    padding: 5px 0;
+  }
+  .mobile-day-calendar-v111 .mobile-duty-line .trade-btn {
+    grid-column: 1 / -1;
+    width: max-content;
+    margin-left: 0;
+  }
+  .mobile-ot-summary-list-v111 {
+    display: grid;
+    gap: 12px;
+  }
+  .ot-summary-card-v111 {
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 22px;
+    padding: 14px;
+    display: grid;
+    gap: 12px;
+    color: #203246;
+    box-shadow: 0 8px 22px rgba(31,50,72,.05);
+  }
+  .ot-card-head-v111 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .ot-card-head-v111 .staff-pill {
+    font-size: 18px;
+    padding: 7px 16px;
+  }
+  .ot-card-grid-v111 {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 7px 12px;
+    font-size: 15px;
+  }
+  .ot-card-grid-v111 span { color: #53677d; font-weight: 700; }
+  .ot-card-grid-v111 b { color: #203246; font-weight: 900; }
+  .ot-duty-counts-v111 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .ot-duty-counts-v111 span {
+    background: #f4f9fd;
+    border: 1px solid #dceaf5;
+    border-radius: 14px;
+    padding: 8px 10px;
+    font-weight: 800;
+    color: #31465b;
+  }
+}
