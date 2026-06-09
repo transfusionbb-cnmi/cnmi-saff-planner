@@ -1006,3 +1006,58 @@ body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!imp
   .mobile-day-head .count-badge, .mobile-day-head .day-count, .mobile-day-head small.count { display:none !important; }
   .mobile-day-head { gap:6px; }
 }
+
+/* Patch V108 hotfix: schedule labels, old tabs, mobile spacing */
+.excel-roster-table-v107 .leave-cell .excel-duty-cell-btn,
+.no-duty-one-line-v107 {
+  white-space: nowrap !important;
+  font-size: 10.5px !important;
+  line-height: 1.05 !important;
+  letter-spacing: -0.1px;
+}
+.excel-roster-table-v107 .excel-duty-cell-btn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-duty-chip-v107 {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 3px 4px 3px 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef7ff;
+  border: 1px solid #d8ebfb;
+  white-space: nowrap;
+}
+.old-duty-table-v107[open] {
+  display: block;
+}
+.schedule-by-person-v107 td:nth-child(2) {
+  min-width: 520px;
+}
+@media (max-width: 820px) {
+  .excel-roster-table-v107 .leave-cell .excel-duty-cell-btn,
+  .no-duty-one-line-v107 {
+    font-size: 9.5px !important;
+    padding-left: 1px;
+    padding-right: 1px;
+  }
+  .schedule-by-person-v107 td:nth-child(2) {
+    min-width: 280px;
+  }
+  /* ซ่อนเลขจำนวนรายการในหัวการ์ดตำแหน่งรายเดือนบนมือถือ เหลือวันที่อย่างเดียว */
+  .position-month-mobile-count,
+  .month-position-mobile-count,
+  .mobile-position-count,
+  .day-total,
+  .day-total-count,
+  .mobile-day-head [data-count],
+  .mobile-day-head .badge:not(.yellow):not(.green):not(.red):not(.blue):not(.orange) {
+    display: none !important;
+  }
+  .mobile-day-head b + b,
+  .mobile-day-head > b:nth-of-type(n+2) {
+    display: none !important;
+  }
+}

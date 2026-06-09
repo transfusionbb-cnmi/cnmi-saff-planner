@@ -45,6 +45,11 @@
   function v107DowLabel(date) { const d = parseDate(date).getDay(); return V107.weekdays.find(w => w.js === d)?.label || ''; }
   function v107RoleFor(code) { return V107.roles[normalizeDutyCodeV107(code)] || 'MT'; }
   function dutyLabelV107(code) { return normalizeDutyCodeV107(code || ''); }
+  function dutyDisplayLabelV107(code) {
+    const c = normalizeDutyCodeV107(code || '');
+    if (c === 'ช4-MT/แตง') return 'ช4';
+    return c;
+  }
   function normalizeDutyCodeV107(code='') {
     const c = String(code || '').trim();
     if (c === 'ช9-MT') return 'ช9-MT/แตง';
@@ -406,12 +411,18 @@
     (assignments || []).filter(a => a.duty_date >= start && a.duty_date <= end).forEach(a => set.add(normalizeDutyCodeV107(a.duty_code)));
     return V107.codes.filter(c => set.has(c));
   }
+  function rosterStaffOptionsFastV107(selectedId='') {
+    const selected = String(selectedId || '');
+    return orderedStaff((state.staff || []).filter(s => isRosterEnabled(s)))
+      .map(st => `<option value="${st.id}" ${selected === String(st.id) ? 'selected' : ''}>${escapeHtml(st.nickname || st.full_name)} (${escapeHtml(st.staff_type || '-')})</option>`)
+      .join('');
+  }
   renderRosterGrid = function renderRosterGridV107(assignments) {
     if (!assignments.length) return empty('กด “สร้างร่าง Auto Assign” เพื่อเริ่มจัดเวร');
     const { y, m } = getMonthRange(state.monthKey);
     const last = new Date(y, m, 0).getDate();
     const codes = dutyTableCodesForMonthV107(assignments, state.monthKey);
-    const desktopTable = `<div class="table-wrap roster-table-wrap"><table class="roster-table"><thead><tr><th>วันที่</th>${codes.map(c => `<th>${escapeHtml(dutyLabelV107(c))}</th>`).join('')}</tr></thead><tbody>
+    const desktopTable = `<div class="table-wrap roster-table-wrap"><table class="roster-table"><thead><tr><th>วันที่</th>${codes.map(c => `<th>${escapeHtml(dutyDisplayLabelV107(c))}</th>`).join('')}</tr></thead><tbody>
       ${Array.from({length:last}, (_,i)=>i+1).map(day => {
         const date = `${y}-${pad(m)}-${pad(day)}`;
         const dow = parseDate(date).toLocaleDateString('th-TH', { weekday:'short' });
@@ -423,7 +434,7 @@
           return `<td><div class="roster-slot ${slot.is_locked?'locked':''}" data-drop-slot="${id}">
             <div class="assigned-name">${slot.staff_id ? staffPill(slot.staff_id) : 'ยังไม่จัด'}</div>
             <div class="slot-meta">${escapeHtml(slot.required_role || v107RoleFor(code))} ${slot.is_locked?'• locked':''}</div>
-            <select class="mobile-roster-select" data-roster-slot-select="${id}" ${slot.is_locked?'disabled':''}><option value="">ยังไม่จัด</option>${staffOptionList(slot.staff_id, st => canStaffWorkSlot(st.id, slot))}</select>
+            <select class="mobile-roster-select" data-roster-slot-select="${id}" ${slot.is_locked?'disabled':''}><option value="">ยังไม่จัด</option>${rosterStaffOptionsFastV107(slot.staff_id)}</select>
             <div class="actions"><button class="tiny-btn" data-clear-slot="${id}">ล้าง</button><button class="tiny-btn" data-toggle-lock-slot="${id}">${slot.is_locked?'ปลดล็อก':'ล็อก'}</button></div>
           </div></td>`;
         }).join('')}</tr>`;
@@ -440,7 +451,7 @@
       const slots = allowedDutyCodesForDate(date).map(code => assignments.find(a => a.duty_date === date && normalizeDutyCodeV107(a.duty_code) === code)).filter(Boolean);
       return `<div class="mobile-card roster-day-card"><div class="mobile-day-head"><b>${day}</b><span>${dow}</span>${isHolidayDate(date) ? `<span class="badge yellow">${escapeHtml(holidayName(date))}</span>` : ''}</div>${slots.map(slot => {
         const id = slot.id || slot._temp_id;
-        return `<div class="mobile-roster-slot"><div><b>${escapeHtml(dutyLabelV107(slot.duty_code))}</b><br><span class="muted">${escapeHtml(slot.required_role || v107RoleFor(slot.duty_code))} ${slot.is_locked?'• locked':''}</span></div><select data-roster-slot-select="${id}" ${slot.is_locked?'disabled':''}><option value="">ยังไม่จัด</option>${staffOptionList(slot.staff_id, st => canStaffWorkSlot(st.id, slot))}</select><div class="actions"><button class="tiny-btn" data-clear-slot="${id}">ล้าง</button><button class="tiny-btn" data-toggle-lock-slot="${id}">${slot.is_locked?'ปลดล็อก':'ล็อก'}</button></div></div>`;
+        return `<div class="mobile-roster-slot"><div><b>${escapeHtml(dutyDisplayLabelV107(slot.duty_code))}</b><br><span class="muted">${escapeHtml(slot.required_role || v107RoleFor(slot.duty_code))} ${slot.is_locked?'• locked':''}</span></div><select data-roster-slot-select="${id}" ${slot.is_locked?'disabled':''}><option value="">ยังไม่จัด</option>${rosterStaffOptionsFastV107(slot.staff_id)}</select><div class="actions"><button class="tiny-btn" data-clear-slot="${id}">ล้าง</button><button class="tiny-btn" data-toggle-lock-slot="${id}">${slot.is_locked?'ปลดล็อก':'ล็อก'}</button></div></div>`;
       }).join('')}</div>`;
     }).join('')}</div>`;
   };
@@ -469,7 +480,7 @@
           const rows = byStaffDate[`${st.id}|${date}`] || [];
           const leaveText = leaveTextForRosterCellV107(st.id, date);
           const cls = [isHolidayDate(date) ? 'holiday-cell' : '', isWeekend(date) ? 'weekend-cell' : '', leaveText ? 'leave-cell' : '', rows.length ? 'has-duty-cell' : ''].join(' ');
-          const cellText = rows.length ? rows.map(a => dutyLabelV107(a.duty_code)).join('<br>') : leaveText;
+          const cellText = rows.length ? rows.map(a => dutyDisplayLabelV107(a.duty_code)).join('<br>') : leaveText;
           const ids = rows.map(a => a.id || a._temp_id).filter(Boolean).join(',');
           return `<td class="${cls}" data-roster-excel-cell="${st.id}|${date}|${ids}" title="${escapeHtml(staffNick(st.id))} ${formatThaiDate(date)}"><button type="button" class="excel-duty-cell-btn" data-roster-excel-cell="${st.id}|${date}|${ids}">${cellText || '&nbsp;'}</button></td>`;
         }).join('')}</tr>`).join('')}
@@ -477,12 +488,8 @@
     </div>`;
   }
 
-  renderReadOnlySchedule = function renderReadOnlyScheduleV107(assignments) {
-    if (!assignments.length) return empty('ยังไม่มีตารางเวรของเดือนนี้');
-    const { y, m } = getMonthRange(state.monthKey);
-    const last = new Date(y, m, 0).getDate();
-    const codes = dutyTableCodesForMonthV107(assignments, state.monthKey);
-    const oldByDay = `<details class="old-duty-table-v107"><summary>ตารางแยกตามวัน/เวรแบบเดิม</summary><div class="table-wrap desktop-schedule-table"><table class="schedule-readable"><thead><tr><th>วันที่</th>${codes.map(c => `<th>${escapeHtml(dutyLabelV107(c))}</th>`).join('')}</tr></thead><tbody>
+  function renderScheduleOldByDayV107(assignments, codes, y, m, last) {
+    return `<div class="table-wrap desktop-schedule-table"><table class="schedule-readable"><thead><tr><th>วันที่</th>${codes.map(c => `<th>${escapeHtml(dutyDisplayLabelV107(c))}</th>`).join('')}</tr></thead><tbody>
       ${Array.from({length:last}, (_,i)=>i+1).map(day => {
         const date = `${y}-${pad(m)}-${pad(day)}`;
         const rowCls = isHolidayDate(date) ? 'holiday-row' : isWeekend(date) ? 'weekend-row' : '';
@@ -492,8 +499,53 @@
           return `<td>${slot?.staff_id ? `<div class="schedule-person-cell">${staffPill(slot.staff_id, { button:true, attrs:`data-staff-stat="${slot.staff_id}" type="button"` })}${renderTradeButton(slot)}</div>` : '-'}</td>`;
         }).join('')}</tr>`;
       }).join('')}
-    </tbody></table></div></details>`;
-    return renderExcelRosterMatrixV107(assignments) + oldByDay + `<div class="mobile-schedule-view">${renderMobileScheduleView(assignments)}</div>`;
+    </tbody></table></div>`;
+  }
+
+  function renderScheduleOldByPersonV107(assignments) {
+    const active = orderedStaff((state.staff || []).filter(s => isRosterEnabled(s)));
+    return `<div class="table-wrap"><table class="schedule-by-person-v107"><thead><tr><th>เจ้าหน้าที่</th><th>รายการเวรในเดือนนี้</th><th>รวม</th></tr></thead><tbody>${active.map(st => {
+      const rows = assignments.filter(a => String(a.staff_id) === String(st.id)).sort((a,b)=>String(a.duty_date).localeCompare(String(b.duty_date)));
+      return `<tr><td>${staffPill(st)}</td><td>${rows.length ? rows.map(a => `<span class="mini-duty-chip-v107">${formatThaiDate(a.duty_date)} ${escapeHtml(dutyDisplayLabelV107(a.duty_code))}${renderTradeButton(a)}</span>`).join(' ') : '<span class="muted">ไม่มีเวรเดือนนี้</span>'}</td><td>${rows.length}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+  }
+
+  function renderScheduleOldOtV107(assignments) {
+    const stats = calcFairness(assignments.filter(x => x.staff_id));
+    const active = orderedStaff((state.staff || []).filter(s => isRosterEnabled(s)));
+    return `<div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>ชม.รวม</th><th>เงินประมาณ</th><th>หน่วยเวร</th><th>ชบด</th><th>ช9</th><th>ช3A/B</th><th>ช4</th><th>วันหยุด/นักขัต</th></tr></thead><tbody>${active.map(s => {
+      const r = stats[s.id] || {};
+      return `<tr><td>${staffPill(s)}</td><td>${(r.hours||0).toFixed(1)}</td><td>${(r.pay||0).toLocaleString()}</td><td>${(r.units||0).toFixed(1)}</td><td>${r.chbd||0}</td><td>${r.ch9||0}</td><td>${r.ch3||0}</td><td>${r.ch4||0}</td><td>${r.weekend||0}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+  }
+
+  function renderScheduleOldMatrixV107(assignments, y, m, last) {
+    const active = orderedStaff((state.staff || []).filter(s => isRosterEnabled(s)));
+    const days = Array.from({length:last}, (_,i)=>i+1);
+    return `<div class="table-wrap mobile-schedule-matrix-wrap"><table class="schedule-person-matrix"><thead><tr><th>เจ้าหน้าที่</th>${days.map(day => `<th>${day}<br><span>${parseDate(`${y}-${pad(m)}-${pad(day)}`).toLocaleDateString('th-TH', { weekday:'short' })}</span></th>`).join('')}</tr></thead><tbody>${active.map(s => `<tr><th style="--staff-bg:${staffColor(s)};--staff-fg:${textColorFor(staffColor(s))}">${escapeHtml(s.nickname || s.full_name)}</th>${days.map(day => {
+      const date = `${y}-${pad(m)}-${pad(day)}`;
+      const rows = assignments.filter(a => String(a.staff_id) === String(s.id) && a.duty_date === date);
+      const leaveText = leaveTextForRosterCellV107(s.id, date);
+      const cls = isHolidayDate(date) ? 'holiday-cell' : isWeekend(date) ? 'weekend-cell' : '';
+      return `<td class="${cls}">${rows.length ? `<b>${rows.map(a => escapeHtml(dutyDisplayLabelV107(a.duty_code))).join('<br>')}</b>` : (leaveText ? `<span class="no-duty-one-line-v107">${escapeHtml(leaveText)}</span>` : '')}</td>`;
+    }).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
+
+  renderReadOnlySchedule = function renderReadOnlyScheduleV107(assignments) {
+    if (!assignments.length) return empty('ยังไม่มีตารางเวรของเดือนนี้');
+    const { y, m } = getMonthRange(state.monthKey);
+    const last = new Date(y, m, 0).getDate();
+    const codes = dutyTableCodesForMonthV107(assignments, state.monthKey);
+    const view = state.scheduleMobileView || 'day';
+    const detail = view === 'person'
+      ? renderScheduleOldByPersonV107(assignments)
+      : view === 'ot'
+        ? renderScheduleOldOtV107(assignments)
+        : view === 'table'
+          ? renderScheduleOldMatrixV107(assignments, y, m, last)
+          : renderScheduleOldByDayV107(assignments, codes, y, m, last);
+    const oldPanel = `<details class="old-duty-table-v107" open><summary>ตารางแยกตามวัน/เวรแบบเดิม</summary>${detail}</details>`;
+    return renderExcelRosterMatrixV107(assignments) + oldPanel;
   };
   window.renderReadOnlySchedule = renderReadOnlySchedule;
 
@@ -508,7 +560,7 @@
     return `<div class="mobile-schedule-list">${Array.from({length:last}, (_,i)=>i+1).map(day => {
       const date = `${y}-${pad(m)}-${pad(day)}`;
       const slots = allowedDutyCodesForDate(date).map(code => ({ code, slot: assignments.find(a => a.duty_date === date && normalizeDutyCodeV107(a.duty_code) === code) })).filter(x => x.slot?.staff_id);
-      return `<div class="schedule-day-card ${isHolidayDate(date)||isWeekend(date)?'weekend-row':''}"><div class="mobile-day-head"><b>${day}</b><span>${parseDate(date).toLocaleDateString('th-TH', { weekday:'short' })}</span>${isHolidayDate(date) ? badge(holidayName(date),'yellow') : ''}</div>${slots.length ? slots.map(({code,slot}) => `<div class="mobile-duty-line"><b>${escapeHtml(dutyLabelV107(code))}</b><span>${staffPill(slot.staff_id, { button:true, attrs:`data-staff-stat="${slot.staff_id}" type="button"` })}</span>${renderTradeButton(slot)}</div>`).join('') : '<span class="muted">ไม่มีเวร</span>'}</div>`;
+      return `<div class="schedule-day-card ${isHolidayDate(date)||isWeekend(date)?'weekend-row':''}"><div class="mobile-day-head"><b>${day}</b><span>${parseDate(date).toLocaleDateString('th-TH', { weekday:'short' })}</span>${isHolidayDate(date) ? badge(holidayName(date),'yellow') : ''}</div>${slots.length ? slots.map(({code,slot}) => `<div class="mobile-duty-line"><b>${escapeHtml(dutyDisplayLabelV107(code))}</b><span>${staffPill(slot.staff_id, { button:true, attrs:`data-staff-stat="${slot.staff_id}" type="button"` })}</span>${renderTradeButton(slot)}</div>`).join('') : '<span class="muted">ไม่มีเวร</span>'}</div>`;
     }).join('')}</div>`;
   };
   window.renderMobileScheduleByDay = renderMobileScheduleByDay;
@@ -519,7 +571,7 @@
     const assignments = getAssignmentsForMonth(state.monthKey);
     const rows = ids.map(id => assignments.find(a => String(a.id || a._temp_id) === String(id))).filter(Boolean);
     const leaveText = leaveTextForRosterCellV107(staffId, date);
-    const detailRows = rows.map(a => `<div class="duty-action-row"><div><b>${escapeHtml(dutyLabelV107(a.duty_code))}</b><br><span class="muted">${formatThaiDate(a.duty_date)} • ${staffPill(a.staff_id)}</span></div><div class="actions">${canRequestTrade(a) ? `<button class="tiny-btn" data-trade-duty="${a.id || a._temp_id}">ขอแลก/ขาย/ยกเวร</button>` : '<span class="muted">ดูอย่างเดียว</span>'}</div></div>`).join('');
+    const detailRows = rows.map(a => `<div class="duty-action-row"><div><b>${escapeHtml(dutyDisplayLabelV107(a.duty_code))}</b><br><span class="muted">${formatThaiDate(a.duty_date)} • ${staffPill(a.staff_id)}</span></div><div class="actions">${canRequestTrade(a) ? `<button class="tiny-btn" data-trade-duty="${a.id || a._temp_id}">ขอแลก/ขาย/ยกเวร</button>` : '<span class="muted">ดูอย่างเดียว</span>'}</div></div>`).join('');
     showModal(`<h2>รายละเอียดตารางเวร</h2><p class="hint">${staffPill(staffId)} • ${formatThaiDate(date)}</p>${leaveText ? `<div class="notice soft-notice">สถานะวันนี้: <b>${escapeHtml(leaveText)}</b></div>` : ''}${detailRows || empty('วันนี้ยังไม่มีเวรในช่องนี้')}<div class="confirm-actions"><button class="ghost-btn" data-page="tradeRequests">ดูคำขอแลก/ขาย/ยกเวร</button><button class="primary-btn" data-app-alert-ok>ปิด</button></div>`);
   }
 
@@ -750,6 +802,7 @@
   handleClick = async function handleClickV107(e) {
     const t = e.target.closest('button, [data-page], [data-roster-excel-cell], [data-edit-holiday-rule], [data-delete-holiday-rule]');
     if (t?.dataset?.page) { state.page = t.dataset.page; closeModal(); renderPage(); return; }
+    if (t?.dataset?.scheduleMobileView) { state.scheduleMobileView = t.dataset.scheduleMobileView; renderPage(); return; }
     if (t?.hasAttribute('data-save-duty-eligibility')) { await saveDutyEligibilityV107(); return; }
     if (t?.dataset?.rosterExcelCell) { showRosterExcelCellModalV107(t.dataset.rosterExcelCell); return; }
     if (t?.dataset?.editHolidayRule) { state.editHolidayRuleDate = t.dataset.editHolidayRule; renderPage(); return; }
@@ -827,7 +880,7 @@
       ot: renderOtPage,
       audit: renderAuditPage,
       profileRequests: renderProfileRequestsPage,
-      profileRequestSummary: typeof renderProfileRequestSummaryPage === 'function' ? renderProfileRequestSummaryPage : undefined,
+      profileRequestSummary: typeof window.renderProfileRequestSummaryPage === 'function' ? window.renderProfileRequestSummaryPage : (typeof renderProfileRequestSummaryPage === 'function' ? renderProfileRequestSummaryPage : undefined),
       users: renderUsersPage,
       eligibility: renderEligibilityPage,
       positionMonth: renderPositionMonthPage,
@@ -835,7 +888,17 @@
       dutyEligibilityV107: renderDutyEligibilityPageV107,
       holidayRulesV107: renderHolidayRulesPageV107
     };
-    $('pageContent').innerHTML = (pages[state.page] || renderDashboard)();
+    const fn = pages[state.page];
+    if (typeof fn === 'function') {
+      $('pageContent').innerHTML = fn();
+      return;
+    }
+    // ถ้าเป็นหน้าจาก patch รุ่นก่อน เช่น ตั้งต้นเวร ให้คืนสิทธิ์ให้ renderer เดิมแทนที่จะเด้งไป Dashboard
+    if (typeof oldRenderPageV107 === 'function' && oldRenderPageV107 !== renderPage) {
+      oldRenderPageV107();
+      return;
+    }
+    $('pageContent').innerHTML = renderDashboard();
   };
   window.renderPage = renderPage;
 
