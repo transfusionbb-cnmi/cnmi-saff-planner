@@ -1408,3 +1408,73 @@ body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!imp
   .ot-summary-card-v112 .ot-duty-counts-v111 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 6px !important; }
   .ot-summary-card-v112 .ot-duty-counts-v111 span { padding: 7px 8px !important; font-size: 13px !important; }
 }
+
+/* V113: mobile-only roster polish */
+@media (max-width: 820px) {
+  .excel-roster-wrap-v113 {
+    max-height: 58vh !important;
+    border-radius: 16px !important;
+  }
+  .excel-roster-table-v113 {
+    min-width: 1040px !important;
+  }
+  .excel-roster-table-v113 th,
+  .excel-roster-table-v113 td {
+    min-width: 52px !important;
+    width: 52px !important;
+    height: 25px !important;
+    min-height: 25px !important;
+    line-height: 1 !important;
+    padding: 0 !important;
+  }
+  .excel-roster-table-v113 thead th {
+    height: 32px !important;
+    min-height: 32px !important;
+  }
+  .excel-roster-table-v113 thead th span { font-size: 14px !important; }
+  .excel-roster-table-v113 thead th small { font-size: 9px !important; }
+  .excel-roster-table-v113 .staff-col,
+  .excel-roster-table-v113 th.staff-name-cell {
+    min-width: 84px !important;
+    width: 84px !important;
+    max-width: 84px !important;
+    padding: 0 4px !important;
+  }
+  .excel-roster-table-v113 th.staff-name-cell b {
+    font-size: 12px !important;
+    max-width: 76px !important;
+  }
+  .excel-roster-table-v113 .excel-duty-cell-btn {
+    min-height: 21px !important;
+    height: 21px !important;
+    max-height: 22px !important;
+    font-size: 9px !important;
+    line-height: .98 !important;
+    padding: 0 1px !important;
+    border-radius: 10px !important;
+  }
+  .excel-roster-table-v113 .leave-cell .excel-duty-cell-btn {
+    font-size: 8.3px !important;
+  }
+  .month-grid-v113 { gap: 5px !important; }
+  .month-day-card-v113 {
+    min-height: 90px !important;
+    padding: 5px !important;
+  }
+  .month-duty-list-v113 { gap: 3px !important; }
+  .month-duty-list-v113 .month-duty-pill-v113 {
+    background: var(--staff-bg) !important;
+    color: var(--staff-fg) !important;
+    border: 1px solid rgba(20, 43, 67, .08) !important;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.18) !important;
+    border-radius: 8px !important;
+    padding: 2px 4px !important;
+    font-size: 8.5px !important;
+    font-weight: 800 !important;
+    line-height: 1.1 !important;
+  }
+  .month-duty-list-v113 .month-duty-pill-v113 b {
+    color: inherit !important;
+    font-weight: 900 !important;
+  }
+}
