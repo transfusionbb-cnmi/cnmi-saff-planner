@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="th">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Redirecting...</title></head>
+<body>
+<script>
+(function(){
+  var parts = location.pathname.split('/').filter(Boolean);
+  var base = location.origin + (parts.length ? '/' + parts[0] + '/' : '/');
+  var search = location.search || '';
+  var hash = location.hash || '';
+  if (!/[?&]mode=/.test(search)) search = (search ? search + '&' : '?') + 'mode=recovery';
+  location.replace(base + search + hash);
+})();
+</script>
+กำลังเปิดหน้าตั้งรหัสผ่าน...
+</body>
+</html>
