@@ -2455,9 +2455,14 @@ function renderUsersPage() {
       <label>Role <select data-field="role"><option ${s.role==='staff'?'selected':''}>staff</option><option ${s.role==='admin'?'selected':''}>admin</option></select></label>
       <label>Active <select data-field="is_active"><option value="true" ${s.is_active?'selected':''}>true</option><option value="false" ${!s.is_active?'selected':''}>false</option></select></label>
       <label>สถานะจัดเวร <select data-field="roster_enabled"><option value="true" ${s.roster_enabled!==false?'selected':''}>true</option><option value="false" ${s.roster_enabled===false?'selected':''}>false</option></select></label>
+      <label class="long-leave-field">สถานะลาระยะยาว <select data-field="is_long_term_leave"><option value="false" ${s.is_long_term_leave===true?'':'selected'}>ปิด / ใช้งานปกติ</option><option value="true" ${s.is_long_term_leave===true?'selected':''}>เปิด / ลาระยะยาว</option></select></label>
       <label>สถานะตำแหน่งรายวัน <select data-field="position_training_status">${POSITION_TRAINING_STATUSES.map(v => `<option value="${escapeHtml(v)}" ${(s.position_training_status || 'ใช้งานปกติ')===v?'selected':''}>${escapeHtml(v)}</option>`).join('')}</select></label>
       <label>Auto ตำแหน่ง <select data-field="daily_position_enabled"><option value="true" ${s.daily_position_enabled!==false?'selected':''}>true</option><option value="false" ${s.daily_position_enabled===false?'selected':''}>false</option></select></label>
       <input type="hidden" data-field="maternity_status" value="${s.maternity_status ? 'true' : 'false'}">
+    </div>
+    <div class="long-leave-admin-actions">
+      <button type="button" class="soft-btn warning" data-v140-reset-balance="${escapeHtml(s.id)}">รีเซ็ตยอดสะสมเป็น 0</button>
+      <span class="hint">ใช้ตอนกลับจากลาคลอด/ลาระยะยาว หรือรับพนักงานใหม่ เพื่อเริ่มยอดชดเชยใหม่ที่ 0</span>
     </div>
   </div>`;
   return `<div class="grid eligibility-page users-page-v49">
@@ -3250,6 +3255,7 @@ async function saveStaffUsers() {
       role: valueOr('role', original.role || 'staff') || 'staff',
       is_active: valueOr('is_active', original.is_active ? 'true' : 'false') === 'true',
       maternity_status: valueOr('maternity_status', original.maternity_status ? 'true' : 'false') === 'true',
+      is_long_term_leave: valueOr('is_long_term_leave', original.is_long_term_leave ? 'true' : 'false') === 'true',
       roster_enabled: valueOr('roster_enabled', original.roster_enabled === false ? 'false' : 'true') !== 'false',
       daily_position_enabled: valueOr('daily_position_enabled', original.daily_position_enabled === false ? 'false' : 'true') !== 'false',
       position_training_status: valueOr('position_training_status', original.position_training_status || 'ใช้งานปกติ') || 'ใช้งานปกติ'
@@ -3279,6 +3285,7 @@ async function saveNewStaff(form) {
     position: fd.get('position') || null,
     role: fd.get('role') || 'staff',
     is_active: true,
+    is_long_term_leave: false,
     roster_enabled: true,
     daily_position_enabled: false,
     position_training_status: 'น้องใหม่ / ยังไม่จัดอัตโนมัติ'

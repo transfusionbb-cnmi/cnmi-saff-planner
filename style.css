@@ -1137,3 +1137,33 @@ body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!imp
   .v136-schedule-grid .v136-sticky-name, .v136-schedule-grid .v136-name-cell { position: static !important; width: 64px !important; min-width: 64px !important; max-width: 64px !important; box-shadow: none !important; }
   .v136-shift-pill, .v136-status, .v136-name-cell, .v136-dayoff-cell, .v136-dayoff-col { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+
+/* v141: Force-visible Admin Long-term Leave UI */
+.long-leave-field select {
+  border-color: #f2b84b;
+  background: #fffaf0;
+}
+.long-leave-admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px dashed #f2b84b;
+  border-radius: 14px;
+  background: #fffaf0;
+}
+.long-leave-admin-actions .warning,
+.v141-long-leave-actions .warning {
+  border-color: #f2b84b;
+  background: #fff4d6;
+  color: #7a4b00;
+}
+.v141-long-leave-inline-note {
+  display:block;
+  margin-top:4px;
+  color:#8a5a00;
+  font-size:12px;
+}
