@@ -262,12 +262,58 @@ function overlapsDate(row, date) { return row.start_date <= date && row.end_date
 function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 function debounce(fn, wait=250) { let t; return (...args) => { clearTimeout(t); t=setTimeout(()=>fn(...args), wait); }; }
 
-// Capture recovery intent BEFORE Supabase reads/cleans the URL hash.
-// This fixes password reset links that otherwise jump straight into Dashboard.
+// Capture Supabase Auth redirect intent BEFORE Supabase reads/cleans the URL hash.
+// V132: GitHub Pages may receive invite/recovery links with #access_token, ?code, or error_description.
+// We detect the link at the first page, let Supabase restore the session, then clean the URL back to the app root.
 const INITIAL_AUTH_URL = `${window.location.search || ''}${window.location.hash || ''}`;
-let RECOVERY_INTENT = /(^|[?#&])type=(recovery|password_recovery|invite)(&|$)/.test(INITIAL_AUTH_URL)
-  || /(^|[?#&])mode=(recovery|set-password)(&|$)/.test(INITIAL_AUTH_URL);
-
+function appBaseUrl() {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  if (window.location.hostname.endsWith('github.io') && parts[0]) return `${window.location.origin}/${parts[0]}/`;
+  if (window.location.pathname.includes('/cnmi-saff-planner/')) return `${window.location.origin}/cnmi-saff-planner/`;
+  return `${window.location.origin}/`;
+}
+function getAuthRedirectInfo(raw = INITIAL_AUTH_URL) {
+  const text = String(raw || '');
+  const params = new URLSearchParams(text.replace(/^#/, '').replace(/^\?/, ''));
+  // URLSearchParams cannot parse mixed ?a=1#b=2 in one go, so parse both sides separately too.
+  const searchParams = new URLSearchParams(window.location.search || '');
+  const hashParams = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+  const get = (k) => params.get(k) || searchParams.get(k) || hashParams.get(k) || '';
+  const type = get('type');
+  const mode = get('mode');
+  const hasToken = /(^|[?#&])(access_token|refresh_token|code|token_hash)=/.test(text);
+  const isRecovery = /^(recovery|password_recovery|invite)$/i.test(type) || /^(recovery|set-password)$/i.test(mode) || hasToken;
+  const error = get('error') || get('error_code') || '';
+  const errorDescription = get('error_description') || '';
+  return { text, type, mode, hasToken, isRecovery, error, errorDescription, hasError: Boolean(error || errorDescription) };
+}
+const INITIAL_AUTH_INFO = getAuthRedirectInfo();
+let RECOVERY_INTENT = INITIAL_AUTH_INFO.isRecovery && !INITIAL_AUTH_INFO.hasError;
+function cleanAuthUrl(keepRecoveryMode=false) {
+  if (!window.history?.replaceState) return;
+  const clean = keepRecoveryMode ? `${appBaseUrl()}?mode=recovery` : appBaseUrl();
+  window.history.replaceState({}, document.title, clean);
+}
+async function handleInitialAuthRedirectOnce() {
+  const info = getAuthRedirectInfo();
+  if (!info.text) return true;
+  if (info.hasError) {
+    clearCachedAppSession();
+    try { await sb?.auth?.signOut(); } catch (_) {}
+    RECOVERY_INTENT = false;
+    cleanAuthUrl(false);
+    const msg = decodeURIComponent(String(info.errorDescription || info.error || 'ลิงก์เข้าสู่ระบบหมดอายุหรือไม่สมบูรณ์ กรุณาขอลิงก์ใหม่อีกครั้ง').replace(/\+/g, ' '));
+    showLoginPanel();
+    showToast(msg.includes('expired') ? 'ลิงก์หมดอายุหรือถูกใช้ไปแล้ว กรุณาขอลิงก์ตั้งรหัสผ่านใหม่อีกครั้ง' : msg, { tone:'error' });
+    return false;
+  }
+  if (info.isRecovery || info.hasToken) {
+    RECOVERY_INTENT = true;
+    // Keep only mode=recovery so the reset form remains visible, but remove access_token/code from the address bar.
+    cleanAuthUrl(true);
+  }
+  return true;
+}
 
 // V39: keep login stable after refresh / mobile sleep.
 // Supabase already persists its own token, but this app-level cache prevents a temporary
@@ -319,10 +365,9 @@ function clearCachedAppSession() {
 }
 
 function authRedirectUrl(mode='') {
-  // V72: ใช้ URL ของหน้าเว็บปัจจุบันจริง ๆ เสมอ และตัด query/hash เก่าออก
-  // ช่วยลดปัญหาลิงก์ตั้งรหัสผ่านย้อนกลับผิด path หลัง deploy หลาย branch/folder
-  const path = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
-  const base = window.location.origin + path;
+  // V132: Always redirect Supabase Auth links back to the GitHub Pages app root.
+  // This avoids /update-password/ or other deep paths becoming 404 on GitHub Pages.
+  const base = appBaseUrl();
   return mode ? `${base}?mode=${encodeURIComponent(mode)}` : base;
 }
 
@@ -495,6 +540,10 @@ async function init() {
     }
   });
 
+  // V132: clean expired/error auth URLs before normal app loading.
+  const continueInit = await handleInitialAuthRedirectOnce();
+  if (!continueInit) { setBusy(false); return; }
+
   sb.auth.onAuthStateChange(async (event, session) => {
     state.session = session;
 
@@ -620,7 +669,7 @@ function bindGlobalEvents() {
       if (r.error) throw r.error;
       // Consume recovery mode before updateUser emits USER_UPDATED, otherwise this tab may keep showing the reset form.
       RECOVERY_INTENT = false;
-      if (window.history?.replaceState) window.history.replaceState({}, document.title, authRedirectUrl());
+      cleanAuthUrl(false);
       const { error } = await sb.auth.updateUser({ password });
       if (error) throw error;
       $('resetPasswordForm').classList.add('hidden');
@@ -741,6 +790,20 @@ async function loadProfile() {
     const byEmail = await sb.from('staff_profiles').select('*').ilike('email', user.email).maybeSingle();
     if (byEmail.error) throw new Error(byEmail.error.message);
     data = byEmail.data;
+  }
+
+  // V132: older staff rows may have user_id = NULL. Link by authenticated email via SECURITY DEFINER RPC.
+  if (data && !data.user_id && user.email) {
+    try {
+      const linked = await sb.rpc('link_my_staff_profile_v132');
+      if (!linked.error && linked.data) data = linked.data;
+      else {
+        const retry = await sb.from('staff_profiles').select('*').eq('user_id', user.id).maybeSingle();
+        if (!retry.error && retry.data) data = retry.data;
+      }
+    } catch (err) {
+      console.warn('link_my_staff_profile_v132 failed', err);
+    }
   }
 
   state.profile = data;
@@ -3696,7 +3759,7 @@ function bindGlobalEvents() {
       if (r.error) r = await sb.rpc('set_initial_login_name_v44', { p_email: recoveryEmail, p_login_name: loginName });
       if (r.error) throw r.error;
       RECOVERY_INTENT = false;
-      if (window.history?.replaceState) window.history.replaceState({}, document.title, authRedirectUrl());
+      cleanAuthUrl(false);
       const { error } = await sb.auth.updateUser({ password });
       if (error) throw error;
       $('resetPasswordForm').classList.add('hidden');
@@ -4158,7 +4221,7 @@ function bindGlobalEvents() {
         if (r.error) r = await sb.rpc('set_initial_login_name_v44', { p_email: recoveryEmail, p_login_name: loginName });
         if (r.error) throw r.error;
         RECOVERY_INTENT = false;
-        if (window.history?.replaceState) window.history.replaceState({}, document.title, authRedirectUrl());
+        cleanAuthUrl(false);
         const { error } = await sb.auth.updateUser({ password });
         if (error) throw error;
         $('resetPasswordForm').classList.add('hidden');
