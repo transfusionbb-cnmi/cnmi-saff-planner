@@ -6,6 +6,29 @@
   'use strict';
   const esc = (v) => (typeof escapeHtml === 'function') ? escapeHtml(v == null ? '' : String(v)) : String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+  // v142: patch scripts cannot read the app.js lexical `let sb`; create/reuse a real Supabase client here.
+  function getSupabaseClient(){
+    if (window.sb && window.sb.from) return window.sb;
+    if (window.__cnmiPatchSupabase && window.__cnmiPatchSupabase.from) return window.__cnmiPatchSupabase;
+    const cfg = window.CNMI_CONFIG || {};
+    if (!window.supabase || !cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) return null;
+    window.__cnmiPatchSupabase = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+        storage: window.localStorage,
+        flowType: 'implicit'
+      }
+    });
+    return window.__cnmiPatchSupabase;
+  }
+
+  function notify(msg, tone){
+    if (typeof showToast === 'function') showToast(msg, tone ? { tone } : undefined);
+    else alert(msg);
+  }
+
   function getStaff(staffId){
     return ((window.state && state.staff) || []).find(s => String(s.id) === String(staffId)) || null;
   }
@@ -43,10 +66,11 @@
   }
 
   async function updateLongLeave(staffId, value){
-    if (!window.sb) return showToast && showToast('ยังไม่ได้เชื่อม Supabase');
+    const client = getSupabaseClient();
+    if (!client) return notify('ยังเชื่อม Supabase ไม่ได้: ตรวจ config.js / SUPABASE_URL / SUPABASE_ANON_KEY', 'error');
     try {
       if (typeof setBusy === 'function') setBusy(true, 'กำลังบันทึกสถานะลาระยะยาว');
-      const { error } = await sb.from('staff_profiles').update({ is_long_term_leave: !!value }).eq('id', staffId);
+      const { error } = await client.from('staff_profiles').update({ is_long_term_leave: !!value }).eq('id', staffId);
       if (error) throw error;
       const st = getStaff(staffId);
       if (st) st.is_long_term_leave = !!value;
@@ -59,21 +83,51 @@
   }
 
   async function resetBalance(staffId){
-    if (!window.sb) return showToast && showToast('ยังไม่ได้เชื่อม Supabase');
+    const client = getSupabaseClient();
+    if (!client) return notify('ยังเชื่อม Supabase ไม่ได้: ตรวจ config.js / SUPABASE_URL / SUPABASE_ANON_KEY', 'error');
+
     const st = getStaff(staffId) || {};
     const name = st.nickname || st.full_name || 'เจ้าหน้าที่นี้';
     if (!confirm(`ยืนยันรีเซ็ตยอดสะสมของ ${name} เป็น 0 ?`)) return;
+
     try {
       if (typeof setBusy === 'function') setBusy(true, 'กำลังรีเซ็ตยอดสะสม');
-      const patch = { carry_over_balance: 0, overtime_balance: 0, ot_balance: 0, balance_reset_at: new Date().toISOString() };
-      const { error } = await sb.from('staff_profiles').update(patch).eq('id', staffId);
+
+      const resetAt = new Date().toISOString();
+      let error = null;
+
+      // Preferred path: use v140 SECURITY DEFINER helper created by supabase_staff_balance_v140.sql.
+      // This avoids normal RLS update blocks when an admin resets another staff member's balance.
+      const rpcRes = await client.rpc('reset_staff_balance_v140', { p_staff_id: staffId });
+      if (rpcRes.error) {
+        // Fallback path for projects that have columns but not the RPC.
+        const patch = {
+          carry_over_balance: 0,
+          overtime_balance: 0,
+          ot_balance: 0,
+          balance_reset_at: resetAt
+        };
+        const updRes = await client.from('staff_profiles').update(patch).eq('id', staffId);
+        error = updRes.error || null;
+      }
       if (error) throw error;
-      if (st) Object.assign(st, patch);
-      if (typeof showToast === 'function') showToast('รีเซ็ตยอดสะสมเป็น 0 แล้ว');
+
+      Object.assign(st, {
+        carry_over_balance: 0,
+        overtime_balance: 0,
+        ot_balance: 0,
+        balance_reset_at: resetAt
+      });
+
+      notify('รีเซ็ตยอดสะสมเป็น 0 สำเร็จเรียบร้อย', 'success');
+
+      // Refresh current screen state.
       if (typeof loadAllData === 'function') await loadAllData();
       if (typeof renderPage === 'function') renderPage();
+      setTimeout(ensureControls, 150);
     } catch(err) {
-      if (typeof showToast === 'function') showToast((err && err.message) || 'รีเซ็ตยอดสะสมไม่สำเร็จ');
+      console.error('[v142 reset balance] failed', err);
+      notify((err && err.message) || 'รีเซ็ตยอดสะสมไม่สำเร็จ', 'error');
     } finally {
       if (typeof setBusy === 'function') setBusy(false);
     }
