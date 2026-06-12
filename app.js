@@ -4813,12 +4813,99 @@ function bindGlobalEvents() {
       const cls = `${outing ? 'outing-cell' : ''} ${isRealLeave ? 'leave-cell ' + leaveCellClass(leaveRow) : ''} ${!cleanCodes.length && !isRealLeave ? 'needs-review-cell' : ''}`.trim();
       if (canEdit && !isRealLeave) {
         const current = row?.position_code || '';
-        return `<td class="matrix-cell ${cls}"><select class="month-position-select" data-month-position-edit="${key}|${staff?.id}"><option value="">รอตรวจสอบ</option>${ALL_POSITION_TEMPLATES.map(t => `<option value="${escapeHtml(t.code)}" ${current===t.code?'selected':''}>${escapeHtml(positionLabelForCell(t.code))}</option>`).join('')}</select>${outing ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
+        const options = monthPositionRoleOptionsForDate(key, current);
+        return `<td class="matrix-cell ${cls}"><select class="month-position-select" data-month-position-edit="${key}|${staff?.id}"><option value="">รอตรวจสอบ</option>${options.map(t => `<option value="${escapeHtml(t.code)}" ${current===t.code?'selected':''}>${escapeHtml(positionLabelForCell(t.code))}</option>`).join('')}</select>${outing ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
       }
       const text = cleanCodes.length ? cleanCodes.join('<br>') : (isRealLeave ? escapeHtml(leaveType) : '');
       const leaveMark = isRealLeave ? '<div class="cell-note">ลางาน</div>' : '';
       const outingMark = outing && cleanCodes.length ? '<div class="cell-note">ออกหน่วย</div>' : '';
       return `<td class="matrix-cell ${cls}">${text ? `<span>${text}</span>` : ''}${leaveMark}${outingMark}</td>`;
+    };
+  } catch (_) {}
+
+  try {
+    const WEEKLY_AUTO_FILL_POSITION_CODES = new Set(['DR-Processing', 'BB-Report']);
+
+    window.monthPositionRoleOptionsForDate = monthPositionRoleOptionsForDate = function monthPositionRoleOptionsForDateV154(date, currentCode='') {
+      const isOutingDay = hasOuting(normalizeDateKey(date));
+      const allowed = (isOutingDay
+        ? [
+            ...DEFAULT_POSITIONS.filter(p => p.zone === 'Blood Bank' || p.zone === 'Manual'),
+            ...OUTING_POSITIONS
+          ]
+        : DEFAULT_POSITIONS.filter(p => p.zone === 'Blood Bank' || p.zone === 'Manual' || p.zone === 'Donor Room'));
+      const seen = new Set();
+      const options = [];
+      allowed.forEach(p => {
+        if (!p?.code || seen.has(p.code)) return;
+        seen.add(p.code);
+        options.push(p);
+      });
+      if (currentCode && !seen.has(currentCode)) {
+        const current = positionTemplateByCode(currentCode, date) || ALL_POSITION_TEMPLATES.find(p => p.code === currentCode);
+        if (current?.code) options.push(current);
+      }
+      return options;
+    };
+
+    window.isRealMonthlyPositionLeave = isRealMonthlyPositionLeave = function isRealMonthlyPositionLeaveV154(staffId, date) {
+      const leave = activeLeaveRecordOn(staffId, normalizeDateKey(date));
+      return !!leave && !isNoDutyLeaveType(leave);
+    };
+
+    window.weekdayDatesForSameWorkWeek = weekdayDatesForSameWorkWeek = function weekdayDatesForSameWorkWeekV154(date) {
+      const base = parseDate(normalizeDateKey(date));
+      const day = base.getDay();
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const monday = new Date(base);
+      monday.setDate(base.getDate() + diffToMonday);
+      return Array.from({ length: 5 }, (_, i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      });
+    };
+
+    window.canAutoFillMonthPositionCell = canAutoFillMonthPositionCell = function canAutoFillMonthPositionCellV154(staffId, date) {
+      const key = normalizeDateKey(date);
+      if (isWeekend(key) || isHolidayDate(key)) return false;
+      if (isRealMonthlyPositionLeave(staffId, key)) return false;
+      return true;
+    };
+
+    window.upsertMonthPositionDraftCell = upsertMonthPositionDraftCell = function upsertMonthPositionDraftCellV154(rows, date, staffId, code) {
+      const d = normalizeDateKey(date);
+      const sid = String(staffId || '');
+      const next = (rows || []).filter(r => !(normalizeDateKey(r?.work_date) === d && String(r?.staff_id || '') === sid));
+      if (code) next.push(makeMonthPositionRow(d, staffId, code));
+      return next;
+    };
+
+    applyMonthPositionEdit = window.applyMonthPositionEdit = function applyMonthPositionEditV154(value, encoded) {
+      if (!isAdmin()) return;
+      const [dateRaw, staffId] = String(encoded || '').split('|');
+      const date = normalizeDateKey(dateRaw);
+      if (!date || !staffId) return;
+      ensureMonthPositionDraftForEdit();
+      let rows = state.monthPositionDraft?.rows || [];
+      const selectedCode = String(value || '').trim();
+      const targetDates = WEEKLY_AUTO_FILL_POSITION_CODES.has(selectedCode)
+        ? weekdayDatesForSameWorkWeek(date)
+        : [date];
+      let changed = 0;
+      targetDates.forEach(d => {
+        if (!canAutoFillMonthPositionCell(staffId, d)) return;
+        rows = upsertMonthPositionDraftCell(rows, d, staffId, selectedCode);
+        changed += 1;
+      });
+      state.monthPositionDraft.rows = rows;
+      rebalanceMonthPositionDraft();
+      renderPage();
+      if (WEEKLY_AUTO_FILL_POSITION_CODES.has(selectedCode)) {
+        showToast(`เติม ${positionLabelForCell(selectedCode)} ให้วันทำงานสัปดาห์นี้แล้ว ${changed} ช่อง โดยข้ามวันหยุด/HOLIDAY/ลางาน`);
+      } else {
+        showToast('ปรับตำแหน่งในร่างแล้ว กดบันทึกแผนทั้งเดือนเพื่อบันทึกจริง');
+      }
     };
   } catch (_) {}
 
