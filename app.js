@@ -3111,21 +3111,29 @@ function handleDragStart(e) { const chip = e.target.closest('[data-drag-staff]')
 function handleDragOver(e) { const slot = e.target.closest('[data-drop-slot]'); if (slot) { e.preventDefault(); slot.classList.add('drag-over'); } }
 function handleDragLeave(e) { const slot = e.target.closest('[data-drop-slot]'); if (slot) slot.classList.remove('drag-over'); }
 function handleDrop(e) {
-  const slot = e.target.closest('[data-drop-slot]');
-  if (!slot) return;
-  e.preventDefault(); slot.classList.remove('drag-over');
-  const staffId = e.dataTransfer.getData('staffId');
-  const target = findDraftSlot(slot.dataset.dropSlot);
+  const slotEl = e.target.closest('[data-drop-slot]');
+  if (!slotEl) return;
+  e.preventDefault();
+  slotEl.classList.remove('drag-over');
+
+  const staffId = e.dataTransfer?.getData('staffId');
+  const slotId = slotEl.dataset.dropSlot;
+  if (!staffId || !slotId) return;
+
+  const target = findDraftSlot(slotId);
   if (!target) return;
   if (target.is_locked) return showToast('ช่องนี้ล็อกอยู่');
-  if (!canStaffWorkSlot(staffId, target)) {
-    if (isConsecutiveRestrictedDuty(target?.duty_code) && hasAdjacentDuty(staffId, target.duty_date, getAssignmentsForMonth(state.monthKey), target)) return showToast('คนนี้มีเวร ชบด ติดกับวันก่อน/วันถัดไปแล้ว กรุณาเลือกคนอื่น');
+  if (isRosterDropBlocked(target)) return showToast('ช่องนี้เป็นวันหยุด/WEEKEND ที่ปิดไว้ จึงไม่รับการลากวาง');
+
+  const currentAssignments = cloneRosterAssignmentsForDraft();
+  const targetForValidation = currentAssignments.find(x => (x.id || x._temp_id) === slotId) || target;
+  if (!canStaffWorkSlot(staffId, targetForValidation, currentAssignments)) {
+    if (isConsecutiveRestrictedDuty(targetForValidation?.duty_code) && hasAdjacentDuty(staffId, targetForValidation.duty_date, currentAssignments, targetForValidation)) return showToast('คนนี้มีเวร ชบด ติดกับวันก่อน/วันถัดไปแล้ว กรุณาเลือกคนอื่น');
     return showToast('คนนี้ติดลา/ไม่รับเวร หรือประเภทไม่ตรงกับเวร');
   }
 
-  const scrollSnapshot = captureRosterScroll(slot);
-  updateDraftSlot(slot.dataset.dropSlot, { staff_id: staffId });
-  rebalanceRosterAfterManualChange(slot.dataset.dropSlot);
+  const scrollSnapshot = captureRosterScroll(slotEl);
+  updateDraftSlot(slotId, { staff_id: staffId }, currentAssignments);
   renderPage();
   restoreRosterScroll(scrollSnapshot);
 }
@@ -3152,11 +3160,28 @@ function restoreRosterScroll(snapshot) {
     if (staffPool) staffPool.scrollTop = snapshot.poolTop || 0;
   });
 }
-function findDraftSlot(id) { const a = getAssignmentsForMonth(state.monthKey); return a.find(x => (x.id || x._temp_id) === id); }
-function updateDraftSlot(id, patch) {
-  if (!state.rosterDraft || state.rosterDraft.monthKey !== state.monthKey) state.rosterDraft = { monthKey: state.monthKey, assignments: structuredClone(getAssignmentsForMonth(state.monthKey)) };
-  const slot = state.rosterDraft.assignments.find(x => (x.id || x._temp_id) === id);
-  if (slot) Object.assign(slot, patch);
+function cloneDeepPlain(value) {
+  try { return structuredClone(value || []); }
+  catch (err) { return JSON.parse(JSON.stringify(value || [])); }
+}
+function cloneRosterAssignmentsForDraft() {
+  const source = state.rosterDraft?.monthKey === state.monthKey ? state.rosterDraft.assignments : getAssignmentsForMonth(state.monthKey);
+  return cloneDeepPlain(source || []);
+}
+function findDraftSlot(id) { const a = getAssignmentsForMonth(state.monthKey) || []; return a.find(x => (x.id || x._temp_id) === id); }
+function isRosterDropBlocked(slot) {
+  if (!slot) return true;
+  if (slot.is_locked || slot.is_closed || slot.closed || slot.disabled) return true;
+  const allowed = allowedDutyCodesForDate(slot.duty_date || '') || [];
+  return !allowed.includes(slot.duty_code);
+}
+function updateDraftSlot(id, patch, clonedAssignments = null) {
+  const assignments = clonedAssignments || cloneRosterAssignmentsForDraft();
+  const idx = assignments.findIndex(x => (x.id || x._temp_id) === id);
+  if (idx < 0) return false;
+  assignments[idx] = { ...assignments[idx], ...patch };
+  state.rosterDraft = { monthKey: state.monthKey, assignments };
+  return true;
 }
 function rebalanceRosterAfterManualChange(changedSlotId) {
   if (!state.rosterDraft || state.rosterDraft.monthKey !== state.monthKey) return;
