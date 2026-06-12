@@ -240,7 +240,7 @@ function staffPhone(id) { const s = state.staff.find(x => x.id === id); return s
 function defaultStaffColor(nick) { return DEFAULT_STAFF_COLORS[String(nick || '').trim()] || '#e8f3ff'; }
 function staffColor(staffOrId) {
   const s = typeof staffOrId === 'object' ? staffOrId : state.staff.find(x => x.id === staffOrId);
-  return s?.staff_color || defaultStaffColor(s?.nickname || s?.full_name);
+  return s?.color || s?.staff_color || defaultStaffColor(s?.nickname || s?.full_name);
 }
 function textColorFor(bg) {
   const hex = String(bg || '#e8f3ff').replace('#','');
@@ -1108,6 +1108,17 @@ function isActiveStaff(s) {
   if (Object.prototype.hasOwnProperty.call(s, 'active')) return s.active === true || String(s.active).toLowerCase() === 'true';
   return s.is_active === true || String(s.is_active).toLowerCase() === 'true';
 }
+function isLongTermLeaveStaff(s) {
+  if (!s) return false;
+  const target = s.targetShifts ?? s.target_shifts ?? s.target_shift_count;
+  return s.is_long_term_leave === true || String(s.is_long_term_leave).toLowerCase() === 'true' || Number(target) === 0;
+}
+function activeRosterStaffIds() {
+  return new Set((state.staff || []).filter(isActiveStaff).map(s => String(s.id)));
+}
+function assignmentBelongsToActiveStaff(a) {
+  return !a?.staff_id || activeRosterStaffIds().has(String(a.staff_id));
+}
 function isDailyPositionEnabled(s) { return s?.daily_position_enabled !== false && isActiveStaff(s) && s?.staff_type !== 'แพทย์' && !s?.maternity_status && s?.position_training_status !== 'งดจัดชั่วคราว' && s?.position_training_status !== 'น้องใหม่ / ยังไม่จัดอัตโนมัติ'; }
 function isRosterEnabled(s) { return isActiveStaff(s) && s?.roster_enabled !== false && s?.staff_type !== 'แพทย์' && !s?.maternity_status; }
 function eligibilityRecord(staffId, positionCode) { return state.positionEligibility.find(x => x.staff_id === staffId && x.position_code === positionCode); }
@@ -1760,12 +1771,13 @@ function renderSchedulerPage() {
   if (!isAdmin()) return noPermission();
   const { y, m } = getMonthRange(state.monthKey);
   const month = state.rosterMonths.find(x => x.year === y && x.month === m);
-  const assignments = getAssignmentsForMonth(state.monthKey);
+  const assignments = getAssignmentsForMonth(state.monthKey).filter(assignmentBelongsToActiveStaff);
   const monthHolidays = state.holidays.filter(h => h.holiday_date?.startsWith(state.monthKey));
   return `<div class="grid">
     <div class="card">
       <div class="toolbar">
         <label>เดือน <input type="month" id="rosterMonthInput" value="${state.monthKey}"></label>
+        <button class="ghost-btn" data-generate-roster>สร้างตารางเปล่า</button>
         <button class="soft-btn" data-auto-assign>สร้างร่าง Auto Assign</button>
         <button class="primary-btn" data-save-roster>บันทึก</button>
         <button class="ghost-btn danger" data-clear-roster-month>ล้างข้อมูลเดือนนี้</button>
@@ -1778,7 +1790,7 @@ function renderSchedulerPage() {
         <button class="soft-btn" type="submit">บันทึกวันหยุด</button>
       </form>
       <div class="hint">Auto Assign จะช่วยเกลี่ยเวรตามกติกาและไม่แตะช่องที่ล็อกไว้</div>
-      ${monthHolidays.length ? `<div class="chip-line">${monthHolidays.map(h => `<span class="badge yellow">${formatThaiDate(h.holiday_date)} ${escapeHtml(h.title)}</span>`).join('')}</div>` : ''}
+      ${monthHolidays.length ? `<div class="chip-line">${monthHolidays.map(h => `<span class="badge yellow">${formatThaiDate(h.holiday_date)} ${escapeHtml(String(h.title || h.name || h.holiday_name || 'วันหยุดราชการ').split(':::')[0].trim())}</span>`).join('')}</div>` : ''}
     </div>
     <div class="roster-board">
       <div class="card">
@@ -1912,10 +1924,10 @@ function scheduleMonthDates(key=state.monthKey) {
 }
 function scheduleStaffList() {
   // ตารางเวรอ่านค่าพนักงานแบบตรงที่สุด: active/is_active === true เท่านั้น แล้วเรียงตามลำดับหน้างานเดิม
-  return orderedStaff(state.staff.filter(isActiveStaff));
+  return orderedStaff(state.staff.filter(s => isActiveStaff(s) && s?.staff_type !== 'แพทย์'));
 }
 function scheduleAssignmentsForMonth(key=state.monthKey) {
-  return getAssignmentsForMonth(key).filter(a => normalizeDateKey(a.duty_date).startsWith(key));
+  return getAssignmentsForMonth(key).filter(a => normalizeDateKey(a?.duty_date).startsWith(key) && assignmentBelongsToActiveStaff(a));
 }
 function dutySortIndex(code) {
   const idx = DUTY_COLUMNS.indexOf(code);
@@ -1976,15 +1988,20 @@ function renderCalendarCardView(staffList, assignments, key=state.monthKey) {
   }).join('')}</div>`;
 }
 function renderPersonView(staffList, assignments, key=state.monthKey) {
-  return `<div class="clean-person-list">${staffList.map(st => {
+  const selectedId = state.schedulePersonFilter || staffList[0]?.id || '';
+  const selected = staffList.find(st => String(st.id) === String(selectedId)) || staffList[0];
+  const renderCard = (st) => {
     const rows = assignments
-      .filter(a => String(a.staff_id) === String(st.id))
-      .sort((a,b) => normalizeDateKey(a.duty_date).localeCompare(normalizeDateKey(b.duty_date)) || dutySortIndex(a.duty_code) - dutySortIndex(b.duty_code));
+      .filter(a => String(a.staff_id) === String(st?.id))
+      .sort((a,b) => normalizeDateKey(a?.duty_date).localeCompare(normalizeDateKey(b?.duty_date)) || dutySortIndex(a?.duty_code) - dutySortIndex(b?.duty_code));
     return `<section class="clean-person-card" style="--staff-bg:${staffColor(st)};--staff-fg:${textColorFor(staffColor(st))}">
-      <button type="button" class="clean-person-head" data-staff-stat="${st.id}"><b>${escapeHtml(st.nickname || st.full_name || '-')}</b><span>${rows.length} เวร</span></button>
-      ${rows.length ? rows.map(a => `<div class="clean-person-duty"><span>${formatThaiDate(a.duty_date)}</span><b>${escapeHtml(dutyDisplayLabel(a.duty_code))}</b>${renderTradeButton(a)}</div>`).join('') : '<span class="muted">ไม่มีเวรเดือนนี้</span>'}
+      <button type="button" class="clean-person-head" data-staff-stat="${st?.id}"><b>${escapeHtml(st?.nickname || st?.full_name || '-')}</b><span>${rows.length} เวร</span></button>
+      ${rows.length ? rows.map(a => `<div class="clean-person-duty"><span>${formatThaiDate(a?.duty_date)}</span><b>${escapeHtml(dutyDisplayLabel(a?.duty_code))}</b>${renderTradeButton(a)}</div>`).join('') : '<span class="muted">ไม่มีเวรเดือนนี้</span>'}
     </section>`;
-  }).join('')}</div>`;
+  };
+  return `<div class="person-filter-mobile no-print"><label>เลือกเจ้าหน้าที่ <select id="schedulePersonFilter">${staffList.map(st => `<option value="${st.id}" ${String(selected?.id)===String(st.id)?'selected':''}>${escapeHtml(st.nickname || st.full_name || '-')}</option>`).join('')}</select></label></div>
+  <div class="clean-person-mobile-result">${selected ? renderCard(selected) : empty('ไม่มีเจ้าหน้าที่')}</div>
+  <div class="clean-person-list">${staffList.map(renderCard).join('')}</div>`;
 }
 function hasAnyDutyOn(staffId, date, assignments) {
   const key = normalizeDateKey(date);
@@ -2001,23 +2018,25 @@ function calculateDaysOff(staffId, key=state.monthKey, assignments=scheduleAssig
 function renderBalanceDashboard(staffList, assignments, key=state.monthKey) {
   const rowsWithDuty = assignments.filter(a => a.staff_id);
   const stats = calcFairness(rowsWithDuty);
-  const unitsList = staffList.map(st => Number(stats[st.id]?.units || 0));
+  const normalStaff = staffList.filter(st => !isLongTermLeaveStaff(st));
+  const unitsList = normalStaff.map(st => Number(stats[st.id]?.units || 0));
   const avgUnits = unitsList.length ? unitsList.reduce((a,b) => a + b, 0) / unitsList.length : 0;
   const rows = staffList.map(st => {
     const r = stats[st.id] || {};
+    const longTerm = isLongTermLeaveStaff(st);
     const units = Number(r.units || 0);
     const hours = Number(r.hours || 0);
     const pay = Number(r.pay || 0);
-    const gap = units - avgUnits;
+    const gap = longTerm ? 0 : units - avgUnits;
     const daysOff = calculateDaysOff(st.id, key, assignments);
-    const status = Math.abs(gap) <= 0.5 ? 'สมดุล' : gap > 0 ? 'เวรมากกว่าเฉลี่ย' : 'เวรน้อยกว่าเฉลี่ย';
-    const color = Math.abs(gap) <= 0.5 ? 'green' : gap > 0 ? 'orange' : 'blue';
+    const status = longTerm ? 'ลาระยะยาว / ไม่คิดหนี้เวร' : Math.abs(gap) <= 0.5 ? 'สมดุล' : gap > 0 ? 'เวรมากกว่าเฉลี่ย' : 'เวรน้อยกว่าเฉลี่ย';
+    const color = longTerm ? 'black' : Math.abs(gap) <= 0.5 ? 'green' : gap > 0 ? 'orange' : 'blue';
     return { st, units, hours, pay, gap, daysOff, status, color };
   });
   return `<div class="clean-balance-dashboard">
     <div class="notice soft-notice">จำนวนวันหยุดสะสม = เสาร์/อาทิตย์/นักขัตฤกษ์ที่เจ้าหน้าที่ไม่มีเวรในระบบ วันหยุดที่มีเวรจะไม่ถูกนับ</div>
-    <div class="table-wrap"><table class="clean-balance-table"><thead><tr><th>เจ้าหน้าที่</th><th>เวรรวม</th><th>หน่วยเวร</th><th>ชั่วโมงรวม</th><th>เงินประมาณ</th><th>จำนวนวันหยุดสะสม</th><th>สถานะ</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td>${staffPill(r.st)}</td><td>${assignments.filter(a => String(a.staff_id) === String(r.st.id)).length}</td><td>${r.units.toFixed(1)}</td><td>${r.hours.toFixed(1)}</td><td>${r.pay.toLocaleString()}</td><td>${r.daysOff}</td><td>${badge(r.status, r.color)}</td></tr>`).join('')}
+    <div class="table-wrap"><table class="clean-balance-table"><thead><tr><th>เจ้าหน้าที่</th><th>เวรรวม</th><th>หน่วยเวร</th><th>ชั่วโมงรวม</th><th>เงินประมาณ</th><th>Quota Gap</th><th>OT Balance</th><th>จำนวนวันหยุดสะสม</th><th>สถานะ</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${staffPill(r.st)}</td><td>${assignments.filter(a => String(a.staff_id) === String(r.st.id)).length}</td><td>${r.units.toFixed(1)}</td><td>${r.hours.toFixed(1)}</td><td>${r.pay.toLocaleString()}</td><td>${r.gap.toFixed(1)}</td><td>${isLongTermLeaveStaff(r.st) ? '0.0' : r.gap.toFixed(1)}</td><td>${r.daysOff}</td><td>${badge(r.status, r.color)}</td></tr>`).join('')}
     </tbody></table></div>
   </div>`;
 }
@@ -2036,7 +2055,7 @@ function renderGridView(staffList, assignments, key=state.monthKey) {
         .sort((a,b) => dutySortIndex(a.duty_code) - dutySortIndex(b.duty_code));
       const off = isWeekend(date) || isHolidayDate(date);
       const leave = isActiveLeaveOn(st.id, date);
-      return `<td class="${off ? 'offday-col' : ''}"><div class="clean-cell-stack">${leave ? '<span class="mini-status">ลา/ไม่รับเวร</span>' : ''}${shifts.length ? shifts.map(a => { const attrs = canRequestTrade(a) ? `data-trade-duty="${a.id}"` : `data-staff-stat="${st.id}"`; return `<button type="button" class="clean-shift-pill" ${attrs}>${escapeHtml(dutyDisplayLabel(a.duty_code))}</button>`; }).join('') : (off && !leave ? '<span class="muted">หยุด</span>' : '')}</div></td>`;
+      return `<td class="${off ? 'offday-col' : ''}"><div class="clean-cell-stack">${leave ? '<span class="mini-status">ลา/ไม่รับเวร</span>' : ''}${shifts.length ? shifts.map(a => { const attrs = canRequestTrade(a) ? `data-trade-duty="${a.id}"` : `data-staff-stat="${st.id}"`; return `<button type="button" class="clean-shift-pill" style="--staff-bg:${bg};--staff-fg:${fg}" ${attrs}>${escapeHtml(dutyDisplayLabel(a.duty_code))}</button>`; }).join('') : (off && !leave ? '<span class="muted">หยุด</span>' : '')}</div></td>`;
     }).join('')}</tr>`;
   }).join('')}</tbody></table></div>`;
 }
@@ -2527,7 +2546,7 @@ function renderOtPage() {
       <h3>ส่วนที่ 1 ยืนยันวันอยู่เวร</h3>
       <p class="muted">${myDuty ? 'วันนี้มีชื่อคุณในตารางเวร' : proxyOptions.length ? 'วันนี้คุณเป็นผู้มาทำเวรแทนตามข้อตกลงกันเอง / จ่ายกันเอง' : 'วันนี้ยังไม่พบชื่อคุณในตารางเวร ถ้าลงจริงให้ Admin ตรวจตารางก่อน'}</p>
       ${proxyBox}
-      <button class="primary-btn" data-check-in ${(!canCheckIn) ? 'disabled' : ''}>ยืนยันวันอยู่เวร</button>
+      <button class="primary-btn" data-check-in ${(!canCheckIn) ? 'disabled' : ''}>ยืนยันรับ OT / อยู่เวร</button>
       <p class="hint gps-help compact">ใช้ GPS เพื่อตรวจว่าอยู่ในพื้นที่โรงพยาบาลก่อนยืนยัน</p>
     </div>
     <div class="card ot-card">
@@ -2618,8 +2637,14 @@ function otStartHourForDate(date) {
 }
 function calcOtHours(r) {
   const workDate = normalizeDateKey(r?.work_date);
+  if (!workDate) return 0;
+  if (String(r?.reason || '').includes('ยืนยันอยู่เวร')) {
+    if (String(currentInchargeForMonth(workDate.slice(0,7))) === String(r?.staff_id)) return 8;
+    const duties = (state.rosterAssignments || []).filter(a => String(a.staff_id) === String(r?.staff_id) && normalizeDateKey(a.duty_date) === workDate);
+    if (duties.length) return duties.reduce((sum, a) => sum + Number(dutyMetrics(a)?.hours || 0), 0);
+  }
   const endTime = String(r?.end_time || '').trim();
-  if (!workDate || !endTime) return 0;
+  if (!endTime) return 0;
   const time = endTime.length === 5 ? `${endTime}:00` : endTime;
   const start = new Date(`${workDate}T${pad(otStartHourForDate(workDate))}:00:00`);
   const end = new Date(`${workDate}T${time}`);
@@ -2843,10 +2868,12 @@ function handleChange(e) {
   if (e.target.id === 'positionMonthInput') { state.positionMonthKey = e.target.value; state.monthPositionDraft = null; renderPage(); }
   if (e.target.id === 'positionMonthViewInput') { state.positionMonthViewKey = e.target.value; renderPage(); }
   if (e.target.id === 'tradeFilterStaff') { state.tradeFilterStaff = e.target.value; renderPage(); }
+  if (e.target.id === 'schedulePersonFilter') { state.schedulePersonFilter = e.target.value; renderPage(); }
   if (e.target.id === 'hrFilterStaff') { state.hrFilterStaff = e.target.value; renderPage(); }
   if (e.target.id === 'hrFilterMonth') { state.hrFilterMonth = e.target.value; renderPage(); }
   if (e.target.id === 'hrSummaryFilterStaff') { state.hrSummaryFilterStaff = e.target.value; renderPage(); }
   if (e.target.id === 'hrSummaryFilterMonth') { state.hrSummaryFilterMonth = e.target.value; renderPage(); }
+  if (e.target.id === 'otApprovalSearch') { state.otApprovalSearch = e.target.value || ''; renderPage(); }
   if (e.target.id === 'otApprovalMonthFilter') { state.otApprovalMonthFilter = e.target.value || state.monthKey; renderPage(); }
   if (e.target.id === 'otApprovalStatusFilter') { state.otApprovalStatusFilter = e.target.value || 'รออนุมัติ'; renderPage(); }
   if (e.target.id === 'leaveStaffSelect') { const inp = document.getElementById('leaveContactPhone'); if (inp && !state.editingLeaveId) inp.value = staffPhone(e.target.value) || ''; }
@@ -3365,8 +3392,15 @@ async function checkIn() {
   const device = (navigator.userAgent + proxyText).slice(0, 250);
   const { error } = await sb.from('attendance_logs').insert({ staff_id: staffIdToLog, duty_date: todayStr(), check_in_at: new Date().toISOString(), lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device });
   if (error) return showToast(error.message);
+  const alreadyRequested = (state.otRequests || []).some(r => String(r.staff_id) === String(staffIdToLog) && normalizeDateKey(r.work_date) === todayStr() && String(r.reason || '').includes('ยืนยันอยู่เวร'));
+  if (!alreadyRequested) {
+    const isIncharge = String(currentInchargeForMonth(todayStr().slice(0,7))) === String(staffIdToLog);
+    const otRow = { staff_id: staffIdToLog, work_date: todayStr(), end_time: '', reason: 'ยืนยันอยู่เวรตามตาราง', note: isIncharge ? 'ระบบคิด OT อินชาร์จประจำเดือน 8 ชั่วโมงอัตโนมัติ' : 'สร้างจากส่วนที่ 1 ยืนยันอยู่เวร', status: 'รออนุมัติ', lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device };
+    const ot = await sb.from('ot_requests').insert(otRow);
+    if (ot.error) showToast(`ลงชื่อสำเร็จ แต่สร้างรายการ OT ไม่สำเร็จ: ${ot.error.message}`, { tone:'error' });
+  }
   await loadAllData(); renderPage();
-  showToast(proxyText ? 'ยืนยันวันอยู่เวรแทนเจ้าของเวรเดิมแล้ว' : 'ยืนยันวันอยู่เวรแล้ว');
+  showToast(proxyText ? 'ยืนยันวันอยู่เวรแทนเจ้าของเวรเดิมและส่งรายการ OT แล้ว' : 'ยืนยันวันอยู่เวรและส่งรายการ OT แล้ว');
 }
 async function saveOtRequest(form) {
   const pos = await getGps();
