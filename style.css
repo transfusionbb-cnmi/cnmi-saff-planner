@@ -2309,3 +2309,16 @@ thead .v179-sticky-first-col {
   .v181-ot-page .section-title { align-items: stretch; }
   .v181-ot-page .section-title .actions { width: 100%; display: grid; grid-template-columns: 1fr; }
 }
+
+/* V182 Dynamic Position Management */
+.position-management-page { display: grid; gap: 16px; }
+.position-management-page .position-master-zone { margin-top: 14px; }
+.position-management-page .position-master-zone:first-child { margin-top: 0; }
+.position-management-page .compact-table table td, .position-management-page .compact-table table th { vertical-align: top; }
+.position-management-page .inactive-row { opacity: .62; }
+.position-management-page .inactive-row td { background: #f8fafc; }
+.position-master-form-card textarea { resize: vertical; min-height: 96px; }
+.position-master-note-card code, .position-management-page code, .v182-eligibility-page code { background: #eef6ff; border: 1px solid #d7eaff; border-radius: 6px; padding: 1px 6px; }
+.position-master-note-card .profile-info-list { margin-top: 10px; }
+.v182-eligibility-page .position-check small { display: block; }
+.v182-position-matrix .month-position-select { min-width: 120px; }

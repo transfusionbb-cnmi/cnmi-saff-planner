@@ -9517,3 +9517,452 @@ function bindGlobalEvents() {
   window.v181OtClaim = { hrCycleRange181, buildHrDummyExportRows181, allocateDummyShifts181, exportHrDummyExcel181, renderClaimHistoryPage181 };
   console.info(`${VERSION_V181} loaded`);
 })();
+
+/* =========================
+   V182 Dynamic Daily Position Management
+   - Admin CRUD for position catalog
+   - Eligibility / daily / monthly position pages render from database first
+   - Fallback to legacy hard-coded templates if SQL table has not been created yet
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V182 = 'V182_DYNAMIC_POSITION_MANAGEMENT';
+  const POSITION_ZONES_V182 = ['Blood Bank', 'Manual', 'Donor Room', 'ออกหน่วย'];
+
+  function esc182(v){
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function truthy182(v){ return v === true || ['true','1','yes','y','active','เปิด','ใช้งาน'].includes(String(v ?? '').trim().toLowerCase()); }
+  function normBool182(v, fallback=true){ if (v == null || v === '') return fallback; return truthy182(v); }
+  function normNum182(v, fallback=999){ const n = Number(v); return Number.isFinite(n) ? n : fallback; }
+  function safeToast182(msg, opts){ try { showToast(msg, opts); } catch (_) { console.warn(msg); } }
+  function friendly182(error){ try { return friendlyDbError(error); } catch (_) { return error?.message || String(error || 'เกิดข้อผิดพลาด'); } }
+  function isOutingRow182(row){ return row?.is_outing === true || String(row?.zone || '').trim() === 'ออกหน่วย' || String(row?.eligibility_code || '').startsWith('OUTING:'); }
+  function defaultEligibilityCode182(row){ return isOutingRow182(row) ? `OUTING:${String(row?.code || '').trim()}` : (String(row?.code || '').trim() || null); }
+
+  function normalizePositionMaster182(row, idx=0, source='db'){
+    const code = String(row?.code || row?.position_code || '').trim();
+    const zone = String(row?.zone || row?.category || (isOutingRow182(row) ? 'ออกหน่วย' : '') || 'Blood Bank').trim();
+    const isOuting = row?.is_outing != null ? normBool182(row.is_outing, false) : zone === 'ออกหน่วย' || String(row?.eligibility_code || '').startsWith('OUTING:');
+    const active = row?.is_active != null ? normBool182(row.is_active, true) : !row?.deleted_at;
+    return {
+      ...row,
+      id: row?.id || `${source}:${isOuting ? 'outing' : 'normal'}:${code}`,
+      code,
+      eligibility_code: String(row?.eligibility_code || '').trim() || (isOuting ? `OUTING:${code}` : code),
+      zone: zone || (isOuting ? 'ออกหน่วย' : 'Blood Bank'),
+      break_time: String(row?.break_time || '').trim() || '-',
+      main_rule: String(row?.main_rule || '').trim() || '',
+      job_desc: String(row?.job_desc || '').trim() || '',
+      is_outing: isOuting,
+      is_active: active,
+      sort_order: normNum182(row?.sort_order, idx + 1),
+      _source: source
+    };
+  }
+
+  function seedPositionCatalog182(){
+    const normal = (typeof DEFAULT_POSITIONS !== 'undefined' ? DEFAULT_POSITIONS : []).map((p, i) => normalizePositionMaster182({ ...p, is_outing:false, is_active:true, sort_order:i + 1 }, i, 'seed'));
+    const offset = normal.length;
+    const outing = (typeof OUTING_POSITIONS !== 'undefined' ? OUTING_POSITIONS : []).map((p, i) => normalizePositionMaster182({ ...p, is_outing:true, is_active:true, sort_order:offset + i + 1 }, offset + i, 'seed'));
+    return [...normal, ...outing];
+  }
+
+  function sortPositionCatalog182(list){
+    const zoneRank = z => {
+      const i = POSITION_ZONES_V182.indexOf(String(z || ''));
+      return i >= 0 ? i : 99;
+    };
+    return [...(list || [])].sort((a,b) => zoneRank(a.zone) - zoneRank(b.zone) || (a.sort_order - b.sort_order) || String(a.code).localeCompare(String(b.code), 'th'));
+  }
+
+  function rawPositionCatalog182(){
+    if (state.positionMastersLoaded && Array.isArray(state.positionMasters)) {
+      return sortPositionCatalog182(state.positionMasters.map((p,i) => normalizePositionMaster182(p, i, 'db')));
+    }
+    return sortPositionCatalog182(seedPositionCatalog182());
+  }
+
+  function positionCatalog182(options={}){
+    const includeInactive = !!options.includeInactive;
+    const rows = rawPositionCatalog182();
+    return includeInactive ? rows : rows.filter(p => p.is_active !== false && !p.deleted_at && p.code);
+  }
+  function normalPositions182(){ return positionCatalog182().filter(p => !p.is_outing && p.zone !== 'ออกหน่วย'); }
+  function outingPositions182(){ return positionCatalog182().filter(p => p.is_outing || p.zone === 'ออกหน่วย'); }
+  function allActivePositions182(){ return positionCatalog182(); }
+  function templatesForDate182(date){
+    const key = typeof normalizeDateKey === 'function' ? normalizeDateKey(date) : String(date || '');
+    try { if (isNoPositionDay(key)) return []; } catch (_) {}
+    return (typeof hasOuting === 'function' && hasOuting(key)) ? outingPositions182() : normalPositions182();
+  }
+  function monthOptionsForDate182(date, currentCode=''){
+    const key = typeof normalizeDateKey === 'function' ? normalizeDateKey(date) : String(date || '');
+    let allowed = [];
+    try {
+      if (isWeekend(key) || isHolidayDate(key)) allowed = [];
+      else if (hasOuting(key)) allowed = [...normalPositions182().filter(p => p.zone === 'Blood Bank' || p.zone === 'Manual'), ...outingPositions182()];
+      else allowed = normalPositions182();
+    } catch (_) { allowed = normalPositions182(); }
+    const seen = new Set();
+    const out = [];
+    allowed.forEach(p => { if (p?.code && !seen.has(`${p.code}|${p.is_outing}`)) { seen.add(`${p.code}|${p.is_outing}`); out.push(p); } });
+    const current = String(currentCode || '').trim();
+    if (current && !out.some(p => p.code === current)) {
+      const row = templateByCode182(current, key, true);
+      if (row?.code) out.push(row);
+    }
+    return out;
+  }
+  function templateByCode182(code, date, includeInactive=false){
+    const base = typeof positionBaseCode === 'function' ? positionBaseCode(code) : String(code || '').trim();
+    if (!base) return null;
+    const list = (includeInactive ? positionCatalog182({ includeInactive:true }) : allActivePositions182());
+    const key = date || (typeof todayStr === 'function' ? todayStr() : '');
+    const outingFirst = (() => { try { return hasOuting(key); } catch (_) { return false; } })();
+    const preferred = outingFirst ? [...list.filter(isOutingRow182), ...list.filter(p => !isOutingRow182(p))] : [...list.filter(p => !isOutingRow182(p)), ...list.filter(isOutingRow182)];
+    return preferred.find(p => p.code === base || p.eligibility_code === base) || null;
+  }
+
+  window.cnmiPositionCatalogV182 = { positionCatalog182, normalPositions182, outingPositions182, monthOptionsForDate182 };
+
+  if (Array.isArray(NAV_ITEMS) && !NAV_ITEMS.some(x => x.id === 'positionManagement')) {
+    const idx = NAV_ITEMS.findIndex(x => x.id === 'eligibility');
+    NAV_ITEMS.splice(idx >= 0 ? idx : NAV_ITEMS.length, 0, {
+      id:'positionManagement', icon:'🧭', title:'จัดการตำแหน่ง', subtitle:'เพิ่ม/แก้ไข/ปิดใช้งานตำแหน่งรายวัน', group:'admin'
+    });
+  }
+
+  async function refreshPositionMasters182(options={}){
+    if (!sb || !state.profile) return [];
+    try {
+      const res = await sb.from('daily_position_masters').select('*').order('sort_order', { ascending:true }).order('zone', { ascending:true }).order('code', { ascending:true });
+      if (res.error) throw res.error;
+      state.positionMasters = res.data || [];
+      state.positionMastersLoaded = true;
+      state.positionMasterLoadError = '';
+      return state.positionMasters;
+    } catch (err) {
+      state.positionMastersLoaded = false;
+      state.positionMasterLoadError = err?.message || String(err || 'โหลดตำแหน่งไม่สำเร็จ');
+      if (!options.silent) console.warn(`${VERSION_V182}: daily_position_masters load failed`, err);
+      return [];
+    }
+  }
+
+  const previousLoadAllDataV182 = window.loadAllData || (typeof loadAllData === 'function' ? loadAllData : null);
+  if (previousLoadAllDataV182) {
+    window.loadAllData = loadAllData = async function loadAllDataV182(){
+      await previousLoadAllDataV182.apply(this, arguments);
+      await refreshPositionMasters182({ silent:true });
+    };
+  }
+
+  window.positionTemplateForDate = positionTemplateForDate = function positionTemplateForDateV182(date){ return templatesForDate182(date); };
+  window.positionTemplateByCode = positionTemplateByCode = function positionTemplateByCodeV182(code, date){ return templateByCode182(code, date, false); };
+  window.positionZoneForCode = positionZoneForCode = function positionZoneForCodeV182(code, fallback=''){
+    return templateByCode182(code, (typeof todayStr === 'function' ? todayStr() : ''), false)?.zone || fallback || 'รอตรวจสอบ';
+  };
+  window.positionSortIndex = positionSortIndex = function positionSortIndexV182(code, date){
+    const base = typeof positionBaseCode === 'function' ? positionBaseCode(code) : String(code || '').trim();
+    const list = [...templatesForDate182(date), { code:'รอตรวจสอบ', sort_order:9999 }];
+    const i = list.findIndex(p => p.code === base || p.eligibility_code === base);
+    return i >= 0 ? i : 9999;
+  };
+  window.monthPositionRoleOptionsForDate = monthPositionRoleOptionsForDate = function monthPositionRoleOptionsForDateV182(date, currentCode=''){
+    return monthOptionsForDate182(date, currentCode);
+  };
+  window.makeMonthPositionRow = makeMonthPositionRow = function makeMonthPositionRowV182(date, staffId, code){
+    const base = templateByCode182(code, date, true) || {};
+    return { work_date: date, position_code: code, zone: base.zone || 'รอตรวจสอบ', break_time: base.break_time || '-', main_rule: base.main_rule || '', job_desc: base.job_desc || '', staff_id: staffId, updated_by: currentStaffId() };
+  };
+
+  function renderPositionManagementPage182(){
+    if (!isAdmin()) return noPermission();
+    const rows = positionCatalog182({ includeInactive:true });
+    const editId = String(state.editingPositionMasterId || '');
+    const editing = rows.find(r => String(r.id) === editId) || null;
+    const isDbReady = !!state.positionMastersLoaded;
+    const grouped = rows.reduce((acc, p) => { (acc[p.zone || 'อื่นๆ'] = acc[p.zone || 'อื่นๆ'] || []).push(p); return acc; }, {});
+    const optionZones = POSITION_ZONES_V182.map(z => `<option value="${esc182(z)}" ${(editing?.zone || 'Blood Bank')===z?'selected':''}>${esc182(z)}</option>`).join('');
+    const formTitle = editing ? `แก้ไขตำแหน่ง: ${esc182(editing.code)}` : 'เพิ่มตำแหน่งใหม่';
+    const dbWarning = !isDbReady ? `<div class="notice error-notice compact"><b>ยังไม่ได้เชื่อมตาราง daily_position_masters</b><br>ตอนนี้ระบบแสดงตำแหน่งเดิมแบบ fallback ชั่วคราว ถ้าต้องการเพิ่ม/แก้ไข/ลบ ให้รันไฟล์ <code>supabase_v182_position_management.sql</code> ใน Supabase SQL Editor ก่อน</div>` : '';
+    const listHtml = Object.entries(grouped).map(([zone, list]) => `<div class="position-master-zone"><div class="section-title"><h3>${esc182(zone)}</h3><span class="badge blue">${list.length} ตำแหน่ง</span></div><div class="table-wrap compact-table"><table><thead><tr><th>ลำดับ</th><th>Code</th><th>ประเภท</th><th>เวลาพัก</th><th>ผู้ปฏิบัติหลัก</th><th>รายละเอียด</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>${list.map(p => `<tr class="${p.is_active === false || p.deleted_at ? 'inactive-row' : ''}"><td>${esc182(p.sort_order)}</td><td><b>${esc182(p.code)}</b>${p.eligibility_code && p.eligibility_code !== p.code ? `<br><small>${esc182(p.eligibility_code)}</small>` : ''}</td><td>${p.is_outing ? badge('ออกหน่วย', 'red') : badge('ปกติ', 'blue')}</td><td>${esc182(p.break_time || '-')}</td><td>${esc182(p.main_rule || '-')}</td><td>${esc182(p.job_desc || '-')}</td><td>${p.is_active === false || p.deleted_at ? badge('ปิดใช้งาน', 'orange') : badge('ใช้งาน', 'green')}</td><td><div class="actions"><button class="tiny-btn" data-edit-position-master="${esc182(p.id)}">แก้ไข</button>${p.is_active === false || p.deleted_at ? `<button class="tiny-btn" data-restore-position-master="${esc182(p.id)}">เปิดใช้</button>` : `<button class="tiny-btn danger-soft-btn" data-delete-position-master="${esc182(p.id)}">ลบ</button>`}</div></td></tr>`).join('')}</tbody></table></div></div>`).join('');
+    return `<div class="position-management-page">
+      <div class="card wide-card">
+        <div class="section-title"><div><h2>จัดการตำแหน่งรายวัน</h2><p class="hint">ตำแหน่งที่เปิดใช้งานจะถูกส่งต่อไปหน้า “สิทธิ์ตำแหน่งรายวัน”, “ตารางตำแหน่งรายวัน” และ “จัดตำแหน่งรายเดือน” อัตโนมัติ</p></div><button class="ghost-btn" data-refresh-position-masters>รีเฟรชจากฐานข้อมูล</button></div>
+        ${dbWarning}
+      </div>
+      <div class="grid grid-2">
+        <div class="card position-master-form-card">
+          <div class="section-title"><h3>${formTitle}</h3>${editing ? '<button class="ghost-btn" data-cancel-position-master-edit>ยกเลิกแก้ไข</button>' : ''}</div>
+          <form id="positionMasterForm" class="form-grid compact-form">
+            <input type="hidden" name="id" value="${esc182(editing?.id || '')}">
+            <label>รหัสตำแหน่ง / Code <input name="code" value="${esc182(editing?.code || '')}" placeholder="เช่น BB-Report" required></label>
+            <label>หมวดหมู่ <select name="zone">${optionZones}</select></label>
+            <label>ประเภท <select name="is_outing"><option value="false" ${editing?.is_outing ? '' : 'selected'}>ตำแหน่งปกติ</option><option value="true" ${editing?.is_outing ? 'selected' : ''}>ตำแหน่งออกหน่วย</option></select></label>
+            <label>ลำดับแสดงผล <input name="sort_order" type="number" value="${esc182(editing?.sort_order ?? (rows.length + 1))}" min="1" step="1"></label>
+            <label>เวลาพัก <input name="break_time" value="${esc182(editing?.break_time || '')}" placeholder="เช่น 11:00 / ออกหน่วย"></label>
+            <label>Eligibility Code <input name="eligibility_code" value="${esc182(editing?.eligibility_code || '')}" placeholder="เว้นว่างได้ / ออกหน่วยจะใช้ OUTING:Code"></label>
+            <label class="wide">ผู้ปฏิบัติหลัก <input name="main_rule" value="${esc182(editing?.main_rule || '')}" placeholder="เช่น MT เท่านั้น / แตง / แก๊ส / เฟื่อง"></label>
+            <label class="wide">รายละเอียดหน้าที่ <textarea name="job_desc" rows="4" placeholder="อธิบายงานของตำแหน่งนี้">${esc182(editing?.job_desc || '')}</textarea></label>
+            <label>สถานะ <select name="is_active"><option value="true" ${editing?.is_active === false ? '' : 'selected'}>ใช้งาน</option><option value="false" ${editing?.is_active === false ? 'selected' : ''}>ปิดใช้งาน</option></select></label>
+            <button class="primary-btn wide" type="submit" ${!isDbReady ? 'disabled' : ''}>${editing ? 'บันทึกการแก้ไข' : 'เพิ่มตำแหน่ง'}</button>
+          </form>
+          <p class="hint">แนะนำ: การ “ลบ” จะเป็นการปิดใช้งาน เพื่อไม่ทำลายประวัติตำแหน่งรายเดือน/รายวันที่เคยบันทึกไว้</p>
+        </div>
+        <div class="card position-master-note-card">
+          <h3>โครงสร้างข้อมูลที่ใช้</h3>
+          <div class="profile-info-list compact-info"><div><span>ตารางหลัก</span><b>daily_position_masters</b></div><div><span>ตัวเชื่อมสิทธิ์</span><b>daily_position_eligibility.position_code</b></div><div><span>ตัวใช้งานจริง</span><b>daily_positions.position_code</b></div></div>
+          <p class="hint">สำหรับตำแหน่งออกหน่วย ระบบจะใช้ Eligibility Code เช่น <code>OUTING:DR-Registration</code> เพื่อแยกสิทธิ์ออกจากตำแหน่งห้องบริจาคปกติ แม้ Code หลักจะชื่อเดียวกัน</p>
+        </div>
+      </div>
+      <div class="card wide-card"><div class="section-title"><h3>รายการตำแหน่งทั้งหมด</h3><span class="badge black">${rows.length} รายการ</span></div>${rows.length ? listHtml : empty('ยังไม่มีรายการตำแหน่ง')}</div>
+    </div>`;
+  }
+
+  async function savePositionMaster182(form){
+    if (!isAdmin()) return safeToast182('เฉพาะ Admin เท่านั้น');
+    if (!state.positionMastersLoaded) return safeToast182('ยังไม่ได้รัน SQL สร้างตาราง daily_position_masters', { tone:'error' });
+    const fd = new FormData(form);
+    const id = String(fd.get('id') || '').trim();
+    const code = String(fd.get('code') || '').trim();
+    const zone = String(fd.get('zone') || '').trim() || 'Blood Bank';
+    const isOuting = String(fd.get('is_outing')) === 'true' || zone === 'ออกหน่วย';
+    const isActive = String(fd.get('is_active')) !== 'false';
+    if (!code) return safeToast182('กรุณากรอกรหัสตำแหน่ง');
+    const payload = {
+      code,
+      zone: isOuting ? 'ออกหน่วย' : zone,
+      is_outing: isOuting,
+      break_time: String(fd.get('break_time') || '').trim() || '-',
+      main_rule: String(fd.get('main_rule') || '').trim() || null,
+      job_desc: String(fd.get('job_desc') || '').trim() || null,
+      sort_order: normNum182(fd.get('sort_order'), 999),
+      is_active: isActive,
+      deleted_at: isActive ? null : new Date().toISOString(),
+      updated_by: currentStaffId()
+    };
+    const elig = String(fd.get('eligibility_code') || '').trim();
+    payload.eligibility_code = elig || (isOuting ? `OUTING:${code}` : null);
+    if (!id) payload.created_by = currentStaffId();
+    const res = id ? await sb.from('daily_position_masters').update(payload).eq('id', id) : await sb.from('daily_position_masters').insert(payload);
+    if (res.error) return safeToast182(friendly182(res.error), { tone:'error' });
+    state.editingPositionMasterId = null;
+    await refreshPositionMasters182();
+    renderPage();
+    safeToast182(id ? 'บันทึกการแก้ไขตำแหน่งแล้ว' : 'เพิ่มตำแหน่งใหม่แล้ว');
+  }
+
+  async function softDeletePositionMaster182(id){
+    if (!isAdmin()) return safeToast182('เฉพาะ Admin เท่านั้น');
+    const row = positionCatalog182({ includeInactive:true }).find(p => String(p.id) === String(id));
+    if (!row) return safeToast182('ไม่พบตำแหน่ง');
+    const ok = await confirmDialog(`ลบ/ปิดใช้งานตำแหน่ง ${row.code}?`, 'ยืนยันลบตำแหน่ง');
+    if (!ok) return;
+    const res = await sb.from('daily_position_masters').update({ is_active:false, deleted_at:new Date().toISOString(), updated_by:currentStaffId() }).eq('id', id);
+    if (res.error) return safeToast182(friendly182(res.error), { tone:'error' });
+    await refreshPositionMasters182();
+    renderPage();
+    safeToast182('ปิดใช้งานตำแหน่งแล้ว');
+  }
+
+  async function restorePositionMaster182(id){
+    if (!isAdmin()) return safeToast182('เฉพาะ Admin เท่านั้น');
+    const res = await sb.from('daily_position_masters').update({ is_active:true, deleted_at:null, updated_by:currentStaffId() }).eq('id', id);
+    if (res.error) return safeToast182(friendly182(res.error), { tone:'error' });
+    await refreshPositionMasters182();
+    renderPage();
+    safeToast182('เปิดใช้งานตำแหน่งแล้ว');
+  }
+
+  window.renderEligibilityPage = renderEligibilityPage = function renderEligibilityPageV182(){
+    if (!isAdmin()) return noPermission();
+    const activeStaff = orderedStaff((state.staff || []).filter(s => s.is_active));
+    if (!activeStaff.length) return empty('ยังไม่มีเจ้าหน้าที่ active');
+    if (!state.eligibilityStaffId || !activeStaff.some(s => s.id === state.eligibilityStaffId)) state.eligibilityStaffId = activeStaff[0].id;
+    const selected = activeStaff.find(s => s.id === state.eligibilityStaffId) || activeStaff[0];
+    const grouped = allActivePositions182().reduce((acc, p) => { (acc[p.zone] = acc[p.zone] || []).push(p); return acc; }, {});
+    const dbWarning = state.positionMasterLoadError ? `<div class="notice error-notice compact">ยังใช้ตำแหน่ง fallback เพราะโหลด <code>daily_position_masters</code> ไม่สำเร็จ: ${esc182(state.positionMasterLoadError)}</div>` : '';
+    return `<div class="grid eligibility-page v182-eligibility-page">
+      <div class="card eligibility-staff-panel">
+        <div class="section-title"><h3>เลือกเจ้าหน้าที่</h3></div>
+        <label>เจ้าหน้าที่ <select id="eligibilityStaffSelect">${activeStaff.map(s => `<option value="${esc182(s.id)}" ${selected.id===s.id?'selected':''}>${esc182(s.nickname || s.full_name)} (${esc182(s.staff_type || '-')})</option>`).join('')}</select></label>
+        <div class="selected-staff-card" style="--staff-bg:${staffColor(selected)};--staff-fg:${textColorFor(staffColor(selected))}"><div class="big-staff-name">${esc182(selected.nickname || selected.full_name)}</div><div>${esc182(selected.full_name || '')}</div><small>${esc182(selected.staff_type || '-')} • ${esc182(selected.position_training_status || 'ใช้งานปกติ')}</small></div>
+      </div>
+      <div class="card eligibility-position-panel">
+        <div class="section-title"><div><h3>สิทธิ์ตำแหน่งรายวันของ ${esc182(selected.nickname || selected.full_name)}</h3><p class="hint">ข้อมูลตำแหน่งมาจากหน้า “จัดการตำแหน่ง” แบบ Dynamic</p></div><button class="primary-btn" data-save-position-eligibility>บันทึกสิทธิ์ตำแหน่ง</button></div>
+        ${dbWarning}
+        <div class="position-card-grid">${Object.entries(grouped).map(([zone, positions]) => `<div class="position-zone-card"><h4>${esc182(zone)}</h4>${positions.map(p => { const eligibilityKey = p.eligibility_code || p.code; const checked = positionEligible(selected, eligibilityKey); const ruleOk = positionRuleOk(selected, p.main_rule); return `<label class="position-check ${checked?'checked':''} ${ruleOk?'':'rule-mismatch'}"><input type="checkbox" data-eligibility data-staff-id="${esc182(selected.id)}" data-position-code="${esc182(eligibilityKey)}" ${checked?'checked':''}><span><b>${esc182(p.code)}</b><small>${esc182(p.main_rule || '-')}${p.is_outing ? ' • ออกหน่วย' : ''}${ruleOk ? '' : ' • ไม่ตรงผู้ปฏิบัติหลัก'}</small><em>${esc182(p.job_desc)}</em></span></label>`; }).join('')}</div>`).join('')}</div>
+      </div>
+    </div>`;
+  };
+  window.renderPositionEligibilityMatrix = renderPositionEligibilityMatrix = function renderPositionEligibilityMatrixV182(){ return renderEligibilityPage(); };
+
+  function expectedTemplatesForDate182(date){ return monthOptionsForDate182(date).filter(p => p.code); }
+  function v182LeaveText(row){ try { return leaveDisplayType(row); } catch (_) { return String(row?.type || row?.leave_type || 'ลาอื่นๆ').split(':::')[0].trim(); } }
+  function v182IsNoDuty(row){ try { return isNoDutyLeaveType(row); } catch (_) { return v182LeaveText(row) === 'ไม่รับเวร'; } }
+  function activeLeaveIndexForDates182(dates){
+    const out = new Map();
+    (state.leaves || []).forEach(l => {
+      const sid = String(l?.staff_id || '');
+      if (!sid) return;
+      (dates || []).forEach(d => { try { if (overlapsDate(l, d) && !out.has(`${sid}|${d}`)) out.set(`${sid}|${d}`, l); } catch (_) {} });
+    });
+    return out;
+  }
+  function missingCell182(date, assignedByDate){
+    const key = normalizeDateKey(date);
+    try { if (isWeekend(key) || isHolidayDate(key)) return `<th class="missing-role-cell no-position-day">ไม่จัด</th>`; } catch (_) {}
+    const assigned = assignedByDate.get(key) || new Set();
+    const missing = expectedTemplatesForDate182(key).filter(p => !assigned.has(positionBaseCode(p.code)));
+    if (!missing.length) return `<th class="missing-role-cell complete">ครบ</th>`;
+    return `<th class="missing-role-cell has-missing">${missing.map(p => `<span>${esc182(positionLabelForCell(p.code))}</span>`).join('')}</th>`;
+  }
+  function renderMonthCell182(staff, date, cellRows, canEdit, leaveIndex){
+    const key = normalizeDateKey(date);
+    if (isWeekend(key) || isHolidayDate(key)) return `<td class="matrix-cell no-position-day ${isHolidayDate(key) ? 'holiday-cell' : 'weekend-cell'}"><span>${isHolidayDate(key) ? 'HOLIDAY' : 'WEEKEND'}</span></td>`;
+    const leaveRow = leaveIndex.get(`${String(staff?.id || '')}|${key}`) || null;
+    const isRealLeave = !!leaveRow && !v182IsNoDuty(leaveRow);
+    const row = (cellRows || [])[0] || null;
+    const cleanCodes = (cellRows || []).map(r => positionLabelForCell(r?.position_code || r?.code)).filter(Boolean);
+    const outing = hasOuting(key);
+    const cls = `${outing ? 'outing-cell' : ''} ${isRealLeave ? 'leave-cell ' + leaveCellClass(leaveRow) : ''} ${!cleanCodes.length && !isRealLeave ? 'needs-review-cell' : ''}`.trim();
+    if (canEdit && !isRealLeave) {
+      const current = row?.position_code || '';
+      const options = monthOptionsForDate182(key, current);
+      return `<td class="matrix-cell ${cls}"><select class="month-position-select" data-month-position-edit="${esc182(key)}|${esc182(staff?.id || '')}"><option value="">รอตรวจสอบ</option>${options.map(t => `<option value="${esc182(t.code)}" ${current===t.code?'selected':''}>${esc182(positionLabelForCell(t.code))}</option>`).join('')}</select>${outing ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
+    }
+    const text = cleanCodes.length ? cleanCodes.join('<br>') : (isRealLeave ? esc182(v182LeaveText(leaveRow)) : '');
+    return `<td class="matrix-cell ${cls}">${text ? `<span>${text}</span>` : ''}${outing && cleanCodes.length ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
+  }
+  window.renderMonthPositionMatrix = renderMonthPositionMatrix = function renderMonthPositionMatrixV182(rows, dates){
+    rows = Array.isArray(rows) ? rows : [];
+    dates = Array.isArray(dates) ? dates : [];
+    if (!rows.length) return empty('ยังไม่มีแผนรายเดือน กด “สร้างแผนทั้งเดือน” ก่อน');
+    const byCell = Object.create(null);
+    const assignedByDate = new Map();
+    rows.forEach((r, idx) => {
+      const sid = String(r?.staff_id || '');
+      const d = normalizeDateKey(r?.work_date);
+      if (!sid || !d) return;
+      (byCell[`${sid}|${d}`] ||= []).push({ ...r, _idx: idx });
+      const code = positionBaseCode(r?.position_code || r?.code || '');
+      if (code && code !== 'รอตรวจสอบ') { if (!assignedByDate.has(d)) assignedByDate.set(d, new Set()); assignedByDate.get(d).add(code); }
+    });
+    const rowStaffIds = new Set(rows.map(r => String(r?.staff_id || '')).filter(Boolean));
+    const displayStaff = orderedStaff((state.staff || []).filter(s => isDailyPositionEnabled(s) || rowStaffIds.has(String(s.id))));
+    const canEdit = isAdmin() && state.page === 'positionMonth';
+    const leaveIndex = activeLeaveIndexForDates182(dates);
+    const dateHeads = dates.map(date => { const d = parseDate(date); const cls = isHolidayDate(date) ? 'holiday-head' : isWeekend(date) ? 'weekend-head' : hasOuting(date) ? 'outing-head' : ''; return `<th class="date-head ${cls}"><b>${d.getDate()}</b><br><span>${d.toLocaleDateString('th-TH', { weekday:'short' })}</span></th>`; }).join('');
+    const missingCells = dates.map(date => missingCell182(date, assignedByDate)).join('');
+    return `<div class="monthly-matrix-wrap v182-position-matrix"><div class="matrix-legend"><span class="legend-box weekend"></span> WEEKEND/HOLIDAY = ไม่จัดตำแหน่ง <span class="legend-box outing"></span> ออกหน่วย <span class="legend-box leave"></span> ตำแหน่งมาจากหน้า “จัดการตำแหน่ง” ${canEdit ? '<span class="hint">Admin เลือกตำแหน่งในช่องได้ แล้วกดบันทึกแผนทั้งเดือน</span>' : ''}</div><div class="table-wrap month-position-matrix"><table><thead><tr><th class="sticky-col staff-col">เจ้าหน้าที่</th><th class="summary-col">สรุป</th>${dateHeads}</tr><tr class="missing-role-row"><th class="sticky-col staff-col missing-role-head">ยังขาด</th><th class="summary-col missing-role-head">-</th>${missingCells}</tr></thead><tbody>${displayStaff.map(st => { const bg = staffColor(st); const fg = textColorFor(bg); return `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${esc182(bg)};color:${esc182(fg)}"><div class="matrix-staff-name"><b>${esc182(st.nickname || st.full_name || '-')}</b><small>${esc182(st.staff_type || '')}</small></div></td><td class="summary-col summary-action-cell"><button class="tiny-btn staff-summary-trigger compact-staff-summary" data-month-position-stat="${esc182(st.id)}" type="button">ดูสรุป</button></td>${dates.map(date => renderMonthCell182(st, date, byCell[`${st.id}|${date}`] || [], canEdit, leaveIndex)).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
+  };
+
+  window.buildMonthlyPositionDraft = buildMonthlyPositionDraft = function buildMonthlyPositionDraftV182(key){
+    const { y, m, last } = getMonthRange(key);
+    const rows = [];
+    const counts = {};
+    const weeklyFixed = {};
+    const serialMap = {};
+    const addCount = (staffId, code) => {
+      if (!staffId) return;
+      const base = positionBaseCode(code);
+      counts[staffId] = counts[staffId] || { total:0, byCode:{}, byZone:{}, load:0 };
+      counts[staffId].total++;
+      counts[staffId].byCode[base] = (counts[staffId].byCode[base] || 0) + 1;
+      counts[staffId].byZone[positionZoneForCode(base)] = (counts[staffId].byZone[positionZoneForCode(base)] || 0) + 1;
+      counts[staffId].load = (counts[staffId].load || 0) + positionLoadWeight(base);
+    };
+    const chooseForPosition = (position, date, pool, used, preferredId=null) => {
+      if (preferredId && !used.has(preferredId)) {
+        const fs = state.staff.find(x => x.id === preferredId);
+        if (pool.some(x => x.id === preferredId) && positionCandidateOk(fs, position, date)) return fs;
+      }
+      const candidates = pool.filter(st => !used.has(st.id) && positionCandidateOk(st, position, date));
+      candidates.sort((a,b) => monthPositionCandidateScore(a, position, counts, rows, date, { ignoreRecent: !!preferredId }) - monthPositionCandidateScore(b, position, counts, rows, date, { ignoreRecent: !!preferredId }) || compareStaffOrder(a,b));
+      return candidates[0] || null;
+    };
+    const choosePositionForStaff = (staff, date, templates, preferBloodBank=false) => {
+      const usable = templates.filter(p => positionCandidateOk(staff, p, date));
+      if (!usable.length) return null;
+      usable.sort((a,b) => { const za = a.zone === 'Blood Bank' || a.zone === 'Manual' ? 0 : 1; const zb = b.zone === 'Blood Bank' || b.zone === 'Manual' ? 0 : 1; if (preferBloodBank && za !== zb) return za - zb; return monthPositionCandidateScore(staff, a, counts, rows, date, { preferBloodBank }) - monthPositionCandidateScore(staff, b, counts, rows, date, { preferBloodBank }) || String(a.code).localeCompare(String(b.code), 'th'); });
+      return usable[0];
+    };
+    const addRow = (staff, date, position) => { if (!staff || !position) return; rows.push(rowForStaffPosition(staff, date, position, serialMap)); addCount(staff.id, position.code); };
+    for (let day = 1; day <= last; day++) {
+      const date = `${y}-${pad(m)}-${pad(day)}`;
+      if (isNoPositionDay(date)) continue;
+      const working = dailyWorkingStaff(date);
+      if (!working.length) continue;
+      const used = new Set();
+      const normal = normalPositions182();
+      const outing = outingPositions182();
+      if (hasOuting(date)) {
+        const participantIds = new Set(outingParticipants(date));
+        const outingPool = working.filter(st => participantIds.has(st.id));
+        const roomPool = working.filter(st => !participantIds.has(st.id));
+        outing.forEach(p => { const staff = chooseForPosition(p, date, outingPool, used); if (staff) { used.add(staff.id); addRow(staff, date, p); } });
+        outingPool.filter(st => !used.has(st.id)).forEach(st => { const p = choosePositionForStaff(st, date, outing, false) || outing.find(x => x.code === 'DR-Main') || outing[0]; used.add(st.id); addRow(st, date, p); });
+        const bbTemplates = normal.filter(p => p.zone === 'Blood Bank' || p.zone === 'Manual');
+        roomPool.forEach(st => { const p = choosePositionForStaff(st, date, bbTemplates, true); if (p) addRow(st, date, p); else rows.push(reviewRowForStaff(st, date, 'ไม่พบตำแหน่ง Blood Bank ที่ตรงสิทธิ์/ผู้ปฏิบัติหลัก')); });
+        continue;
+      }
+      const wk = weekKeyOf(date);
+      weeklyFixed[wk] = weeklyFixed[wk] || {};
+      ['BB-Report','DR-Processing'].forEach(code => {
+        const p = normal.find(x => x.code === code);
+        if (!p) return;
+        if (!weeklyFixed[wk][code]) { const chosen = chooseForPosition(p, date, working, used); weeklyFixed[wk][code] = chosen?.id || null; }
+        const staff = chooseForPosition(p, date, working, used, weeklyFixed[wk][code]);
+        if (staff) { used.add(staff.id); addRow(staff, date, p); }
+      });
+      normal.filter(p => !['BB-Report','DR-Processing'].includes(p.code)).forEach(p => { const staff = chooseForPosition(p, date, working, used); if (staff) { used.add(staff.id); addRow(staff, date, p); } });
+      working.filter(st => !used.has(st.id)).forEach(st => { const p = choosePositionForStaff(st, date, normal, false); if (p) addRow(st, date, p); else rows.push(reviewRowForStaff(st, date, 'ไม่พบตำแหน่งที่ตรงสิทธิ์/ผู้ปฏิบัติหลัก')); });
+    }
+    return { monthKey:key, rows };
+  };
+
+  const previousRenderPageV182 = window.renderPage || (typeof renderPage === 'function' ? renderPage : null);
+  window.renderPage = renderPage = function renderPageV182(){
+    if (state.page !== 'positionManagement') return previousRenderPageV182 ? previousRenderPageV182.apply(this, arguments) : undefined;
+    const item = NAV_ITEMS.find(x => x.id === state.page) || { title:'จัดการตำแหน่ง', subtitle:'เพิ่ม/แก้ไข/ปิดใช้งานตำแหน่งรายวัน' };
+    const title = $('pageTitle'); if (title) title.textContent = item.title;
+    const subtitle = $('pageSubtitle'); if (subtitle) subtitle.textContent = item.subtitle;
+    renderNav();
+    const content = $('pageContent'); if (content) content.innerHTML = renderPositionManagementPage182();
+  };
+
+  document.addEventListener('click', async function(e){
+    const nav = e.target?.closest?.('[data-page]');
+    if (nav && ['positionManagement','eligibility','positions','positionMonth','positionMonthView'].includes(nav.getAttribute('data-page'))) {
+      e.preventDefault(); e.stopPropagation(); if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      state.page = nav.getAttribute('data-page');
+      const sidebar = $('sidebar'); if (sidebar) sidebar.classList.remove('open');
+      document.body.classList.remove('sidebar-open');
+      await refreshPositionMasters182({ silent:true });
+      renderPage();
+      return;
+    }
+    const refresh = e.target?.closest?.('[data-refresh-position-masters]');
+    if (refresh) { e.preventDefault(); e.stopPropagation(); await refreshPositionMasters182(); renderPage(); safeToast182('รีเฟรชรายการตำแหน่งแล้ว'); return; }
+    const edit = e.target?.closest?.('[data-edit-position-master]');
+    if (edit) { e.preventDefault(); e.stopPropagation(); state.editingPositionMasterId = edit.getAttribute('data-edit-position-master'); renderPage(); return; }
+    const cancel = e.target?.closest?.('[data-cancel-position-master-edit]');
+    if (cancel) { e.preventDefault(); e.stopPropagation(); state.editingPositionMasterId = null; renderPage(); return; }
+    const del = e.target?.closest?.('[data-delete-position-master]');
+    if (del) { e.preventDefault(); e.stopPropagation(); await softDeletePositionMaster182(del.getAttribute('data-delete-position-master')); return; }
+    const restore = e.target?.closest?.('[data-restore-position-master]');
+    if (restore) { e.preventDefault(); e.stopPropagation(); await restorePositionMaster182(restore.getAttribute('data-restore-position-master')); return; }
+  }, true);
+
+  document.addEventListener('submit', async function(e){
+    if (e.target?.id === 'positionMasterForm') {
+      e.preventDefault(); e.stopPropagation(); if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      await savePositionMaster182(e.target);
+    }
+  }, true);
+
+  console.info(`${VERSION_V182} loaded`);
+})();
