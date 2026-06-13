@@ -858,7 +858,7 @@ body.modal-open { overflow: hidden; }
   .profile-info-list > div { grid-template-columns: 1fr; gap: 3px; }
 }
 
-/* V59 hotfix: simple centered GPS status modal */
+/* V59 hotfix: simple centered status modal */
 .modal-status-icon {
   width: 64px;
   height: 64px;

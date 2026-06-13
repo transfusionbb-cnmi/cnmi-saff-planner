@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V64 - v59 stable + profile/trade/GPS polish */
+/* CNMI Staff Planner V64 - v59 stable + profile/trade polish */
 const CFG = window.CNMI_CONFIG || {};
 window.__CNMI_CLEAN_COMPONENTS_IN_APP__ = true;
 const NAV_ITEMS = [
@@ -2621,7 +2621,7 @@ function renderOtPage() {
       <p class="muted">${myDuty ? 'วันนี้มีชื่อคุณในตารางเวร' : proxyOptions.length ? 'วันนี้คุณเป็นผู้มาทำเวรแทนตามข้อตกลงกันเอง / จ่ายกันเอง' : 'วันนี้ยังไม่พบชื่อคุณในตารางเวร ถ้าลงจริงให้ Admin ตรวจตารางก่อน'}</p>
       ${proxyBox}
       <button class="primary-btn" data-check-in ${(!canCheckIn) ? 'disabled' : ''}>ยืนยันรับ OT / อยู่เวร</button>
-      <p class="hint gps-help compact">ใช้ GPS เพื่อตรวจว่าอยู่ในพื้นที่โรงพยาบาลก่อนยืนยัน</p>
+      <p class="hint gps-help compact">ระบบยกเลิกการตรวจตำแหน่งแล้ว บันทึกได้ทันที</p>
     </div>
     <div class="card ot-card">
       <h3>ส่วนที่ 2 ขอ OT เพิ่ม / เวรปั่นเลือด</h3>
@@ -3543,26 +3543,15 @@ function showGpsHelp(message) {
     <p class="modal-message">${escapeHtml(message || 'ไม่ได้อยู่ในพื้นที่โรงพยาบาล')}</p>`);
 }
 function getGps() {
-  return new Promise(resolve => {
-    if (!navigator.geolocation) return resolve({ ok:false, message:'อุปกรณ์นี้ไม่รองรับ GPS' });
-    navigator.geolocation.getCurrentPosition(
-      p => resolve({ ok:true, lat:p.coords.latitude, lng:p.coords.longitude, accuracy:p.coords.accuracy }),
-      err => resolve({ ok:false, message: gpsErrorMessage(err) }),
-      { enableHighAccuracy:true, timeout:12000, maximumAge:0 }
-    );
-  });
+  // V172: ยกเลิกการใช้ตำแหน่งแล้ว ให้ submit ต่อได้ทันทีโดยไม่เรียก browser permission
+  return Promise.resolve({ ok:true, lat:null, lng:null, accuracy:null, locationBypassed:true });
 }
 function gpsErrorMessage(err) {
-  if (!err) return 'ไม่ได้อยู่ในพื้นที่โรงพยาบาล';
-  if (err.code === 1) return 'ยังไม่ได้อนุญาตให้ใช้ตำแหน่ง กรุณาเปิด Location Permission ให้เว็บนี้ก่อน';
-  if (err.code === 2) return 'ไม่ได้อยู่ในพื้นที่โรงพยาบาล';
-  if (err.code === 3) return 'อ่านตำแหน่งไม่ทันเวลา กรุณาลองใหม่อีกครั้ง';
-  return 'ไม่ได้อยู่ในพื้นที่โรงพยาบาล';
+  return 'ระบบยกเลิกการตรวจตำแหน่งแล้ว';
 }
 function isInsideGeofence(pos) {
-  if (!CFG.GEOFENCE?.enabled) return true;
-  const d = distanceMeters(pos.lat, pos.lng, CFG.GEOFENCE.lat, CFG.GEOFENCE.lng);
-  return d <= (CFG.GEOFENCE.radiusMeters || 500);
+  // V172: bypass geofence ทุกกรณี เพื่อไม่บล็อกการลงชื่ออยู่เวร/ขอ OT
+  return true;
 }
 function distanceMeters(lat1, lon1, lat2, lon2) {
   const R=6371000, toRad=x=>x*Math.PI/180;
@@ -6555,7 +6544,7 @@ function bindGlobalEvents() {
           ${staffMode}
           <button class="primary-btn wide" type="submit">ยืนยันรับ OT / อยู่เวร</button>
         </form>
-        <p class="hint gps-help compact">ใช้ GPS เพื่อตรวจว่าอยู่ในพื้นที่โรงพยาบาลก่อนยืนยัน และรองรับการบันทึกย้อนหลังตามเวลาจริง</p>
+        <p class="hint gps-help compact">ระบบยกเลิกการตรวจตำแหน่งแล้ว บันทึกได้ทันที และรองรับการบันทึกย้อนหลังตามเวลาจริง</p>
       </div>
       <div class="card ot-card">
         <h3>ส่วนที่ 2 ขอ OT เพิ่ม / เวรปั่นเลือด</h3>
@@ -6843,7 +6832,7 @@ function bindGlobalEvents() {
           ${staffMode}
           <button class="primary-btn wide" type="submit">ยืนยันรับ OT / อยู่เวร</button>
         </form>
-        <p class="hint gps-help compact">ใช้ GPS เพื่อตรวจว่าอยู่ในพื้นที่โรงพยาบาลก่อนยืนยัน และรองรับการบันทึกย้อนหลังตามเวลาจริง</p>
+        <p class="hint gps-help compact">ระบบยกเลิกการตรวจตำแหน่งแล้ว บันทึกได้ทันที และรองรับการบันทึกย้อนหลังตามเวลาจริง</p>
       </div>
       <div class="card ot-card">
         <h3>ส่วนที่ 2 ขอ OT เพิ่ม / เวรปั่นเลือด</h3>
@@ -6946,7 +6935,7 @@ function bindGlobalEvents() {
         const mine = (state.otRequests || []).filter(x => String(x.staff_id) === String(currentStaffId()));
         const rows = isAdmin() ? (state.otRequests || []) : mine;
         return `<div class="grid grid-2 ot-page v165-ot-page v166-ot-page">
-          <div class="card ot-card"><h3>ส่วนที่ 1 ยืนยันวันอยู่เวร</h3><form id="attendanceForm" class="form-grid compact-form attendance-form v165-attendance-form"><div class="v165-checkin-fields v170-checkin-fields" data-v170-last-start="${esc166(today)}"><label>วันที่อยู่เวร <input name="duty_date" type="date" value="${esc166(today)}" required></label><label>เวลาเริ่มทำงาน <input name="start_time" type="time" value="${pad(otStartHourForDate(today))}:00" required></label><label>วันที่สิ้นสุด <input name="end_date" type="date" value="${esc166(today)}" required></label><label>เวลาสิ้นสุด <input name="end_time" type="time" required></label></div><button class="primary-btn wide" type="submit">ยืนยันรับ OT / อยู่เวร</button></form><p class="hint gps-help compact">โหมดสำรอง: ระบบตัดส่วนที่ทำให้ render ค้างออกชั่วคราว แต่ยังลงชื่ออยู่เวรได้</p></div>
+          <div class="card ot-card"><h3>ส่วนที่ 1 ยืนยันวันอยู่เวร</h3><form id="attendanceForm" class="form-grid compact-form attendance-form v165-attendance-form"><div class="v165-checkin-fields v170-checkin-fields" data-v170-last-start="${esc166(today)}"><label>วันที่อยู่เวร <input name="duty_date" type="date" value="${esc166(today)}" required></label><label>เวลาเริ่มทำงาน <input name="start_time" type="time" value="${pad(otStartHourForDate(today))}:00" required></label><label>วันที่สิ้นสุด <input name="end_date" type="date" value="${esc166(today)}" required></label><label>เวลาสิ้นสุด <input name="end_time" type="time" required></label></div><button class="primary-btn wide" type="submit">ยืนยันรับ OT / อยู่เวร</button></form><p class="hint gps-help compact">โหมดสำรอง: ยังลงชื่ออยู่เวรได้โดยไม่ต้องเปิดตำแหน่ง</p></div>
           <div class="card ot-card"><h3>ส่วนที่ 2 ขอ OT เพิ่ม / เวรปั่นเลือด</h3><form id="otForm" class="form-grid v165-ot-extra-form"><label>วันที่ <input name="work_date" type="date" value="${esc166(today)}" required></label><label>ตั้งแต่เวลา <input name="start_time" type="time" value="${pad(otStartHourForDate(today))}:00" required></label><label>ถึงเวลา <input name="end_time" type="time" required></label><label>เหตุผล <select name="reason">${OT_REASONS.map(r => `<option>${esc166(r)}</option>`).join('')}</select></label><label class="wide">รายละเอียด <input name="note"></label><button class="primary-btn wide" type="submit">ยืนยันขอ OT เพิ่ม</button></form></div>
           <div class="card wide-card" style="grid-column:1/-1;"><div class="section-title"><h3>${isAdmin() ? 'ส่วนที่ 3 อนุมัติ OT' : 'รายการ OT ของฉัน'}</h3>${isAdmin() ? '<button class="ghost-btn" data-export-ot-excel>Export Excel สรุปเดือนนี้</button>' : ''}</div>${renderOtTable(rows)}</div>
           <div class="card" style="grid-column:1/-1;"><h3>ส่วนที่ 4 สรุป OT รายเดือน</h3><p class="hint">สรุปเฉพาะรายการที่อนุมัติแล้ว</p>${renderOtSummary()}</div>
@@ -7744,4 +7733,34 @@ function bindGlobalEvents() {
   });
 
   window.v171OtDefaultHelpers = { datePlusDaysV171, defaultOtExtraStartTimeV171, syncAttendanceDefaultsV171, syncOtExtraStartTimeV171 };
+})();
+
+
+/* =========================
+   V172 Remove Location Check for Attendance/OT
+   - No browser location call.
+   - Attendance and OT submit continue without permission prompt.
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V172 = 'V172_NO_LOCATION_PERMISSION';
+  function noLocationPayloadV172(){
+    return { ok:true, lat:null, lng:null, accuracy:null, locationBypassed:true };
+  }
+  window.getGps = getGps = function getGpsBypassedV172(){
+    return Promise.resolve(noLocationPayloadV172());
+  };
+  window.isInsideGeofence = isInsideGeofence = function isInsideGeofenceBypassedV172(){
+    return true;
+  };
+  window.gpsErrorMessage = gpsErrorMessage = function gpsErrorMessageBypassedV172(){
+    return 'ระบบยกเลิกการตรวจตำแหน่งแล้ว';
+  };
+  document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('.gps-help').forEach(el => {
+      const text = String(el.textContent || '');
+      if (/GPS|Location|ตำแหน่ง/.test(text)) el.textContent = 'ระบบยกเลิกการตรวจตำแหน่งแล้ว สามารถบันทึกได้ทันที';
+    });
+  });
+  console.info(`${VERSION_V172} loaded`);
 })();
