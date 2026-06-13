@@ -12,8 +12,11 @@
     const params = new URLSearchParams((String(location.search || '') + '&' + String(location.hash || '').replace(/^#/, '')).replace(/^&/, ''));
     const type = params.get('type') || '';
     const mode = params.get('mode') || '';
-    const hasToken = /(access_token|refresh_token|token_hash|code)=/i.test(text);
-    const isRecovery = hasToken || /^(recovery|password_recovery|invite|signup)$/i.test(type) || /^(recovery|set-password|update-password)$/i.test(mode);
+    const hasToken = /(access_token|refresh_token|token_hash|(^|[?#&])code=)/i.test(text);
+    const hasAuthType = /^(recovery|password_recovery|invite|signup)$/i.test(type);
+    // V196: A bare ?mode=recovery is only a stale URL marker, not an active recovery link.
+    // Keep mode support only when a token/code or explicit auth type is also present.
+    const isRecovery = hasToken || hasAuthType || (/^(recovery|set-password|update-password)$/i.test(mode) && (hasToken || hasAuthType));
     const hasError = /(error=|error_code=|error_description=)/i.test(text);
     return { text, type, mode, hasToken, isRecovery, hasError };
   }
@@ -48,7 +51,10 @@
     return location.origin + '/';
   }
   function cleanToRecoveryMode() {
-    try { history.replaceState({}, document.title, appBaseUrl() + '?mode=recovery'); } catch (_) {}
+    // V196: avoid writing a token-less ?mode=recovery back into the URL.
+    // Older behavior left a stale recovery marker that could revive password setup mode
+    // during unrelated saves. Keep the user at app root after Supabase has consumed the link.
+    try { history.replaceState({}, document.title, appBaseUrl()); } catch (_) {}
   }
   function showPasswordOverlay() {
     const authView = document.getElementById('authView');

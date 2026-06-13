@@ -283,9 +283,9 @@ function getAuthRedirectInfo(raw = INITIAL_AUTH_URL) {
   const type = get('type');
   const mode = get('mode');
   const hasToken = /(^|[?#&])(access_token|refresh_token|code|token_hash)=/i.test(text);
-  const isRecovery = /^(recovery|password_recovery|invite)$/i.test(type)
-    || /^(recovery|set-password|update-password)$/i.test(mode)
-    || hasToken;
+  const hasAuthType = /^(recovery|password_recovery|invite)$/i.test(type);
+  // V196: A bare ?mode=recovery is stale metadata after an auth flow, not a real link.
+  const isRecovery = hasToken || hasAuthType || (/^(recovery|set-password|update-password)$/i.test(mode) && (hasToken || hasAuthType));
   const error = get('error') || get('error_code') || '';
   const errorDescription = get('error_description') || '';
   return { text, type, mode, hasToken, isRecovery, error, errorDescription, hasError: Boolean(error || errorDescription) };
@@ -309,7 +309,9 @@ function isPasswordSetupForced() {
 
     // V187: กัน flag ตั้งรหัสผ่านค้างจากรอบก่อน แล้วทำให้ Admin ถูกดึงไปหน้า reset password ตอนทำงานปกติ
     const currentUrl = `${window.location.search || ''}${window.location.hash || ''}`;
-    const urlHasRecoveryIntent = /type=(recovery|password_recovery|invite)|mode=(recovery|set-password|update-password)|access_token=|refresh_token=|token_hash=|(^|[?#&])code=/i.test(currentUrl);
+    const urlHasRealToken = /access_token=|refresh_token=|token_hash=|(^|[?#&])code=/i.test(currentUrl);
+    const urlHasAuthType = /type=(recovery|password_recovery|invite)/i.test(currentUrl);
+    const urlHasRecoveryIntent = urlHasRealToken || urlHasAuthType;
     let savedAt = 0;
     try { savedAt = Number(JSON.parse(raw)?.at || 0); } catch (_) { savedAt = raw === '1' ? Date.now() : 0; }
     const isExpired = savedAt && (Date.now() - savedAt > 60 * 60 * 1000);
@@ -611,12 +613,10 @@ async function requestPasswordSetupLink(email) {
 }
 function isPasswordRecoveryUrl() {
   const raw = `${window.location.search || ''}${window.location.hash || ''}`;
-  return RECOVERY_INTENT
-    || raw.includes('type=recovery')
-    || raw.includes('type=password_recovery')
-    || raw.includes('type=invite')
-    || raw.includes('mode=recovery')
-    || raw.includes('mode=set-password');
+  const hasRealToken = /access_token=|refresh_token=|token_hash=|(^|[?#&])code=/i.test(raw);
+  const hasAuthType = /type=(recovery|password_recovery|invite)/i.test(raw);
+  // V196: ignore bare ?mode=recovery / ?mode=set-password without token or type.
+  return RECOVERY_INTENT || hasRealToken || hasAuthType;
 }
 
 async function init() {
@@ -6047,9 +6047,11 @@ function bindGlobalEvents() {
   function v162IsRecoveryMode(){
     try {
       const raw = String(location.search || '') + String(location.hash || '');
+      const hasRealToken = /access_token=|refresh_token=|token_hash=|(^|[?#&])code=/i.test(raw);
+      const hasAuthType = /type=(recovery|password_recovery|invite)/i.test(raw);
       return !!(typeof RECOVERY_INTENT !== 'undefined' && RECOVERY_INTENT) ||
         !!(typeof isPasswordSetupForced === 'function' && isPasswordSetupForced()) ||
-        /type=(recovery|password_recovery|invite)|mode=(recovery|set-password)|access_token=|refresh_token=|token_hash=/i.test(raw);
+        hasRealToken || hasAuthType;
     } catch (_) { return false; }
   }
   function v162ApplySingleLoginUi(){
@@ -9741,23 +9743,33 @@ function bindGlobalEvents() {
     try {
       const rawUrl = `${window.location.search || ''}${window.location.hash || ''}`;
       const appVisible = !$('appView')?.classList?.contains('hidden');
-      // V195: mode=recovery without a real Supabase token is a stale URL marker, not an active password-reset link.
-      // Keeping it while the normal app is visible can make an Admin jump back to recovery mode after saving a position.
-      const hasRealAuthLink = /type=(password_recovery|invite)|access_token=|refresh_token=|token_hash=|(^|[?#&])code=/i.test(rawUrl);
-      const hasStaleRecoveryMode = /type=recovery|mode=(recovery|set-password|update-password)/i.test(rawUrl) && !hasRealAuthLink;
-      if (appVisible && hasStaleRecoveryMode) {
-        if (typeof clearPasswordSetupForced === 'function') clearPasswordSetupForced();
-        if (typeof RECOVERY_INTENT !== 'undefined') RECOVERY_INTENT = false;
-        if (typeof AUTH_LINK_PROCESSING !== 'undefined') AUTH_LINK_PROCESSING = false;
-        try {
-          if (window.history?.replaceState) window.history.replaceState({}, document.title, (typeof appBaseUrl === 'function' ? appBaseUrl() : window.location.pathname));
-        } catch (_) {}
-        return;
-      }
-      if (!hasRealAuthLink && appVisible) {
-        if (typeof clearPasswordSetupForced === 'function') clearPasswordSetupForced();
-        if (typeof RECOVERY_INTENT !== 'undefined') RECOVERY_INTENT = false;
-        if (typeof AUTH_LINK_PROCESSING !== 'undefined') AUTH_LINK_PROCESSING = false;
+      const hasRealAuthLink = /type=(password_recovery|invite|signup)|access_token=|refresh_token=|token_hash=|(^|[?#&])code=/i.test(rawUrl);
+      const hasRecoveryMarker = /type=recovery|mode=(recovery|set-password|update-password)/i.test(rawUrl);
+
+      const clearAllRecoveryFlags = () => {
+        try { if (typeof clearPasswordSetupForced === 'function') clearPasswordSetupForced(); } catch (_) {}
+        try { RECOVERY_INTENT = false; } catch (_) {}
+        try { AUTH_LINK_PROCESSING = false; } catch (_) {}
+        try { window.RECOVERY_INTENT = false; } catch (_) {}
+        try { window.AUTH_LINK_PROCESSING = false; } catch (_) {}
+        try { window.CNMI_AUTH_LINK_INTENT = false; } catch (_) {}
+        try { window.CNMI_REQUIRE_PASSWORD_UPDATE = false; } catch (_) {}
+        ['cnmi.forcePasswordSetup.v134','cnmi.forcePasswordSetup.v135','cnmi.forcePasswordSetup.v136','cnmi.forcePasswordSetup.v138'].forEach(k => {
+          try { sessionStorage.removeItem(k); } catch (_) {}
+          try { localStorage.removeItem(k); } catch (_) {}
+        });
+        try { document.documentElement.classList.remove('v136-auth-link'); } catch (_) {}
+      };
+
+      // V196: clear every historical forced-recovery flag, not only the V134 flag.
+      // Older v136/v138 patch files also set CNMI_* globals and sessionStorage keys.
+      if (appVisible && (!hasRealAuthLink || hasRecoveryMarker)) {
+        clearAllRecoveryFlags();
+        if (hasRecoveryMarker && !hasRealAuthLink) {
+          try {
+            if (window.history?.replaceState) window.history.replaceState({}, document.title, (typeof appBaseUrl === 'function' ? appBaseUrl() : window.location.pathname));
+          } catch (_) {}
+        }
       }
     } catch (err) { console.warn(`${VERSION_V182}: clear stale recovery guard skipped`, context, err); }
   }
@@ -9950,7 +9962,7 @@ function bindGlobalEvents() {
 
       <details class="card position-collapse-card position-master-form-card" ${formOpen ? 'open' : ''}>
         <summary><span><b>${formTitle}</b><small>${editing ? 'แก้ข้อมูลตำแหน่งเดิม โดยคงลำดับเดิมไว้' : 'ฟอร์มจะเปิดเมื่อกดเพิ่มตำแหน่งใหม่'}</small></span>${editing ? '<button class="ghost-btn" data-cancel-position-master-edit type="button">ยกเลิกแก้ไข</button>' : ''}</summary>
-        <form id="positionMasterForm" class="form-grid compact-form">
+        <form id="positionMasterForm" class="form-grid compact-form" action="javascript:void(0)" autocomplete="off">
           <input type="hidden" name="id" value="${esc182(editing?.id || '')}">
           <label>รหัสตำแหน่ง / Code <input name="code" value="${esc182(editing?.code || '')}" placeholder="เช่น BB-Report" required></label>
           <label>หมวดหมู่ <select name="zone">${optionZones}</select></label>

@@ -2,7 +2,13 @@
 (function () {
   'use strict';
   var raw = String(location.href || '') + ' ' + String(location.search || '') + ' ' + String(location.hash || '');
-  var isAuthLink = /(access_token|refresh_token|token_hash|code)=/i.test(raw) || /type=(recovery|password_recovery|invite|signup)/i.test(raw) || /mode=(recovery|set-password|update-password)/i.test(raw);
+  // V196: Do not treat a bare ?mode=recovery as a real auth/recovery link.
+  // That stale marker can remain after password setup and later pull normal admin actions
+  // (including Position Management save) back into recovery mode.
+  var hasRealAuthToken = /(access_token|refresh_token|token_hash|(^|[?#&])code=)/i.test(raw);
+  var hasAuthType = /type=(recovery|password_recovery|invite|signup)/i.test(raw);
+  var hasRecoveryModeWithToken = /mode=(recovery|set-password|update-password)/i.test(raw) && (hasRealAuthToken || hasAuthType);
+  var isAuthLink = hasRealAuthToken || hasAuthType || hasRecoveryModeWithToken;
   var isError = /(error=|error_code=|error_description=)/i.test(raw);
   if (isAuthLink && !isError) {
     window.CNMI_AUTH_LINK_INTENT = true;
