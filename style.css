@@ -2090,3 +2090,45 @@ textarea {
     max-width: 132px !important;
   }
 }
+
+/* V175: force freeze first column in Position Overview + QC Rotation modals */
+.v169-overview-table {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  position: relative !important;
+  background: #fff !important;
+}
+.v169-overview-table table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  width: max-content !important;
+  min-width: 100% !important;
+}
+.v169-overview-table table > thead > tr > th:first-child,
+.v169-overview-table table > tbody > tr > th:first-child,
+.v169-overview-table table > tbody > tr > td:first-child,
+.v169-overview-table .sticky-name-col {
+  position: sticky !important;
+  left: 0 !important;
+  background: #fff !important;
+  z-index: 10 !important;
+  box-shadow: 8px 0 18px rgba(15, 35, 52, .10) !important;
+}
+.v169-overview-table table > thead > tr > th:first-child,
+.v169-overview-table thead .sticky-name-col {
+  top: 0 !important;
+  background: #f6f9fc !important;
+  z-index: 11 !important;
+}
+.v169-overview-table table > tbody > tr > th:first-child,
+.v169-overview-table table > tbody > tr > td:first-child,
+.v169-overview-table tbody .sticky-name-col {
+  background: #fff !important;
+  z-index: 10 !important;
+}
+.v169-overview-table .sticky-name-col .staff-color-pill,
+.v169-overview-table table > tbody > tr > th:first-child .staff-color-pill,
+.v169-overview-table table > tbody > tr > td:first-child .staff-color-pill {
+  position: relative;
+  z-index: 12;
+}
