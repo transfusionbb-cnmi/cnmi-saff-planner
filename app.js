@@ -6635,17 +6635,19 @@ function bindGlobalEvents() {
       device: deviceInfo
     };
 
-    const noteParts = [
-      isAdmin() ? `Admin บันทึกแทนโดย ${staffNick(currentStaffId())}` : 'สร้างจากส่วนที่ 1 ยืนยันอยู่เวร',
-      `เวลาเริ่ม ${startTime}`,
-      `วันที่สิ้นสุด ${endDate}`,
-      `เวลาสิ้นสุด ${endTime}`,
-      `ชั่วโมงคำนวณ ${calculatedHours} ชั่วโมง`,
-      chosenDuty ? `ประเภทเวร ${DUTY_LABEL[chosenDuty] || chosenDuty}` : '',
-      manualHours !== null ? `จำนวนเวลา ${manualHours} ชั่วโมง` : '',
-      proxyText,
-      adminNote
-    ].filter(Boolean);
+    // V176: ข้อความในคอลัมน์ “เหตุผล” ต้องสั้น ไม่ซ้ำกับคอลัมน์ช่วงเวลาทำงาน/ชั่วโมง
+    // เก็บเฉพาะแหล่งที่มา + ประเภทเวร + หมายเหตุที่ผู้ใช้กรอกจริง
+    const chosenDutyLabel = chosenDuty ? String(chosenDuty) : '';
+    const noteParts = isAdmin()
+      ? [
+          `บันทึกแทนโดย Admin (${staffNick(currentStaffId())})`,
+          chosenDutyLabel ? `ประเภทเวร: ${chosenDutyLabel}` : '',
+          adminNote ? `หมายเหตุ: ${adminNote}` : ''
+        ]
+      : [
+          'ยืนยันอยู่เวรตามตาราง (ส่วนที่ 1)',
+          chosenDutyLabel ? `ประเภทเวร: ${chosenDutyLabel}` : ''
+        ];
 
     const otBase = {
       staff_id: staffId,
@@ -6663,14 +6665,16 @@ function bindGlobalEvents() {
     };
 
     const isSchemaColumnError = (err) => /end_date|start_time|column|schema|cache/i.test(err?.message || '');
-    const withFallbackNote = (payload, extra) => ({ ...payload, note: [payload.note, extra].filter(Boolean).join(' | ') });
     async function writeOtRow(payload, existingId){
       const attempts = [];
       attempts.push({ ...payload });
-      const noEndDate = withFallbackNote({ ...payload }, `วันที่สิ้นสุด ${payload.end_date}`);
+
+      // V176: fallback สำหรับฐานข้อมูลเก่าต้องไม่เอา start/end date/time ไปซ่อนไว้ใน note อีก
+      const noEndDate = { ...payload };
       delete noEndDate.end_date;
       attempts.push(noEndDate);
-      const noStartOrEndDate = withFallbackNote({ ...payload }, `เวลาเริ่ม ${payload.start_time} | วันที่สิ้นสุด ${payload.end_date}`);
+
+      const noStartOrEndDate = { ...payload };
       delete noStartOrEndDate.start_time;
       delete noStartOrEndDate.end_date;
       attempts.push(noStartOrEndDate);
@@ -8061,4 +8065,162 @@ function bindGlobalEvents() {
   }
 
   console.info(`${VERSION_V174} loaded`);
+})();
+
+
+/* =========================
+   V176 Compact OT Reason Text
+   - Stop duplicating time/date/hour details in OT reason display.
+   - Sanitize old rows that already contain legacy note text.
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V176 = 'V176_COMPACT_OT_REASON_TEXT';
+
+  function esc176(v){
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function norm176(v){ return String(v == null ? '' : v).trim(); }
+  function isAttendanceOt176(row){
+    const reason = norm176(row?.reason);
+    const note = norm176(row?.note);
+    return /ยืนยันอยู่เวร/.test(reason) || /ยืนยันอยู่เวร|บันทึกแทนโดย\s*Admin|Admin\s*บันทึกแทนโดย|สร้างจากส่วนที่\s*1/i.test(note);
+  }
+  function noteTokens176(note){
+    return norm176(note).split('|').map(x => x.trim()).filter(Boolean);
+  }
+  function isLegacyTimeToken176(token){
+    return /^(วันที่เริ่ม|วันที่อยู่เวร|วันที่สิ้นสุด|เวลาเริ่ม|เวลาสิ้นสุด|ชั่วโมงคำนวณ|จำนวนเวลา)\b/i.test(norm176(token));
+  }
+  function cleanDutyCode176(value){
+    let code = norm176(value).replace(/^ประเภทเวร\s*:*/i, '').trim();
+    code = code.replace(/^[:：]\s*/, '').trim();
+    return code;
+  }
+  function dutyFromNote176(note){
+    for (const token of noteTokens176(note)) {
+      const m = token.match(/^ประเภทเวร\s*:?[\s]*(.+)$/i);
+      if (m && norm176(m[1])) return cleanDutyCode176(m[1]);
+    }
+    const m = norm176(note).match(/ประเภทเวร\s*:?[\s]*([^|]+)/i);
+    return m ? cleanDutyCode176(m[1]) : '';
+  }
+  function dutyCodeForCalc176(note){
+    const raw = dutyFromNote176(note);
+    if (!raw) return '';
+    if (raw === 'ช9') return 'ช9-MT';
+    if (raw === 'ช4') return 'ช4A';
+    return raw;
+  }
+  function adminRecorder176(note){
+    for (const token of noteTokens176(note)) {
+      let m = token.match(/^บันทึกแทนโดย\s*Admin\s*\(([^)]+)\)/i);
+      if (m && norm176(m[1])) return norm176(m[1]);
+      m = token.match(/^Admin\s*บันทึกแทนโดย\s*(.+)$/i);
+      if (m && norm176(m[1])) return norm176(m[1]);
+    }
+    return '';
+  }
+  function adminMemo176(note){
+    const out = [];
+    for (const token of noteTokens176(note)) {
+      const t = norm176(token);
+      if (!t || isLegacyTimeToken176(t)) continue;
+      if (/^ประเภทเวร\b/i.test(t)) continue;
+      if (/^บันทึกแทนโดย\s*Admin/i.test(t)) continue;
+      if (/^Admin\s*บันทึกแทนโดย/i.test(t)) continue;
+      if (/^ยืนยันอยู่เวรตามตาราง/i.test(t)) continue;
+      if (/^สร้างจากส่วนที่\s*1/i.test(t)) continue;
+      const m = t.match(/^หมายเหตุ\s*:\s*(.+)$/i);
+      out.push(m ? norm176(m[1]) : t);
+    }
+    return out.join(' | ');
+  }
+  function compactOtReasonText176(row){
+    if (!isAttendanceOt176(row)) {
+      return { main: norm176(row?.reason) || '-', detail: norm176(row?.note) };
+    }
+    const note = norm176(row?.note);
+    const duty = dutyFromNote176(note);
+    const reason = norm176(row?.reason);
+    if (/Admin/i.test(reason) || /Admin\s*บันทึกแทนโดย|บันทึกแทนโดย\s*Admin/i.test(note)) {
+      const recorder = adminRecorder176(note);
+      const memo = adminMemo176(note);
+      const parts = [
+        recorder ? `บันทึกแทนโดย Admin (${recorder})` : 'บันทึกแทนโดย Admin',
+        duty ? `ประเภทเวร: ${duty}` : '',
+        memo ? `หมายเหตุ: ${memo}` : ''
+      ].filter(Boolean);
+      return { main: parts.join(' | '), detail: '' };
+    }
+    const parts = [
+      'ยืนยันอยู่เวรตามตาราง (ส่วนที่ 1)',
+      duty ? `ประเภทเวร: ${duty}` : ''
+    ].filter(Boolean);
+    return { main: parts.join(' | '), detail: '' };
+  }
+  function otEndDate176(row){
+    if (typeof normalizeDateKey !== 'function') return norm176(row?.end_date || row?.work_date);
+    const fromColumn = normalizeDateKey(row?.end_date);
+    if (fromColumn) return fromColumn;
+    const m = norm176(row?.note).match(/วันที่สิ้นสุด\s*(\d{4}-\d{2}-\d{2})/);
+    return m ? normalizeDateKey(m[1]) : normalizeDateKey(row?.work_date);
+  }
+  function noteStartTime176(note){
+    const m = norm176(note).match(/เวลาเริ่ม\s*([0-2]?\d:[0-5]\d)/);
+    return m ? m[1] : '';
+  }
+  function otTimeText176(row){
+    const startDate = normalizeDateKey(row?.work_date);
+    const endDate = otEndDate176(row) || startDate;
+    const startTime = norm176(row?.start_time || noteStartTime176(row?.note));
+    const endTime = norm176(row?.end_time);
+    const startText = startTime ? `${formatThaiDate(startDate)} ${esc176(startTime)}` : formatThaiDate(startDate);
+    const endText = endTime ? `${formatThaiDate(endDate)} ${esc176(endTime)}` : formatThaiDate(endDate);
+    return `${startText}<br><span class="muted">ถึง ${endText}</span>`;
+  }
+  function reasonHtml176(row){
+    const text = compactOtReasonText176(row);
+    return `${esc176(text.main || '-')}${text.detail ? `<br><span class="muted">${esc176(text.detail)}</span>` : ''}`;
+  }
+
+  const previousCalcOtHoursV176 = window.calcOtHours || (typeof calcOtHours === 'function' ? calcOtHours : null);
+  window.calcOtHours = calcOtHours = function calcOtHoursV176(row){
+    try {
+      const workDate = normalizeDateKey(row?.work_date);
+      if (workDate && isAttendanceOt176(row)) {
+        const dutyCode = dutyCodeForCalc176(row?.note);
+        if (dutyCode && dutyCode !== 'manual' && typeof dutyHoursForCode === 'function') {
+          const h = Number(dutyHoursForCode(workDate, dutyCode));
+          if (Number.isFinite(h) && h > 0) return h;
+        }
+      }
+    } catch (err) { console.warn(`${VERSION_V176} calc compact duty fallback`, err); }
+    return previousCalcOtHoursV176 ? previousCalcOtHoursV176(row) : 0;
+  };
+
+  const previousRenderOtTableV176 = window.renderOtTable || (typeof renderOtTable === 'function' ? renderOtTable : null);
+  window.renderOtTable = renderOtTable = function renderOtTableV176(rows){
+    try {
+      const visible = (isAdmin()
+        ? filteredOtRows(rows)
+        : rows.slice().sort((a,b) => normalizeDateKey(b.work_date).localeCompare(normalizeDateKey(a.work_date)) || String(b.created_at || '').localeCompare(String(a.created_at || ''))));
+      const filters = isAdmin() ? renderOtFilters() : '';
+      if (!visible.length) return filters + empty(isAdmin() ? 'ยังไม่มีรายการ OT ตามตัวกรองนี้' : 'ยังไม่มีรายการ OT');
+      const actionButtons = r => isAdmin() ? `<div class="actions">${OT_STATUSES.map(s => `<button class="tiny-btn" data-ot-status="${r.id}|${s}">${s}</button>`).join('')}</div>` : '-';
+      const statusBadgeLocal = r => badge(r.status, r.status==='อนุมัติ'?'green':r.status==='ไม่อนุมัติ'?'red':r.status==='ส่งกลับแก้ไข'?'orange':'black');
+      const table = `<div class="table-wrap ot-desktop-table"><table><thead><tr><th>ชื่อ</th><th>ช่วงเวลาทำงาน</th><th>เหตุผล</th><th>ชั่วโมง</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
+        ${visible.map(r => `<tr><td>${staffPill(r.staff_id)}</td><td>${otTimeText176(r)}</td><td>${reasonHtml176(r)}</td><td>${calcOtHours(r).toFixed(1)}</td><td>${statusBadgeLocal(r)}</td><td>${actionButtons(r)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+      const cards = `<div class="mobile-cards ot-mobile-cards">${visible.map(r => `<div class="mobile-card"><div class="mobile-day-head">${staffPill(r.staff_id)}${statusBadgeLocal(r)}</div><div><b>ช่วงเวลาทำงาน</b><br>${otTimeText176(r)}</div><div><b>เหตุผล:</b> ${reasonHtml176(r)}</div><div><b>ชั่วโมง:</b> ${calcOtHours(r).toFixed(1)}</div>${isAdmin() ? `<div class="actions">${OT_STATUSES.map(s => `<button class="tiny-btn" data-ot-status="${r.id}|${s}">${s}</button>`).join('')}</div>` : ''}</div>`).join('')}</div>`;
+      return filters + table + cards;
+    } catch (err) {
+      console.warn(`${VERSION_V176} table fallback`, err);
+      return previousRenderOtTableV176 ? previousRenderOtTableV176(rows) : empty('แสดงตาราง OT ไม่สำเร็จ');
+    }
+  };
+
+  window.v176OtReasonHelpers = { compactOtReasonText176, dutyFromNote176, isAttendanceOt176 };
+  console.info(`${VERSION_V176} loaded`);
 })();
