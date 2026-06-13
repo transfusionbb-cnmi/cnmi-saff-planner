@@ -8072,6 +8072,7 @@ function bindGlobalEvents() {
    V176 Compact OT Reason Text
    - Stop duplicating time/date/hour details in OT reason display.
    - Sanitize old rows that already contain legacy note text.
+   - V177: Staff can delete own rejected OT rows.
    ========================= */
 (function(){
   'use strict';
@@ -8185,6 +8186,52 @@ function bindGlobalEvents() {
     return `${esc176(text.main || '-')}${text.detail ? `<br><span class="muted">${esc176(text.detail)}</span>` : ''}`;
   }
 
+  function isRejectedOt176(row){
+    return norm176(row?.status) === 'ไม่อนุมัติ';
+  }
+  function canDeleteRejectedOt176(row){
+    return !isAdmin() && isRejectedOt176(row) && String(row?.staff_id || '') === String(currentStaffId() || '');
+  }
+  function deleteRejectedOtButton176(row){
+    return `<button class="tiny-btn danger" type="button" data-delete-rejected-ot="${esc176(row?.id)}" title="ลบรายการ OT ที่ไม่อนุมัติ">ลบ</button>`;
+  }
+  function otActionButtons176(row){
+    if (isAdmin()) {
+      return `<div class="actions">${OT_STATUSES.map(s => `<button class="tiny-btn" data-ot-status="${row.id}|${s}">${s}</button>`).join('')}</div>`;
+    }
+    return canDeleteRejectedOt176(row) ? `<div class="actions">${deleteRejectedOtButton176(row)}</div>` : '-';
+  }
+  async function deleteRejectedOt176(id){
+    const row = (state.otRequests || []).find(r => String(r.id) === String(id));
+    if (!row) return showToast('ไม่พบรายการ OT นี้ กรุณารีเฟรชหน้าอีกครั้ง', { tone:'error' });
+    if (!canDeleteRejectedOt176(row)) return showToast('ลบได้เฉพาะรายการ OT ของตัวเองที่มีสถานะ “ไม่อนุมัติ” เท่านั้น', { tone:'error' });
+    const ok = typeof confirmDialog === 'function'
+      ? await confirmDialog('คุณต้องการลบรายการที่ไม่อนุมัตินี้ใช่หรือไม่?', 'ยืนยันลบรายการ OT')
+      : window.confirm('คุณต้องการลบรายการที่ไม่อนุมัตินี้ใช่หรือไม่?');
+    if (!ok) return;
+    const { data, error } = await sb.from('ot_requests')
+      .delete()
+      .eq('id', id)
+      .eq('staff_id', currentStaffId())
+      .eq('status', 'ไม่อนุมัติ')
+      .select('id');
+    if (error) return showToast(`ลบรายการ OT ไม่สำเร็จ: ${error.message}`, { tone:'error' });
+    if (!data || !data.length) return showToast('ไม่พบรายการ OT ที่ลบได้ หรือสิทธิ์ฐานข้อมูลยังไม่อนุญาตให้ลบ', { tone:'error' });
+    state.otRequests = (state.otRequests || []).filter(r => String(r.id) !== String(id));
+    await loadAllData();
+    renderPage();
+    showToast('ลบรายการ OT ที่ไม่อนุมัติแล้ว');
+  }
+
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest ? e.target.closest('[data-delete-rejected-ot]') : null;
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    deleteRejectedOt176(btn.dataset.deleteRejectedOt);
+  }, true);
+
   const previousCalcOtHoursV176 = window.calcOtHours || (typeof calcOtHours === 'function' ? calcOtHours : null);
   window.calcOtHours = calcOtHours = function calcOtHoursV176(row){
     try {
@@ -8208,12 +8255,12 @@ function bindGlobalEvents() {
         : rows.slice().sort((a,b) => normalizeDateKey(b.work_date).localeCompare(normalizeDateKey(a.work_date)) || String(b.created_at || '').localeCompare(String(a.created_at || ''))));
       const filters = isAdmin() ? renderOtFilters() : '';
       if (!visible.length) return filters + empty(isAdmin() ? 'ยังไม่มีรายการ OT ตามตัวกรองนี้' : 'ยังไม่มีรายการ OT');
-      const actionButtons = r => isAdmin() ? `<div class="actions">${OT_STATUSES.map(s => `<button class="tiny-btn" data-ot-status="${r.id}|${s}">${s}</button>`).join('')}</div>` : '-';
+      const actionButtons = r => otActionButtons176(r);
       const statusBadgeLocal = r => badge(r.status, r.status==='อนุมัติ'?'green':r.status==='ไม่อนุมัติ'?'red':r.status==='ส่งกลับแก้ไข'?'orange':'black');
       const table = `<div class="table-wrap ot-desktop-table"><table><thead><tr><th>ชื่อ</th><th>ช่วงเวลาทำงาน</th><th>เหตุผล</th><th>ชั่วโมง</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
         ${visible.map(r => `<tr><td>${staffPill(r.staff_id)}</td><td>${otTimeText176(r)}</td><td>${reasonHtml176(r)}</td><td>${calcOtHours(r).toFixed(1)}</td><td>${statusBadgeLocal(r)}</td><td>${actionButtons(r)}</td></tr>`).join('')}
       </tbody></table></div>`;
-      const cards = `<div class="mobile-cards ot-mobile-cards">${visible.map(r => `<div class="mobile-card"><div class="mobile-day-head">${staffPill(r.staff_id)}${statusBadgeLocal(r)}</div><div><b>ช่วงเวลาทำงาน</b><br>${otTimeText176(r)}</div><div><b>เหตุผล:</b> ${reasonHtml176(r)}</div><div><b>ชั่วโมง:</b> ${calcOtHours(r).toFixed(1)}</div>${isAdmin() ? `<div class="actions">${OT_STATUSES.map(s => `<button class="tiny-btn" data-ot-status="${r.id}|${s}">${s}</button>`).join('')}</div>` : ''}</div>`).join('')}</div>`;
+      const cards = `<div class="mobile-cards ot-mobile-cards">${visible.map(r => `<div class="mobile-card"><div class="mobile-day-head">${staffPill(r.staff_id)}${statusBadgeLocal(r)}</div><div><b>ช่วงเวลาทำงาน</b><br>${otTimeText176(r)}</div><div><b>เหตุผล:</b> ${reasonHtml176(r)}</div><div><b>ชั่วโมง:</b> ${calcOtHours(r).toFixed(1)}</div>${otActionButtons176(r) !== '-' ? otActionButtons176(r) : ''}</div>`).join('')}</div>`;
       return filters + table + cards;
     } catch (err) {
       console.warn(`${VERSION_V176} table fallback`, err);
