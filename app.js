@@ -7211,3 +7211,279 @@ function bindGlobalEvents() {
   }
 })();
 
+
+/* =========================
+   V169 Monthly Position Overview + QC Rotation Tracker
+   - Adds overview buttons to Admin monthly position toolbar.
+   - Shows zone summary, position summary with sticky staff column, and weekly QC rotation tracking.
+   ========================= */
+(function(){
+  'use strict';
+
+  const ZONE_COLUMNS_V169 = ['Manual', 'Blood Bank', 'Donor Room', 'ออกหน่วย'];
+  const QC_POSITION_CODES_V169 = ['BB-Report', 'DR-Processing'];
+
+  function escV169(v){
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function normDateV169(v){
+    try { return normalizeDateKey(v); } catch (_) { return String(v || '').slice(0, 10); }
+  }
+  function codeV169(row){
+    const raw = row?.position_code || row?.code || '';
+    try { return positionBaseCode(raw); } catch (_) { return String(raw || '').replace(/\s+#\d+$/, '').trim(); }
+  }
+  function staffIdV169(v){ return String(v == null ? '' : v); }
+  function monthDatesV169(key){
+    const { y, m } = getMonthRange(key);
+    const last = new Date(y, m, 0).getDate();
+    return Array.from({ length:last }, (_, i) => `${y}-${pad(m)}-${pad(i + 1)}`);
+  }
+  function activePositionStaffV169(rows){
+    const rowStaff = new Set((rows || []).map(r => staffIdV169(r?.staff_id)).filter(Boolean));
+    return orderedStaff((state.staff || []).filter(s => isDailyPositionEnabled(s) || rowStaff.has(staffIdV169(s.id))));
+  }
+  function realMonthlyLeaveV169(staffId, date){
+    try {
+      const leave = activeLeaveRecordOn(staffId, date);
+      return !!leave && !isNoDutyLeaveType(leave);
+    } catch (_) { return false; }
+  }
+  function usablePositionRowV169(row, dateSet){
+    const date = normDateV169(row?.work_date);
+    const sid = staffIdV169(row?.staff_id);
+    if (!sid || !date) return false;
+    if (dateSet && dateSet.size && !dateSet.has(date)) return false;
+    try { if (isNoPositionDay(date)) return false; } catch (_) {}
+    if (realMonthlyLeaveV169(sid, date)) return false;
+    const st = (state.staff || []).find(s => staffIdV169(s.id) === sid);
+    if (!st || !isDailyPositionEnabled(st)) return false;
+    const code = codeV169(row);
+    return !!code && code !== 'รอตรวจสอบ';
+  }
+  function currentMonthContextV169(){
+    const key = state.page === 'positionMonthView' ? (state.positionMonthViewKey || state.monthKey) : (state.positionMonthKey || state.monthKey);
+    const dates = monthDatesV169(key);
+    const rows = state.monthPositionDraft?.monthKey === key ? (state.monthPositionDraft.rows || []) : (state.positions || []).filter(x => normDateV169(x?.work_date).startsWith(key));
+    return { key, dates, rows };
+  }
+  function templateForRowV169(row){
+    const code = codeV169(row);
+    try { return positionTemplateByCode(code, normDateV169(row?.work_date)) || (ALL_POSITION_TEMPLATES || []).find(p => p.code === code) || null; }
+    catch (_) { return null; }
+  }
+  function zoneForRowV169(row){
+    const code = codeV169(row);
+    const tpl = templateForRowV169(row);
+    const zone = String(row?.zone || tpl?.zone || '').trim();
+    if (zone === 'ออกหน่วย') return 'ออกหน่วย';
+    if (zone === 'Manual' || /^BB-Manual/i.test(code) || code.toLowerCase().includes('manual')) return 'Manual';
+    if (code.startsWith('BB-')) return 'Blood Bank';
+    if (code.startsWith('DR-')) return 'Donor Room';
+    if (ZONE_COLUMNS_V169.includes(zone)) return zone;
+    return 'Blood Bank';
+  }
+  function positionColumnsV169(rows){
+    const map = new Map();
+    (ALL_POSITION_TEMPLATES || []).forEach(p => {
+      const code = codeV169(p);
+      if (code && code !== 'รอตรวจสอบ' && !map.has(code)) map.set(code, positionLabelForCell(code));
+    });
+    (rows || []).forEach(r => {
+      const code = codeV169(r);
+      if (code && code !== 'รอตรวจสอบ' && !map.has(code)) map.set(code, positionLabelForCell(code));
+    });
+    return Array.from(map.keys());
+  }
+  function buildOverviewStatsV169(rows, dates){
+    const dateSet = new Set(dates || []);
+    const staffStats = new Map();
+    const ensure = (sid) => {
+      if (!staffStats.has(sid)) {
+        staffStats.set(sid, {
+          zones: Object.fromEntries(ZONE_COLUMNS_V169.map(z => [z, 0])),
+          positions: {},
+          total: 0
+        });
+      }
+      return staffStats.get(sid);
+    };
+    (rows || []).forEach(row => {
+      if (!usablePositionRowV169(row, dateSet)) return;
+      const sid = staffIdV169(row.staff_id);
+      const stat = ensure(sid);
+      const zone = zoneForRowV169(row);
+      const code = codeV169(row);
+      if (!stat.zones[zone] && stat.zones[zone] !== 0) stat.zones[zone] = 0;
+      stat.zones[zone] += 1;
+      stat.positions[code] = (stat.positions[code] || 0) + 1;
+      stat.total += 1;
+    });
+    return staffStats;
+  }
+  function renderNumberCellV169(value){
+    const n = Number(value || 0);
+    return `<td class="num-cell ${n ? 'has-count' : 'zero-count'}">${n || ''}</td>`;
+  }
+  function renderPositionOverviewModalV169(){
+    const { key, rows, dates } = currentMonthContextV169();
+    const stats = buildOverviewStatsV169(rows, dates);
+    const staffList = activePositionStaffV169(rows);
+    const positionCols = positionColumnsV169(rows);
+    const zoneBody = staffList.map(st => {
+      const stat = stats.get(staffIdV169(st.id)) || { zones:{}, total:0 };
+      return `<tr><th class="sticky-name-col">${staffPill(st)}</th>${ZONE_COLUMNS_V169.map(z => renderNumberCellV169(stat.zones?.[z] || 0)).join('')}<td class="num-cell total-cell">${stat.total || ''}</td></tr>`;
+    }).join('');
+    const posBody = staffList.map(st => {
+      const stat = stats.get(staffIdV169(st.id)) || { positions:{} };
+      return `<tr><th class="sticky-name-col">${staffPill(st)}</th>${positionCols.map(code => renderNumberCellV169(stat.positions?.[code] || 0)).join('')}</tr>`;
+    }).join('');
+    const totalAssigned = Array.from(stats.values()).reduce((sum, s) => sum + (s.total || 0), 0);
+    showModal(`<div class="v169-overview-modal">
+      <div class="section-title"><div><h2>ภาพรวมจัดตำแหน่ง ${escV169(key)}</h2><p class="hint">นับจากแผนเดือนปัจจุบัน${state.monthPositionDraft?.monthKey === key ? ' (รวมร่างที่กำลังแก้ไข ยังไม่บันทึก)' : ''} และหักวันหยุด/วันลาจริงแล้ว</p></div>${badge(`รวม ${totalAssigned} ตำแหน่ง`, totalAssigned ? 'blue' : 'black')}</div>
+      <div class="card-lite overview-block">
+        <h4>ตารางที่ 1: สรุปแยกตามห้อง/โซน</h4>
+        <div class="table-wrap v169-overview-table zone-summary-table"><table><thead><tr><th class="sticky-name-col">ชื่อเจ้าหน้าที่</th>${ZONE_COLUMNS_V169.map(z => `<th>${escV169(z)}</th>`).join('')}<th>รวม</th></tr></thead><tbody>${zoneBody || `<tr><td colspan="${ZONE_COLUMNS_V169.length + 2}">ยังไม่มีข้อมูลตำแหน่งในเดือนนี้</td></tr>`}</tbody></table></div>
+      </div>
+      <div class="card-lite overview-block">
+        <h4>ตารางที่ 2: สรุปแยกตามตำแหน่ง (รายบุคคล)</h4>
+        <p class="hint">คอลัมน์ชื่อเจ้าหน้าที่ถูกล็อกไว้ด้านซ้าย เลื่อนแนวนอนได้โดยชื่อไม่หาย</p>
+        <div class="table-wrap v169-overview-table position-summary-table"><table><thead><tr><th class="sticky-name-col">ชื่อเจ้าหน้าที่</th>${positionCols.map(code => `<th>${escV169(positionLabelForCell(code))}</th>`).join('')}</tr></thead><tbody>${posBody || `<tr><td colspan="${positionCols.length + 1}">ยังไม่มีข้อมูลตำแหน่งในเดือนนี้</td></tr>`}</tbody></table></div>
+      </div>
+    </div>`, { large:true });
+  }
+
+  function dateKeyV169(d){ return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+  function weekStartKeyV169(date){
+    const d = parseDate(normDateV169(date));
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    return dateKeyV169(d);
+  }
+  function shortDateV169(date){
+    try { return parseDate(date).toLocaleDateString('th-TH', { day:'numeric', month:'short' }); }
+    catch (_) { return String(date || '').slice(5); }
+  }
+  function monthWeeksV169(dates){
+    const groups = new Map();
+    (dates || []).forEach(date => {
+      const key = weekStartKeyV169(date);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(date);
+    });
+    return Array.from(groups.entries()).sort((a,b) => a[0].localeCompare(b[0])).map(([key, ds], idx) => ({
+      key,
+      index: idx + 1,
+      dates: ds,
+      label: `Week ${idx + 1}`,
+      range: `${shortDateV169(ds[0])} - ${shortDateV169(ds[ds.length - 1])}`
+    }));
+  }
+  function buildQcStatsV169(rows, dates){
+    const dateSet = new Set(dates || []);
+    const weeks = monthWeeksV169(dates || []);
+    const weekMap = new Map(weeks.map(w => [w.key, w]));
+    const staffStats = new Map();
+    const detailsByWeek = new Map(weeks.map(w => [w.key, Object.fromEntries(QC_POSITION_CODES_V169.map(c => [c, []]))]));
+    const ensureStaff = (sid) => {
+      if (!staffStats.has(sid)) {
+        staffStats.set(sid, { total:0, byCode:{}, weeks:Object.fromEntries(weeks.map(w => [w.key, { total:0, byCode:{}, details:[] }])) });
+      }
+      return staffStats.get(sid);
+    };
+    (rows || []).forEach(row => {
+      if (!usablePositionRowV169(row, dateSet)) return;
+      const code = codeV169(row);
+      if (!QC_POSITION_CODES_V169.includes(code)) return;
+      const date = normDateV169(row.work_date);
+      const weekKey = weekStartKeyV169(date);
+      if (!weekMap.has(weekKey)) return;
+      const sid = staffIdV169(row.staff_id);
+      const st = (state.staff || []).find(s => staffIdV169(s.id) === sid);
+      const stat = ensureStaff(sid);
+      const weekStat = stat.weeks[weekKey];
+      stat.total += 1;
+      stat.byCode[code] = (stat.byCode[code] || 0) + 1;
+      weekStat.total += 1;
+      weekStat.byCode[code] = (weekStat.byCode[code] || 0) + 1;
+      weekStat.details.push({ code, date });
+      const detailMap = detailsByWeek.get(weekKey);
+      if (detailMap) detailMap[code].push({ date, staff: st, sid });
+    });
+    return { weeks, staffStats, detailsByWeek };
+  }
+  function qcWeekCellV169(weekStat){
+    if (!weekStat || !weekStat.total) return '<td class="qc-empty">-</td>';
+    return `<td class="qc-week-cell">${QC_POSITION_CODES_V169.map(code => {
+      const n = weekStat.byCode?.[code] || 0;
+      return n ? `<span>${escV169(code)} <b>${n}</b></span>` : '';
+    }).filter(Boolean).join('')}</td>`;
+  }
+  function qcDetailListV169(items){
+    if (!items || !items.length) return '<span class="muted">-</span>';
+    return items.slice().sort((a,b) => a.date.localeCompare(b.date) || (a.staff?.nickname || '').localeCompare(b.staff?.nickname || '', 'th'))
+      .map(x => `<div class="qc-detail-line"><b>${shortDateV169(x.date)}</b> ${x.staff ? staffPill(x.staff) : escV169(x.sid)}</div>`).join('');
+  }
+  function renderQcRotationModalV169(){
+    const { key, rows, dates } = currentMonthContextV169();
+    const { weeks, staffStats, detailsByWeek } = buildQcStatsV169(rows, dates);
+    const staffList = activePositionStaffV169(rows);
+    const totalQc = Array.from(staffStats.values()).reduce((sum, s) => sum + (s.total || 0), 0);
+    const staffBody = staffList.map(st => {
+      const stat = staffStats.get(staffIdV169(st.id)) || { total:0, weeks:{} };
+      const totalCls = stat.total ? 'has-count' : 'zero-count';
+      return `<tr><th class="sticky-name-col">${staffPill(st)}</th><td class="num-cell total-cell ${totalCls}">${stat.total || ''}</td>${weeks.map(w => qcWeekCellV169(stat.weeks?.[w.key])).join('')}</tr>`;
+    }).join('');
+    const weeklyBody = weeks.map(w => {
+      const detail = detailsByWeek.get(w.key) || {};
+      const weekTotal = QC_POSITION_CODES_V169.reduce((sum, code) => sum + (detail[code]?.length || 0), 0);
+      return `<tr><th>${escV169(w.label)}<br><small>${escV169(w.range)}</small></th>${QC_POSITION_CODES_V169.map(code => `<td>${qcDetailListV169(detail[code])}</td>`).join('')}<td class="num-cell total-cell">${weekTotal || ''}</td></tr>`;
+    }).join('');
+    showModal(`<div class="v169-qc-modal">
+      <div class="section-title"><div><h2>ติดตามการหมุนเวียน QC ${escV169(key)}</h2><p class="hint">ติดตามเฉพาะตำแหน่ง BB-Report และ DR-Processing เพื่อดูความทั่วถึงรายสัปดาห์</p></div>${badge(`QC รวม ${totalQc} ครั้ง`, totalQc ? 'green' : 'black')}</div>
+      <div class="card-lite overview-block">
+        <h4>ยอดสะสมรวมต่อบุคคล + แยกรายสัปดาห์</h4>
+        <div class="table-wrap v169-overview-table qc-staff-table"><table><thead><tr><th class="sticky-name-col">ชื่อเจ้าหน้าที่</th><th>ยอดสะสมรวม</th>${weeks.map(w => `<th>${escV169(w.label)}<br><small>${escV169(w.range)}</small></th>`).join('')}</tr></thead><tbody>${staffBody || `<tr><td colspan="${weeks.length + 2}">ยังไม่มีข้อมูล QC ในเดือนนี้</td></tr>`}</tbody></table></div>
+      </div>
+      <div class="card-lite overview-block">
+        <h4>รายละเอียดว่าแต่ละสัปดาห์ใครลงตำแหน่ง QC</h4>
+        <div class="table-wrap v169-overview-table qc-detail-table"><table><thead><tr><th>สัปดาห์</th><th>BB-Report</th><th>DR-Processing</th><th>รวม</th></tr></thead><tbody>${weeklyBody || '<tr><td colspan="4">ยังไม่มีข้อมูลรายสัปดาห์</td></tr>'}</tbody></table></div>
+      </div>
+    </div>`, { large:true });
+  }
+
+  const oldRenderPositionMonthPageV169 = window.renderPositionMonthPage || (typeof renderPositionMonthPage === 'function' ? renderPositionMonthPage : null);
+  if (oldRenderPositionMonthPageV169) {
+    window.renderPositionMonthPage = renderPositionMonthPage = function renderPositionMonthPageV169(){
+      let html = oldRenderPositionMonthPageV169.apply(this, arguments);
+      if (String(html || '').includes('data-position-month-overview-v169')) return html;
+      const buttons = '<button class="soft-btn" data-position-month-overview-v169>ดูภาพรวมจัดตำแหน่ง</button><button class="soft-btn qc-rotation-btn" data-qc-rotation-v169>ติดตามการหมุนเวียน QC</button>';
+      html = String(html || '');
+      if (html.match(/<button[^>]*data-restore-month-positions[^>]*>[\s\S]*?<\/button>/)) {
+        return html.replace(/(<button[^>]*data-restore-month-positions[^>]*>[\s\S]*?<\/button>)/, `$1${buttons}`);
+      }
+      return html.replace(/(<div class="toolbar">)/, `$1${buttons}`);
+    };
+  }
+
+  document.addEventListener('click', function(e){
+    const overviewBtn = e.target?.closest?.('[data-position-month-overview-v169]');
+    if (overviewBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      renderPositionOverviewModalV169();
+      return;
+    }
+    const qcBtn = e.target?.closest?.('[data-qc-rotation-v169]');
+    if (qcBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      renderQcRotationModalV169();
+    }
+  }, true);
+
+  window.renderPositionOverviewModalV169 = renderPositionOverviewModalV169;
+  window.renderQcRotationModalV169 = renderQcRotationModalV169;
+})();
