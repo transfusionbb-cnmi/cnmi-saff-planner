@@ -310,7 +310,22 @@ function clearPasswordSetupForced() {
   try { window.sessionStorage.removeItem(PASSWORD_SETUP_FORCE_KEY); } catch (_) {}
 }
 function isPasswordSetupForced() {
-  try { return window.sessionStorage.getItem(PASSWORD_SETUP_FORCE_KEY) === '1' || !!window.sessionStorage.getItem(PASSWORD_SETUP_FORCE_KEY); } catch (_) { return false; }
+  try {
+    const raw = window.sessionStorage.getItem(PASSWORD_SETUP_FORCE_KEY);
+    if (!raw) return false;
+
+    // V187: กัน flag ตั้งรหัสผ่านค้างจากรอบก่อน แล้วทำให้ Admin ถูกดึงไปหน้า reset password ตอนทำงานปกติ
+    const currentUrl = `${window.location.search || ''}${window.location.hash || ''}`;
+    const urlHasRecoveryIntent = /type=(recovery|password_recovery|invite)|mode=(recovery|set-password|update-password)|access_token=|refresh_token=|token_hash=|(^|[?#&])code=/i.test(currentUrl);
+    let savedAt = 0;
+    try { savedAt = Number(JSON.parse(raw)?.at || 0); } catch (_) { savedAt = raw === '1' ? Date.now() : 0; }
+    const isExpired = savedAt && (Date.now() - savedAt > 60 * 60 * 1000);
+    if (isExpired || !urlHasRecoveryIntent) {
+      window.sessionStorage.removeItem(PASSWORD_SETUP_FORCE_KEY);
+      return false;
+    }
+    return true;
+  } catch (_) { return false; }
 }
 if (INITIAL_AUTH_INFO.isRecovery && !INITIAL_AUTH_INFO.hasError) setPasswordSetupForced('initial-auth-url');
 
@@ -9572,6 +9587,35 @@ function bindGlobalEvents() {
   function normBool182(v, fallback=true){ if (v == null || v === '') return fallback; return truthy182(v); }
   function normNum182(v, fallback=999){ const n = Number(v); return Number.isFinite(n) ? n : fallback; }
   function safeToast182(msg, opts){ try { showToast(msg, opts); } catch (_) { console.warn(msg); } }
+  function clearStaleRecoveryGuard182(context='position-management') {
+    try {
+      const rawUrl = `${window.location.search || ''}${window.location.hash || ''}`;
+      const hasActiveAuthLink = /type=(recovery|password_recovery|invite)|mode=(recovery|set-password|update-password)|access_token=|refresh_token=|token_hash=|(^|[?#&])code=/i.test(rawUrl);
+      const appVisible = !$('appView')?.classList?.contains('hidden');
+      if (!hasActiveAuthLink && appVisible) {
+        if (typeof clearPasswordSetupForced === 'function') clearPasswordSetupForced();
+        if (typeof RECOVERY_INTENT !== 'undefined') RECOVERY_INTENT = false;
+        if (typeof AUTH_LINK_PROCESSING !== 'undefined') AUTH_LINK_PROCESSING = false;
+      }
+    } catch (err) { console.warn(`${VERSION_V182}: clear stale recovery guard skipped`, context, err); }
+  }
+
+  async function ensureAdminSessionForPosition182(){
+    clearStaleRecoveryGuard182('before-position-save');
+    if (!sb?.auth?.getSession) return true;
+    const { data, error } = await sb.auth.getSession();
+    if (error) { safeToast182('ตรวจสอบ Session ไม่สำเร็จ: ' + friendly182(error), { tone:'error' }); return false; }
+    if (!data?.session?.user) { safeToast182('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง', { tone:'error' }); return false; }
+    state.session = data.session;
+    if (!state.profile) {
+      try { await loadProfile(); }
+      catch (err) { safeToast182('โหลดสิทธิ์ผู้ใช้ไม่สำเร็จ: ' + friendly182(err), { tone:'error' }); return false; }
+    }
+    clearStaleRecoveryGuard182('after-session-check');
+    if (!isAdmin()) { safeToast182('เฉพาะ Admin เท่านั้น', { tone:'error' }); return false; }
+    return true;
+  }
+
   function friendly182(error){ try { return friendlyDbError(error); } catch (_) { return error?.message || String(error || 'เกิดข้อผิดพลาด'); } }
   function isOutingRow182(row){ return row?.is_outing === true || String(row?.zone || '').trim() === 'ออกหน่วย' || String(row?.eligibility_code || '').startsWith('OUTING:'); }
   function defaultEligibilityCode182(row){ return isOutingRow182(row) ? `OUTING:${String(row?.code || '').trim()}` : (String(row?.code || '').trim() || null); }
@@ -9775,7 +9819,7 @@ function bindGlobalEvents() {
   }
 
   async function savePositionMaster182(form){
-    if (!isAdmin()) return safeToast182('เฉพาะ Admin เท่านั้น');
+    if (!(await ensureAdminSessionForPosition182())) return;
     if (!state.positionMastersLoaded) return safeToast182('ยังไม่ได้รัน SQL สร้างตาราง daily_position_masters', { tone:'error' });
     const fd = new FormData(form);
     const id = String(fd.get('id') || '').trim();
@@ -9801,8 +9845,13 @@ function bindGlobalEvents() {
     const elig = String(fd.get('eligibility_code') || '').trim();
     payload.eligibility_code = elig || (isOuting ? `OUTING:${code}` : null);
     if (!id) payload.created_by = currentStaffId();
-    const res = id ? await sb.from('daily_position_masters').update(payload).eq('id', id) : await sb.from('daily_position_masters').insert(payload);
+    setBusy(true, id ? 'กำลังบันทึกการแก้ไขตำแหน่ง' : 'กำลังเพิ่มตำแหน่งใหม่');
+    const res = id
+      ? await sb.from('daily_position_masters').update(payload).eq('id', id).select('id').maybeSingle()
+      : await sb.from('daily_position_masters').insert(payload).select('id').maybeSingle();
+    setBusy(false);
     if (res.error) return safeToast182(friendly182(res.error), { tone:'error' });
+    clearStaleRecoveryGuard182('after-position-save');
     state.editingPositionMasterId = null;
     state.showPositionMasterForm = false;
     await refreshPositionMasters182();
@@ -10018,7 +10067,9 @@ function bindGlobalEvents() {
   document.addEventListener('submit', async function(e){
     if (e.target?.id === 'positionMasterForm') {
       e.preventDefault(); e.stopPropagation(); if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      clearStaleRecoveryGuard182('position-master-submit');
       await savePositionMaster182(e.target);
+      return;
     }
   }, true);
 
