@@ -8186,11 +8186,45 @@ function bindGlobalEvents() {
     return `${esc176(text.main || '-')}${text.detail ? `<br><span class="muted">${esc176(text.detail)}</span>` : ''}`;
   }
 
+  // V179: normalize rejected OT status before delete. Some rows may carry trailing spaces
+  // or a backend status alias, while the UI still shows them as rejected.
+  function normalizeOtStatusV179(value){
+    return norm176(value).replace(/\s+/g, ' ').trim();
+  }
+  function isRejectedStatusV179(value){
+    const s = normalizeOtStatusV179(value).toLowerCase();
+    return s === 'ไม่อนุมัติ'
+      || s === 'ไม่อนุมัติแล้ว'
+      || s === 'rejected'
+      || s === 'reject'
+      || s === 'denied'
+      || s === 'not_approved'
+      || s === 'not approved';
+  }
   function isRejectedOt176(row){
-    return norm176(row?.status) === 'ไม่อนุมัติ';
+    return isRejectedStatusV179(row?.status);
   }
   function canDeleteRejectedOt176(row){
     return !isAdmin() && isRejectedOt176(row) && String(row?.staff_id || '') === String(currentStaffId() || '');
+  }
+  function isMissingRpcV179(error){
+    const msg = String(error?.message || error?.details || error?.hint || error || '');
+    const code = String(error?.code || '');
+    return code === 'PGRST202'
+      || /could not find.*function/i.test(msg)
+      || /function .*delete_own_rejected_ot_v179.*does not exist/i.test(msg)
+      || /schema cache/i.test(msg);
+  }
+  function otDeleteErrorTextV179(error){
+    const raw = String(error?.message || error || '').trim();
+    if (!raw) return 'ลบรายการ OT ไม่สำเร็จ';
+    if (/row-level security|permission denied|not authorized|violates row-level security/i.test(raw)) {
+      return 'ฐานข้อมูลยังไม่อนุญาตให้ Staff ลบรายการ OT สถานะ “ไม่อนุมัติ” กรุณารันไฟล์ supabase_v179_staff_delete_rejected_ot_fix.sql ใน Supabase SQL Editor';
+    }
+    if (raw.includes('ไม่สามารถลบรายการ OT ที่อนุมัติ') || raw.includes('สถานะที่ไม่อนุญาตให้ลบ')) {
+      return 'ฐานข้อมูลยังมี Validation เดิมที่บล็อกการลบอยู่ กรุณารันไฟล์ supabase_v179_staff_delete_rejected_ot_fix.sql แล้วทดสอบใหม่';
+    }
+    return raw;
   }
   function deleteRejectedOtButton176(row){
     return `<button class="tiny-btn danger" type="button" data-delete-rejected-ot="${esc176(row?.id)}" title="ลบรายการ OT ที่ไม่อนุมัติ">ลบ</button>`;
@@ -8202,21 +8236,73 @@ function bindGlobalEvents() {
     return canDeleteRejectedOt176(row) ? `<div class="actions">${deleteRejectedOtButton176(row)}</div>` : '-';
   }
   async function deleteRejectedOt176(id){
-    const row = (state.otRequests || []).find(r => String(r.id) === String(id));
-    if (!row) return showToast('ไม่พบรายการ OT นี้ กรุณารีเฟรชหน้าอีกครั้ง', { tone:'error' });
-    if (!canDeleteRejectedOt176(row)) return showToast('ลบได้เฉพาะรายการ OT ของตัวเองที่มีสถานะ “ไม่อนุมัติ” เท่านั้น', { tone:'error' });
+    const localRow = (state.otRequests || []).find(r => String(r.id) === String(id));
+    if (!localRow) return showToast('ไม่พบรายการ OT นี้ กรุณารีเฟรชหน้าอีกครั้ง', { tone:'error' });
+    if (!canDeleteRejectedOt176(localRow)) return showToast('ลบได้เฉพาะรายการ OT ของตัวเองที่มีสถานะ “ไม่อนุมัติ” เท่านั้น', { tone:'error' });
+
     const ok = typeof confirmDialog === 'function'
       ? await confirmDialog('คุณต้องการลบรายการที่ไม่อนุมัตินี้ใช่หรือไม่?', 'ยืนยันลบรายการ OT')
       : window.confirm('คุณต้องการลบรายการที่ไม่อนุมัตินี้ใช่หรือไม่?');
     if (!ok) return;
+
+    const staffId = currentStaffId();
+    let serverRow = localRow;
+
+    // Re-check the current DB row before deleting. This prevents accidentally deleting a row
+    // that was approved after the page was loaded.
+    try {
+      const check = await sb.from('ot_requests')
+        .select('id,staff_id,status')
+        .eq('id', id)
+        .eq('staff_id', staffId)
+        .maybeSingle();
+      if (check.error) throw check.error;
+      if (!check.data) return showToast('ไม่พบรายการ OT ที่ลบได้ หรือรายการนี้ไม่ได้เป็นของคุณ', { tone:'error' });
+      serverRow = check.data;
+    } catch (err) {
+      return showToast(`ตรวจสอบรายการ OT ก่อนลบไม่สำเร็จ: ${otDeleteErrorTextV179(err)}`, { tone:'error' });
+    }
+
+    if (!isRejectedStatusV179(serverRow.status)) {
+      return showToast('ไม่สามารถลบรายการ OT ที่อนุมัติ หรืออยู่ในสถานะที่ไม่อนุญาตให้ลบได้', { tone:'error' });
+    }
+
+    // Preferred path: DB-side validation/RLS patch V179. If the SQL has not been run yet,
+    // fall back to direct delete with the current status value, still guarded by RLS.
+    let rpcError = null;
+    try {
+      const rpc = await sb.rpc('delete_own_rejected_ot_v179', { p_ot_id: id });
+      if (!rpc.error) {
+        const deleted = Number(rpc.data?.deleted || (rpc.data?.ok ? 1 : 0));
+        if (deleted > 0) {
+          state.otRequests = (state.otRequests || []).filter(r => String(r.id) !== String(id));
+          await loadAllData();
+          renderPage();
+          return showToast('ลบรายการ OT ที่ไม่อนุมัติแล้ว');
+        }
+      } else if (!isMissingRpcV179(rpc.error)) {
+        rpcError = rpc.error;
+      }
+    } catch (err) {
+      if (!isMissingRpcV179(err)) rpcError = err;
+    }
+
     const { data, error } = await sb.from('ot_requests')
       .delete()
       .eq('id', id)
-      .eq('staff_id', currentStaffId())
-      .eq('status', 'ไม่อนุมัติ')
+      .eq('staff_id', staffId)
+      .eq('status', serverRow.status)
       .select('id');
-    if (error) return showToast(`ลบรายการ OT ไม่สำเร็จ: ${error.message}`, { tone:'error' });
-    if (!data || !data.length) return showToast('ไม่พบรายการ OT ที่ลบได้ หรือสิทธิ์ฐานข้อมูลยังไม่อนุญาตให้ลบ', { tone:'error' });
+
+    if (error) {
+      const msg = otDeleteErrorTextV179(error || rpcError);
+      return showToast(`ลบรายการ OT ไม่สำเร็จ: ${msg}`, { tone:'error' });
+    }
+    if (!data || !data.length) {
+      const msg = rpcError ? otDeleteErrorTextV179(rpcError) : 'ไม่พบรายการ OT ที่ลบได้ หรือสิทธิ์ฐานข้อมูลยังไม่อนุญาตให้ลบ กรุณารันไฟล์ supabase_v179_staff_delete_rejected_ot_fix.sql';
+      return showToast(msg, { tone:'error' });
+    }
+
     state.otRequests = (state.otRequests || []).filter(r => String(r.id) !== String(id));
     await loadAllData();
     renderPage();
@@ -8270,4 +8356,68 @@ function bindGlobalEvents() {
 
   window.v176OtReasonHelpers = { compactOtReasonText176, dutyFromNote176, isAttendanceOt176 };
   console.info(`${VERSION_V176} loaded`);
+})();
+
+
+/* =========================
+   V179 OT Delete Validation + Strong Freeze First Column
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V179 = 'V179_OT_DELETE_AND_FREEZE_FIX';
+
+  function applyFreezeFirstColumnV179(root){
+    const scope = root || document;
+    const wrappers = scope.querySelectorAll
+      ? scope.querySelectorAll('.v169-overview-modal .v169-overview-table, .v169-qc-modal .v169-overview-table')
+      : [];
+    wrappers.forEach(wrap => {
+      wrap.classList.add('table-responsive', 'v179-freeze-table');
+      wrap.style.overflowX = 'auto';
+      wrap.style.overflowY = 'auto';
+      wrap.style.maxWidth = '100%';
+      wrap.style.position = 'relative';
+      wrap.style.backgroundColor = '#ffffff';
+      const table = wrap.querySelector('table');
+      if (table) {
+        table.style.borderCollapse = 'separate';
+        table.style.borderSpacing = '0';
+        table.style.width = 'max-content';
+        table.style.minWidth = '100%';
+      }
+      wrap.querySelectorAll('tr').forEach(tr => {
+        const cell = tr.children && tr.children.length ? tr.children[0] : null;
+        if (!cell) return;
+        const isHead = !!cell.closest('thead');
+        cell.classList.add('sticky-name-col', 'v179-sticky-first-col');
+        cell.style.position = 'sticky';
+        cell.style.left = '0px';
+        cell.style.backgroundColor = isHead ? '#f6f9fc' : '#ffffff';
+        cell.style.zIndex = isHead ? '90' : '70';
+        cell.style.boxShadow = '10px 0 20px rgba(15, 35, 52, .10)';
+        cell.style.borderRight = '1px solid rgba(23, 53, 77, .14)';
+        if (isHead) cell.style.top = '0px';
+      });
+    });
+  }
+
+  document.addEventListener('click', function(e){
+    const isOverview = e.target?.closest?.('[data-position-month-overview-v169]');
+    const isQc = e.target?.closest?.('[data-qc-rotation-v169]');
+    if (!isOverview && !isQc) return;
+    requestAnimationFrame(() => applyFreezeFirstColumnV179(document));
+    setTimeout(() => applyFreezeFirstColumnV179(document), 80);
+  }, true);
+
+  const previousShowModalV179 = window.showModal || (typeof showModal === 'function' ? showModal : null);
+  if (previousShowModalV179) {
+    window.showModal = showModal = function showModalV179(html, opts){
+      const result = previousShowModalV179.call(this, html, opts || {});
+      requestAnimationFrame(() => applyFreezeFirstColumnV179(document));
+      return result;
+    };
+  }
+
+  window.applyFreezeFirstColumnV179 = applyFreezeFirstColumnV179;
+  console.info(`${VERSION_V179} loaded`);
 })();

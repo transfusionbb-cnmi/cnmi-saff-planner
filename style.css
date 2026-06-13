@@ -2191,3 +2191,78 @@ textarea {
   position: relative;
   z-index: 70;
 }
+
+/* V179: hard fix for sticky first column in Position Overview / QC modal tables */
+.v169-overview-modal,
+.v169-qc-modal,
+.v169-overview-modal .overview-block,
+.v169-qc-modal .overview-block {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.v169-overview-modal .overview-block,
+.v169-qc-modal .overview-block {
+  overflow: visible !important;
+}
+
+.v179-freeze-table,
+.table-responsive.v169-overview-table,
+.v169-overview-modal .v169-overview-table,
+.v169-qc-modal .v169-overview-table {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  position: relative !important;
+  background: #ffffff !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.v179-freeze-table table,
+.table-responsive.v169-overview-table table,
+.v169-overview-modal .v169-overview-table table,
+.v169-qc-modal .v169-overview-table table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  width: max-content !important;
+  min-width: 100% !important;
+}
+
+.v179-freeze-table th:first-child,
+.v179-freeze-table td:first-child,
+.table-responsive.v169-overview-table th:first-child,
+.table-responsive.v169-overview-table td:first-child,
+.v169-overview-modal .v169-overview-table th:first-child,
+.v169-overview-modal .v169-overview-table td:first-child,
+.v169-qc-modal .v169-overview-table th:first-child,
+.v169-qc-modal .v169-overview-table td:first-child,
+.v179-sticky-first-col {
+  position: sticky !important;
+  left: 0 !important;
+  background-color: #ffffff !important;
+  z-index: 70 !important;
+  box-shadow: 10px 0 20px rgba(15, 35, 52, .10) !important;
+  border-right: 1px solid rgba(23, 53, 77, .14) !important;
+}
+
+.v179-freeze-table thead th,
+.table-responsive.v169-overview-table thead th,
+.v169-overview-modal .v169-overview-table thead th,
+.v169-qc-modal .v169-overview-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 80 !important;
+  background: #f6f9fc !important;
+}
+
+.v179-freeze-table thead th:first-child,
+.table-responsive.v169-overview-table thead th:first-child,
+.v169-overview-modal .v169-overview-table thead th:first-child,
+.v169-qc-modal .v169-overview-table thead th:first-child,
+thead .v179-sticky-first-col {
+  top: 0 !important;
+  z-index: 90 !important;
+  background-color: #f6f9fc !important;
+}
