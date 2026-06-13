@@ -712,7 +712,7 @@ function bindGlobalEvents() {
     if (error) {
       const msg = String(error.message || '');
       if (msg.toLowerCase().includes('invalid login credentials')) {
-        return showToast('ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ลืมรหัสผ่าน');
+        return showToast('อีเมลหรือรหัสผ่านไม่ถูกต้อง หากเป็นการล็อกอินครั้งแรกหรือลืมรหัสผ่าน ให้ใช้อีเมลมหิดล และรหัสผ่าน CNMI@ ตามด้วยรหัสพนักงาน');
       }
       return showToast(msg);
     }
@@ -4201,8 +4201,8 @@ function bindGlobalEvents() {
       const msg = String(error.message || '');
       if (msg.toLowerCase().includes('invalid login credentials')) {
         const hint = loginId.includes('@')
-          ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ลืมรหัสผ่าน'
-          : 'ชื่อผู้ใช้นี้มีในระบบแล้ว แต่รหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ลืมรหัสผ่าน';
+          ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง หากเป็นการล็อกอินครั้งแรกหรือลืมรหัสผ่าน ให้ใช้อีเมลมหิดล และรหัสผ่าน CNMI@ ตามด้วยรหัสพนักงาน'
+          : 'Username/Email นี้มีในระบบแล้ว แต่รหัสผ่านไม่ถูกต้อง หากเป็นการล็อกอินครั้งแรกหรือลืมรหัสผ่าน ให้ใช้อีเมลมหิดล และรหัสผ่าน CNMI@ ตามด้วยรหัสพนักงาน';
         return showToast(hint, { tone:'error' });
       }
       return showToast(msg, { tone:'error' });
@@ -4672,7 +4672,7 @@ function bindGlobalEvents() {
       setBusy(false);
       if (error) {
         const msg = String(error.message || '');
-        if (msg.toLowerCase().includes('invalid login credentials')) return showToast('ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง ถ้ายังไม่เคยตั้งรหัสผ่าน ให้กดแท็บ Login ครั้งแรก / ลืมรหัสผ่าน', { tone:'error' });
+        if (msg.toLowerCase().includes('invalid login credentials')) return showToast('อีเมลหรือรหัสผ่านไม่ถูกต้อง หากเป็นการล็อกอินครั้งแรกหรือลืมรหัสผ่าน ให้ใช้อีเมลมหิดล และรหัสผ่าน CNMI@ ตามด้วยรหัสพนักงาน', { tone:'error' });
         return showToast(msg, { tone:'error' });
       }
     });
@@ -5828,4 +5828,435 @@ function bindGlobalEvents() {
   document.addEventListener('submit', function(e){
     if (e.target && e.target.id === 'v161ForceAccountForm') { e.preventDefault(); v161SaveForcedAccount(e.target); }
   }, true);
+})();
+
+
+/* =========================
+   V162 Login Single Form + Account Settings + Safe Position Table Render
+   ========================= */
+(function(){
+  'use strict';
+  const V162_LOGIN_HELPER = 'สำหรับการล็อกอินครั้งแรก หรือ ลืมรหัสผ่าน กรุณาใช้อีเมลมหิดล ส่วนรหัสผ่านคือ CNMI@ ตามด้วยรหัสพนักงาน';
+
+  function v162Esc(v){
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function v162$(id){ return document.getElementById(id); }
+  function v162IsRecoveryMode(){
+    try {
+      const raw = String(location.search || '') + String(location.hash || '');
+      return !!(typeof RECOVERY_INTENT !== 'undefined' && RECOVERY_INTENT) ||
+        !!(typeof isPasswordSetupForced === 'function' && isPasswordSetupForced()) ||
+        /type=(recovery|password_recovery|invite)|mode=(recovery|set-password)|access_token=|refresh_token=|token_hash=/i.test(raw);
+    } catch (_) { return false; }
+  }
+  function v162ApplySingleLoginUi(){
+    try {
+      const tabs = document.querySelector('.auth-tabs');
+      if (tabs) { tabs.classList.add('hidden'); tabs.setAttribute('aria-hidden','true'); }
+      const loginForm = v162$('loginForm');
+      const setupForm = v162$('setupPasswordForm');
+      const resetForm = v162$('resetPasswordForm');
+      const loginInput = v162$('loginEmail');
+      const pwInput = v162$('loginPassword');
+      const title = document.querySelector('.auth-card h1');
+      const subtitle = document.querySelector('.auth-card > p.muted');
+      if (loginInput) { loginInput.setAttribute('type','email'); loginInput.setAttribute('placeholder','name@mahidol.ac.th'); }
+      if (pwInput) pwInput.setAttribute('placeholder','เช่น CNMI@รหัสพนักงาน');
+      if (subtitle && !v162IsRecoveryMode()) subtitle.textContent = 'กรอกอีเมล Mahidol และ Password เพื่อเข้าสู่ระบบ';
+      if (title && !v162IsRecoveryMode()) title.textContent = 'ระบบเวรและกิจกรรมหน่วยงาน';
+      if (setupForm) { setupForm.classList.add('hidden'); setupForm.classList.remove('active'); setupForm.setAttribute('aria-hidden','true'); }
+      if (!v162IsRecoveryMode() && loginForm) {
+        loginForm.classList.remove('hidden'); loginForm.classList.add('active');
+        if (resetForm) resetForm.classList.add('hidden');
+        let helper = loginForm.querySelector('.login-helper-text');
+        if (!helper) {
+          helper = document.createElement('p');
+          helper.className = 'hint login-helper-text';
+          loginForm.appendChild(helper);
+        }
+        helper.textContent = V162_LOGIN_HELPER;
+      }
+    } catch (err) { console.warn('V162 login UI normalize skipped', err); }
+  }
+
+  const oldRenderAuthTabs = (typeof window.renderAuthTabs === 'function') ? window.renderAuthTabs : (typeof renderAuthTabs === 'function' ? renderAuthTabs : null);
+  if (oldRenderAuthTabs) {
+    window.renderAuthTabs = function renderAuthTabsV162(){
+      const out = oldRenderAuthTabs.apply(this, arguments);
+      v162ApplySingleLoginUi();
+      return out;
+    };
+    try { renderAuthTabs = window.renderAuthTabs; } catch (_) {}
+  }
+  const oldShowLoginPanel = (typeof window.showLoginPanel === 'function') ? window.showLoginPanel : (typeof showLoginPanel === 'function' ? showLoginPanel : null);
+  if (oldShowLoginPanel) {
+    window.showLoginPanel = function showLoginPanelV162(){
+      const out = oldShowLoginPanel.apply(this, arguments);
+      v162ApplySingleLoginUi();
+      return out;
+    };
+    try { showLoginPanel = window.showLoginPanel; } catch (_) {}
+  }
+  document.addEventListener('DOMContentLoaded', v162ApplySingleLoginUi);
+  setTimeout(v162ApplySingleLoginUi, 0);
+  setTimeout(v162ApplySingleLoginUi, 400);
+
+  function v162EnsureAccountMenu(){
+    if (!Array.isArray(window.NAV_ITEMS) && typeof NAV_ITEMS === 'undefined') return;
+    const list = (typeof NAV_ITEMS !== 'undefined') ? NAV_ITEMS : window.NAV_ITEMS;
+    if (!Array.isArray(list)) return;
+    const old = list.find(x => x && x.id === 'accountSettings');
+    if (old) {
+      old.title = 'ตั้งค่าบัญชี';
+      old.subtitle = 'เปลี่ยน Username และ Password ของตัวเอง';
+      old.group = 'staff';
+      old.icon = '🔐';
+      return;
+    }
+    const item = { id:'accountSettings', icon:'🔐', title:'ตั้งค่าบัญชี', subtitle:'เปลี่ยน Username และ Password ของตัวเอง', group:'staff' };
+    const idx = list.findIndex(x => x && x.id === 'myProfile');
+    list.splice(idx >= 0 ? idx + 1 : 4, 0, item);
+  }
+  window.v162EnsureAccountMenu = v162EnsureAccountMenu;
+
+  function v162RenderAccountSettingsPage(){
+    const p = state.profile || {};
+    return `<div class="grid grid-2 account-settings-page v162-account-settings">
+      <div class="card profile-card-readable">
+        <div class="section-title"><h3>ข้อมูลบัญชีปัจจุบัน</h3></div>
+        <div class="profile-info-list">
+          <div><span>ชื่อเล่น</span><b>${v162Esc(p.nickname || '-')}</b></div>
+          <div><span>ชื่อ-สกุล</span><b>${v162Esc(p.full_name || '-')}</b></div>
+          <div><span>Email</span><b>${v162Esc(p.email || '-')}</b></div>
+          <div><span>Username</span><b>${v162Esc(p.login_name || '-')}</b></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title"><div><h3>ตั้งค่าบัญชี</h3><p class="hint">ใช้เปลี่ยน Username หรือ Password ได้เองหลังล็อกอิน ไม่ต้องรอรอบบังคับเปลี่ยนครั้งแรก</p></div></div>
+        <form id="directAccountForm" class="form-grid compact-form">
+          <label>Username ใหม่
+            <input name="login_name" value="${v162Esc(p.login_name || '')}" placeholder="เช่น gift123 หรือรหัสพนักงาน" autocomplete="username">
+            <span class="hint">ใช้ตัวอักษรอังกฤษ ตัวเลข จุด ขีดกลาง หรือขีดล่าง</span>
+          </label>
+          <label>Password ใหม่
+            <input name="password" type="password" placeholder="เว้นว่างถ้าไม่เปลี่ยน" autocomplete="new-password">
+          </label>
+          <label>ยืนยัน Password ใหม่
+            <input name="password2" type="password" placeholder="กรอกซ้ำ" autocomplete="new-password">
+          </label>
+          <button class="primary-btn wide" type="submit">บันทึก Username / Password</button>
+        </form>
+        <p class="hint">ถ้าเปลี่ยนเฉพาะ Username ให้เว้นช่อง Password ว่างไว้ได้</p>
+      </div>
+    </div>`;
+  }
+  window.renderAccountSettingsPage = v162RenderAccountSettingsPage;
+
+  const oldRenderNav = (typeof window.renderNav === 'function') ? window.renderNav : (typeof renderNav === 'function' ? renderNav : null);
+  if (oldRenderNav) {
+    window.renderNav = function renderNavV162(){
+      v162EnsureAccountMenu();
+      return oldRenderNav.apply(this, arguments);
+    };
+    try { renderNav = window.renderNav; } catch (_) {}
+  }
+  const oldRenderPage = (typeof window.renderPage === 'function') ? window.renderPage : (typeof renderPage === 'function' ? renderPage : null);
+  if (oldRenderPage) {
+    window.renderPage = function renderPageV162(){
+      v162EnsureAccountMenu();
+      if (typeof v161IsFirstLoginProfile === 'function' && v161IsFirstLoginProfile()) return oldRenderPage.apply(this, arguments);
+      if (state && state.page === 'accountSettings') {
+        const item = (typeof NAV_ITEMS !== 'undefined' ? NAV_ITEMS : []).find(x => x.id === 'accountSettings') || {};
+        const title = v162$('pageTitle'); if (title) title.textContent = item.title || 'ตั้งค่าบัญชี';
+        const subtitle = v162$('pageSubtitle'); if (subtitle) subtitle.textContent = item.subtitle || 'เปลี่ยน Username และ Password ของตัวเอง';
+        try { renderNav(); } catch (_) {}
+        const content = v162$('pageContent'); if (content) content.innerHTML = v162RenderAccountSettingsPage();
+        return;
+      }
+      return oldRenderPage.apply(this, arguments);
+    };
+    try { renderPage = window.renderPage; } catch (_) {}
+  }
+  v162EnsureAccountMenu();
+
+  function v162ActiveLeaveIndex(dates){
+    const dateSet = new Set(dates || []);
+    const out = new Map();
+    const leaves = Array.isArray(state.leaves) ? state.leaves : [];
+    leaves.forEach(l => {
+      const staffId = String(l?.staff_id || '');
+      if (!staffId) return;
+      const status = String(l?.status || l?.approval_status || 'active').toLowerCase();
+      if (/(cancel|reject|delete|ยกเลิก|ไม่อนุมัติ)/i.test(status)) return;
+      (dates || []).forEach(d => {
+        if (dateSet.size && !dateSet.has(d)) return;
+        try { if (!overlapsDate(l, d)) return; } catch (_) { return; }
+        const key = `${staffId}|${d}`;
+        if (!out.has(key)) out.set(key, l);
+      });
+    });
+    return out;
+  }
+  function v162DateMeta(dates){
+    const meta = {};
+    (dates || []).forEach(d => {
+      meta[d] = {
+        weekend: isWeekend(d),
+        holiday: isHolidayDate(d),
+        outing: hasOuting(d)
+      };
+    });
+    return meta;
+  }
+  function v162LeaveText(row){
+    if (!row) return '';
+    try { return leaveDisplayType(row); } catch (_) { return String(row.type || row.leave_type || 'ลาอื่นๆ').split(':::')[0].trim(); }
+  }
+  function v162IsNoDuty(row){
+    try { return isNoDutyLeaveType(row); } catch (_) { return v162LeaveText(row) === 'ไม่รับเวร'; }
+  }
+  function v162PositionOptions(date, current){
+    try { if (typeof monthPositionRoleOptionsForDate === 'function') return monthPositionRoleOptionsForDate(date, current) || []; } catch (_) {}
+    const list = hasOuting(date) ? [...DEFAULT_POSITIONS.filter(p => p.zone === 'Blood Bank' || p.zone === 'Manual'), ...OUTING_POSITIONS] : DEFAULT_POSITIONS;
+    const seen = new Set();
+    const out = [];
+    (list || []).forEach(p => { if (p?.code && !seen.has(p.code)) { seen.add(p.code); out.push(p); } });
+    return out;
+  }
+  function v162ExpectedTemplates(date){
+    const key = normalizeDateKey(date);
+    if (!key || isWeekend(key) || isHolidayDate(key)) return [];
+    const source = hasOuting(key)
+      ? [...OUTING_POSITIONS, ...DEFAULT_POSITIONS.filter(p => p.zone === 'Blood Bank' || p.zone === 'Manual')]
+      : DEFAULT_POSITIONS;
+    const seen = new Set();
+    return (source || []).filter(p => {
+      const code = positionBaseCode(p?.code || '');
+      if (!code || seen.has(code)) return false;
+      seen.add(code);
+      return true;
+    });
+  }
+  function v162MissingCell(date, assignedByDate){
+    const key = normalizeDateKey(date);
+    if (isWeekend(key) || isHolidayDate(key)) return `<th class="missing-role-cell no-position-day">ไม่จัด</th>`;
+    const assigned = assignedByDate.get(key) || new Set();
+    const missing = v162ExpectedTemplates(key).filter(p => !assigned.has(positionBaseCode(p.code)));
+    if (!missing.length) return `<th class="missing-role-cell complete">ครบ</th>`;
+    return `<th class="missing-role-cell has-missing">${missing.map(p => `<span>${v162Esc(positionLabelForCell(p.code))}</span>`).join('')}</th>`;
+  }
+  function v162MonthCell(staff, date, cellRows, canEdit, ctx){
+    const key = normalizeDateKey(date);
+    const meta = ctx.meta[key] || {};
+    if (meta.weekend || meta.holiday) {
+      return `<td class="matrix-cell no-position-day ${meta.holiday ? 'holiday-cell' : 'weekend-cell'}"><span>${meta.holiday ? 'HOLIDAY' : 'WEEKEND'}</span></td>`;
+    }
+    const leaveRow = ctx.leaveIndex.get(`${String(staff?.id || '')}|${key}`) || null;
+    const isRealLeave = !!leaveRow && !v162IsNoDuty(leaveRow);
+    const leaveType = v162LeaveText(leaveRow);
+    const row = (cellRows || [])[0] || null;
+    const cleanCodes = (cellRows || []).map(r => positionLabelForCell(r?.position_code || r?.code)).filter(Boolean);
+    const cls = `${meta.outing ? 'outing-cell' : ''} ${isRealLeave ? 'leave-cell ' + leaveCellClass(leaveRow) : ''} ${!cleanCodes.length && !isRealLeave ? 'needs-review-cell' : ''}`.trim();
+    if (canEdit && !isRealLeave) {
+      const current = row?.position_code || '';
+      const options = v162PositionOptions(key, current);
+      return `<td class="matrix-cell ${cls}"><select class="month-position-select" data-month-position-edit="${key}|${v162Esc(staff?.id || '')}"><option value="">รอตรวจสอบ</option>${options.map(t => `<option value="${v162Esc(t.code)}" ${current===t.code?'selected':''}>${v162Esc(positionLabelForCell(t.code))}</option>`).join('')}</select></td>`;
+    }
+    const text = cleanCodes.length ? cleanCodes.join('<br>') : (isRealLeave ? v162Esc(leaveType) : '');
+    return `<td class="matrix-cell ${cls}">${text ? `<span>${text}</span>` : ''}</td>`;
+  }
+
+  const oldRenderMonthPositionMatrix = (typeof window.renderMonthPositionMatrix === 'function') ? window.renderMonthPositionMatrix : (typeof renderMonthPositionMatrix === 'function' ? renderMonthPositionMatrix : null);
+  window.renderMonthPositionMatrix = function renderMonthPositionMatrixV162(rows, dates){
+    try {
+      rows = Array.isArray(rows) ? rows : [];
+      dates = Array.isArray(dates) ? dates : [];
+      if (!rows.length) return empty('ยังไม่มีแผนรายเดือน กด “สร้างแผนทั้งเดือน” ก่อน');
+      const byCell = Object.create(null);
+      const assignedByDate = new Map();
+      rows.forEach((r, idx) => {
+        const sid = String(r?.staff_id || '');
+        const d = normalizeDateKey(r?.work_date);
+        if (!sid || !d) return;
+        const key = `${sid}|${d}`;
+        (byCell[key] ||= []).push({ ...r, _idx: idx });
+        const code = positionBaseCode(r?.position_code || r?.code || '');
+        if (code && code !== 'รอตรวจสอบ') {
+          if (!assignedByDate.has(d)) assignedByDate.set(d, new Set());
+          assignedByDate.get(d).add(code);
+        }
+      });
+      const rowStaffIds = new Set(rows.map(r => String(r?.staff_id || '')).filter(Boolean));
+      const displayStaff = orderedStaff((state.staff || []).filter(s => isDailyPositionEnabled(s) || rowStaffIds.has(String(s.id))));
+      const canEdit = isAdmin() && state.page === 'positionMonth';
+      const ctx = { leaveIndex: v162ActiveLeaveIndex(dates), meta: v162DateMeta(dates) };
+      const dateHeads = dates.map(date => {
+        const d = parseDate(date);
+        const mt = ctx.meta[date] || {};
+        const cls = mt.holiday ? 'holiday-head' : mt.weekend ? 'weekend-head' : mt.outing ? 'outing-head' : '';
+        return `<th class="date-head ${cls}"><b>${d.getDate()}</b><br><span>${d.toLocaleDateString('th-TH', { weekday:'short' })}</span></th>`;
+      }).join('');
+      const missingCells = dates.map(date => v162MissingCell(date, assignedByDate)).join('');
+      return `<div class="monthly-matrix-wrap v153-position-matrix v158-position-matrix v159-position-matrix v160-position-matrix v162-position-matrix">
+        <div class="matrix-legend"><span class="legend-box weekend"></span> WEEKEND/HOLIDAY = ไม่จัดตำแหน่ง <span class="legend-box outing"></span> ออกหน่วย <span class="legend-box leave"></span> แสดงเฉพาะประเภทลา / ไม่รับเวรยังจัดตำแหน่งได้ ${canEdit ? '<span class="hint">Admin เลือกตำแหน่งในช่องได้ แล้วกดบันทึกแผนทั้งเดือน</span>' : ''}</div>
+        <div class="table-wrap month-position-matrix"><table><thead>
+          <tr><th class="sticky-col staff-col">เจ้าหน้าที่</th><th class="summary-col">สรุป</th>${dateHeads}</tr>
+          <tr class="missing-role-row"><th class="sticky-col staff-col missing-role-head">ยังขาด</th><th class="summary-col missing-role-head">-</th>${missingCells}</tr>
+        </thead><tbody>${displayStaff.map(st => {
+          const bg = staffColor(st); const fg = textColorFor(bg);
+          return `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${v162Esc(bg)};color:${v162Esc(fg)}"><div class="matrix-staff-name"><b>${v162Esc(st.nickname || st.full_name || '-')}</b><small>${v162Esc(st.staff_type || '')}</small></div></td><td class="summary-col summary-action-cell"><button class="tiny-btn staff-summary-trigger compact-staff-summary" data-month-position-stat="${v162Esc(st.id)}" type="button">ดูสรุป</button></td>${dates.map(date => v162MonthCell(st, date, byCell[`${st.id}|${date}`] || [], canEdit, ctx)).join('')}</tr>`;
+        }).join('')}</tbody></table></div></div>`;
+    } catch (err) {
+      console.error('V162 renderMonthPositionMatrix failed', err);
+      if (oldRenderMonthPositionMatrix) {
+        try { return oldRenderMonthPositionMatrix.apply(this, arguments); } catch (_) {}
+      }
+      return `<div class="notice error-notice">โหลดตารางตำแหน่งรายเดือนไม่สำเร็จ: ${v162Esc(err.message || err)}</div>`;
+    }
+  };
+  try { renderMonthPositionMatrix = window.renderMonthPositionMatrix; } catch (_) {}
+
+  function v162StaffOptionList(selectedId, predicate){
+    let staff = [];
+    try { staff = orderedStaff((state.staff || []).filter(s => !predicate || predicate(s))); }
+    catch (_) { staff = state.staff || []; }
+    const selected = selectedId ? (state.staff || []).find(s => String(s.id) === String(selectedId)) : null;
+    if (selected && !staff.some(s => String(s.id) === String(selected.id))) staff = [selected, ...staff];
+    return staff.map(s => `<option value="${v162Esc(s.id)}" ${String(s.id)===String(selectedId || '')?'selected':''}>${v162Esc(s.nickname || s.full_name || s.email || '-')}</option>`).join('');
+  }
+  function v162DailySelect(row, idx, date){
+    const baseCode = positionBaseCode(row.position_code || row.code);
+    const base = positionTemplateByCode(baseCode, date) || row;
+    const code = base.code || row.position_code || row.code || 'รอตรวจสอบ';
+    const rule = row.main_rule || base.main_rule || '';
+    const positionForCheck = { ...base, code, position_code: code, main_rule: rule };
+    const opts = v162StaffOptionList(row.staff_id, s => baseCode === 'รอตรวจสอบ' || positionCandidateOk(s, positionForCheck, date));
+    return `<select data-position-row="${idx}" data-position-code="${v162Esc(code)}" data-position-zone="${v162Esc(row.zone || base.zone || '')}" data-position-break="${v162Esc(row.break_time || base.break_time || '')}" data-position-rule="${v162Esc(rule)}" data-position-job="${v162Esc(row.job_desc || base.job_desc || '')}"><option value="">-</option>${opts}</select>`;
+  }
+  const oldRenderPositionsPage = (typeof window.renderPositionsPage === 'function') ? window.renderPositionsPage : (typeof renderPositionsPage === 'function' ? renderPositionsPage : null);
+  window.renderPositionsPage = function renderPositionsPageV162(){
+    try {
+      const date = state.positionDate || todayStr();
+      const existingRows = sortPositionRows((state.positions || []).filter(x => normalizeDateKey(x.work_date) === date));
+      const template = positionTemplateForDate(date) || [];
+      const rows = existingRows.length ? existingRows.map(r => {
+        const base = positionTemplateByCode(r.position_code, date) || {};
+        return { ...base, ...r, code: r.position_code, position_code: r.position_code || base.code };
+      }) : template.map(p => ({ ...p, position_code: p.code, staff_id: null }));
+      const canManage = canManagePositions(date);
+      const key = date.slice(0,7);
+      const incharge = currentInchargeForMonth(key);
+      const dayStatus = (state.positionDayStatus || []).find(x => normalizeDateKey(x.work_date) === date);
+      const isPublished = dayStatus?.status === 'published';
+      const noPosition = isNoPositionDay(date);
+      const rowHtml = rows.map((r,idx) => {
+        const baseCode = positionBaseCode(r.position_code || r.code);
+        const base = positionTemplateByCode(baseCode, date) || r;
+        const select = canManage ? v162DailySelect(r, idx, date) : staffPill(r.staff_id);
+        const label = positionLabelForCell(r.position_code || base.code);
+        const zone = r.zone || base.zone || '';
+        return `<tr><td>${v162Esc(zone)}</td><td><b>${v162Esc(label)}</b></td><td>${v162Esc(r.break_time || base.break_time || '')}</td><td>${select}</td><td>${v162Esc(r.main_rule || base.main_rule || '')}</td><td>${v162Esc(r.job_desc || base.job_desc || '')}</td></tr>`;
+      }).join('');
+      const cardHtml = rows.map((r,idx) => {
+        const baseCode = positionBaseCode(r.position_code || r.code);
+        const base = positionTemplateByCode(baseCode, date) || r;
+        const select = canManage ? v162DailySelect(r, idx, date) : staffPill(r.staff_id);
+        return `<div class="position-mobile-card"><div class="section-title"><h3>${v162Esc(positionLabelForCell(r.position_code || base.code))}</h3>${badge(r.zone || base.zone || '-', (r.zone || base.zone) === 'ออกหน่วย' ? 'red' : 'blue')}</div><div class="muted">พัก ${v162Esc(r.break_time || base.break_time || '-')} • ${v162Esc(r.main_rule || base.main_rule || '')}</div><label>ผู้รับผิดชอบ ${select}</label><p>${v162Esc(r.job_desc || base.job_desc || '')}</p></div>`;
+      }).join('');
+      const table = `<div class="table-wrap daily-position-table desktop-table v162-daily-position-table"><table><thead><tr><th>โซน</th><th>ตำแหน่ง</th><th>เวลาพัก</th><th>ผู้รับผิดชอบ</th><th>ผู้ปฏิบัติหลัก</th><th>หน้าที่โดยย่อ</th></tr></thead><tbody>${rowHtml}</tbody></table></div><div class="mobile-position-list">${cardHtml}</div>`;
+      return `<div class="card v162-positions-page">
+        <div class="toolbar">
+          <label>วันที่ <input type="date" id="positionDateInput" value="${v162Esc(date)}"></label>
+          ${isAdmin() ? `<label>อินชาร์จประจำเดือน <select id="inchargeSelect"><option value="">ไม่ระบุ</option>${staffOptions(incharge)}</select></label><button class="soft-btn" data-save-incharge>บันทึกอินชาร์จ</button>` : `<span>${badge('อินชาร์จ: ' + staffNick(incharge), 'blue')}</span>`}
+          ${canManage && !noPosition ? '<button class="primary-btn" data-save-positions>บันทึกตำแหน่งวันนี้</button>' : ''}
+          ${isPublished ? '<span class="badge green">ประกาศแล้ว</span>' : '<span class="badge orange">ร่าง</span>'}
+        </div>
+        <div class="notice soft-notice">ตรวจตำแหน่งของวันนี้ให้ตรงกับคนลาและงานจริง แล้วกดบันทึกตำแหน่งวันนี้ หากมีคนลาหลังจากบันทึกแล้ว ให้ปรับหน้างานและบันทึกใหม่อีกครั้ง</div>
+        ${noPosition ? `<div class="notice">วันนี้เป็น${isHolidayDate(date) ? 'วันหยุดราชการ' : 'วันเสาร์-อาทิตย์'} จึงไม่ต้องจัดตำแหน่งรายวัน</div>` : ''}
+        ${!noPosition && hasOuting(date) ? `<div class="notice">วันนี้มีออกหน่วย: คนที่ถูกติ๊กในกิจกรรมจะถูกจัดลงชุดออกหน่วย ส่วนคนที่เหลือจะถูกเกลี่ยไปตำแหน่งห้อง Blood Bank</div>` : ''}
+        ${noPosition ? empty('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : table}
+      </div>`;
+    } catch (err) {
+      console.error('V162 renderPositionsPage failed', err);
+      if (oldRenderPositionsPage) {
+        try { return oldRenderPositionsPage.apply(this, arguments); } catch (_) {}
+      }
+      return `<div class="notice error-notice">โหลดตารางตำแหน่งรายวันไม่สำเร็จ: ${v162Esc(err.message || err)}</div>`;
+    }
+  };
+  try { renderPositionsPage = window.renderPositionsPage; } catch (_) {}
+
+  const oldRenderPositionMonthPage = (typeof window.renderPositionMonthPage === 'function') ? window.renderPositionMonthPage : (typeof renderPositionMonthPage === 'function' ? renderPositionMonthPage : null);
+  if (oldRenderPositionMonthPage) {
+    window.renderPositionMonthPage = function renderPositionMonthPageV162(){ return oldRenderPositionMonthPage.apply(this, arguments); };
+    try { renderPositionMonthPage = window.renderPositionMonthPage; } catch (_) {}
+  }
+})();
+
+/* V162b: safe roster schedule grid render to prevent sticky/summary layout freeze */
+(function(){
+  'use strict';
+  function esc(v){ try { return escapeHtml(v == null ? '' : String(v)); } catch(_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); } }
+  function leaveIndexForDates(staffList, dates){
+    const out = new Map();
+    const ids = new Set((staffList || []).map(s => String(s.id)));
+    (state.leaves || []).forEach(l => {
+      const sid = String(l?.staff_id || '');
+      if (!ids.has(sid)) return;
+      const status = String(l?.status || l?.approval_status || 'active').toLowerCase();
+      if (/(cancel|reject|delete|ยกเลิก|ไม่อนุมัติ)/i.test(status)) return;
+      (dates || []).forEach(d => {
+        try { if (overlapsDate(l, d) && !out.has(`${sid}|${d}`)) out.set(`${sid}|${d}`, l); } catch(_) {}
+      });
+    });
+    return out;
+  }
+  const oldRenderGridView = (typeof window.renderGridView === 'function') ? window.renderGridView : (typeof renderGridView === 'function' ? renderGridView : null);
+  window.renderGridView = function renderGridViewV162(staffList, assignments, key=state.monthKey){
+    try {
+      const dates = scheduleMonthDates(key);
+      staffList = (staffList || []).filter(isRosterEnabled);
+      assignments = assignments || [];
+      const byCell = Object.create(null);
+      assignments.forEach(a => {
+        const sid = String(a?.staff_id || '');
+        const d = normalizeDateKey(a?.duty_date);
+        if (!sid || !d) return;
+        const k = `${sid}|${d}`;
+        (byCell[k] ||= []).push(a);
+      });
+      Object.values(byCell).forEach(list => list.sort((a,b) => dutySortIndex(a?.duty_code) - dutySortIndex(b?.duty_code)));
+      const leaveIdx = leaveIndexForDates(staffList, dates);
+      const heads = dates.map(date => {
+        const d = parseDate(date);
+        const off = isWeekend(date) || isHolidayDate(date);
+        const hname = isHolidayDate(date) ? `<br><small>${esc(holidayName(date))}</small>` : '';
+        return `<th class="${off ? 'offday-col' : ''}">${d.getDate()}<br><span>${d.toLocaleDateString('th-TH', { weekday:'short' })}</span>${hname}</th>`;
+      }).join('');
+      const body = staffList.map(st => {
+        const bg = staffColor(st); const fg = textColorFor(bg);
+        const cells = dates.map(date => {
+          const shifts = byCell[`${st.id}|${date}`] || [];
+          const off = isWeekend(date) || isHolidayDate(date);
+          const leave = leaveIdx.get(`${String(st.id)}|${date}`) || null;
+          const leaveCls = leave ? leaveCellClass(leave) : '';
+          const leaveHtml = leave ? leaveCellBadge(leave) : '';
+          const shiftHtml = shifts.map(a => {
+            const attrs = canRequestTrade(a) ? `data-trade-duty="${esc(a.id)}"` : `data-staff-stat="${esc(st.id)}"`;
+            return `<button type="button" class="clean-shift-pill" style="--staff-bg:${esc(bg)};--staff-fg:${esc(fg)};background:${esc(bg)};color:${esc(fg)}" ${attrs}>${esc(dutyDisplayLabel(a?.duty_code))}</button>`;
+          }).join('');
+          return `<td class="${off ? 'offday-col' : ''} ${leaveCls}"><div class="clean-cell-stack">${leaveHtml}${shiftHtml}${(!shiftHtml && off && !leave) ? '<span class="muted">หยุด</span>' : ''}</div></td>`;
+        }).join('');
+        return `<tr><th class="clean-sticky-col clean-staff-cell" style="--staff-bg:${esc(bg)};--staff-fg:${esc(fg)};background:${esc(bg)};color:${esc(fg)}"><b>${esc(st.nickname || st.full_name || '-')}</b></th><td class="clean-summary-cell"><button class="tiny-btn" type="button" data-staff-stat="${esc(st.id)}">ดูสรุป</button></td>${cells}</tr>`;
+      }).join('');
+      return `<div class="table-wrap clean-grid-wrap"><table id="scheduleTable" class="clean-schedule-grid v160-schedule-grid v162-schedule-grid"><thead><tr><th class="clean-sticky-col clean-staff-head">เจ้าหน้าที่</th><th class="clean-summary-head">สรุป</th>${heads}</tr></thead><tbody>${body}</tbody></table></div>`;
+    } catch (err) {
+      console.error('V162 renderGridView failed', err);
+      if (oldRenderGridView) { try { return oldRenderGridView.apply(this, arguments); } catch(_) {} }
+      return `<div class="notice error-notice">โหลดตารางเวรไม่สำเร็จ: ${esc(err.message || err)}</div>`;
+    }
+  };
+  try { renderGridView = window.renderGridView; } catch(_) {}
 })();

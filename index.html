@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=161" />
+  <link rel="stylesheet" href="style.css?v=162" />
 </head>
 <body>
   <div id="setupWarning" class="setup-warning hidden">
@@ -19,27 +19,27 @@
     <div class="auth-card">
       <div class="brand-mark">CNMI</div>
       <h1>ระบบเวรและกิจกรรมหน่วยงาน</h1>
-      <p class="muted">Login ด้วยชื่อผู้ใช้หรืออีเมล Mahidol และรหัสผ่านของระบบ</p>
+      <p class="muted">กรอกอีเมล Mahidol และ Password เพื่อเข้าสู่ระบบ</p>
 
-      <div class="auth-tabs">
-        <button class="auth-tab active" data-auth-tab="login">เข้าสู่ระบบ</button>
-        <button class="auth-tab" data-auth-tab="setupPassword">Login ครั้งแรก / ลืมรหัสผ่าน</button>
+      <div class="auth-tabs hidden" aria-hidden="true">
+        <button class="auth-tab active" data-auth-tab="login" type="button">เข้าสู่ระบบ</button>
+        <button class="auth-tab" data-auth-tab="setupPassword" type="button">Login ครั้งแรก / ลืมรหัสผ่าน</button>
       </div>
 
       <form id="loginForm" class="auth-panel active">
-        <label>ชื่อผู้ใช้ หรืออีเมล Mahidol
-          <input id="loginEmail" type="text" placeholder="เช่น user หรือ name@mahidol.ac.th" autocomplete="username" required>
+        <label>อีเมล Mahidol
+          <input id="loginEmail" type="email" placeholder="name@mahidol.ac.th" autocomplete="username" required>
         </label>
         <label>รหัสผ่าน
-          <input id="loginPassword" type="password" placeholder="รหัสผ่าน" autocomplete="current-password" required>
+          <input id="loginPassword" type="password" placeholder="เช่น CNMI@รหัสพนักงาน" autocomplete="current-password" required>
         </label>
         <button class="primary-btn full-btn" type="submit">เข้าสู่ระบบ</button>
-        <p class="hint">ยังไม่เคยตั้งรหัสผ่าน หรือจำรหัสผ่านไม่ได้ ให้ไปแท็บ “Login ครั้งแรก / ลืมรหัสผ่าน”</p>
+        <p class="hint login-helper-text">สำหรับการล็อกอินครั้งแรก หรือ ลืมรหัสผ่าน กรุณาใช้อีเมลมหิดล ส่วนรหัสผ่านคือ CNMI@ ตามด้วยรหัสพนักงาน</p>
       </form>
 
-      <form id="setupPasswordForm" class="auth-panel">
+      <form id="setupPasswordForm" class="auth-panel hidden" aria-hidden="true">
         <label>อีเมล Mahidol
-          <input id="setupPasswordEmail" type="email" placeholder="name@mahidol.ac.th" autocomplete="username" required>
+          <input id="setupPasswordEmail" type="email" placeholder="name@mahidol.ac.th" autocomplete="username">
         </label>
         <button class="primary-btn full-btn" type="submit">ส่งลิงก์ตั้งรหัสผ่าน</button>
         <p class="hint">ระบบจะส่งลิงก์เฉพาะอีเมลที่อยู่ในรายชื่อเจ้าหน้าที่และเปิดใช้งานแล้วเท่านั้น</p>
@@ -103,7 +103,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="config.js?v=149"></script>
   <script src="patch-v136-preauth.js?v=149"></script>
-  <script src="app.js?v=161"></script>
+  <script src="app.js?v=162"></script>
   <script src="patch-v136-auth-layout-tabs-final.js?v=149"></script>
   <script src="patch-v137-critical-regression-restore.js?v=149"></script>
   <script src="patch-v138-password-complete-redirect.js?v=149"></script>

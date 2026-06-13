@@ -1669,3 +1669,42 @@ body.cnmi-sidebar-hidden .page-content{max-width:none!important;}
 .force-setup-card{border:1px solid rgba(59,130,246,.22);box-shadow:0 16px 45px rgba(59,130,246,.12);}
 .compact-info{margin:12px 0 16px;}
 .nav-force-note{padding:12px;margin:8px;border-radius:14px;background:#fff7ed;color:#9a3412;font-size:.9rem;font-weight:700;line-height:1.4;}
+
+/* V162: single login form + safer table rendering */
+.auth-tabs.hidden,
+#setupPasswordForm.hidden { display:none!important; }
+.login-helper-text{
+  margin-top:10px;
+  padding:10px 12px;
+  border:1px solid #bfdbfe;
+  border-radius:14px;
+  background:#eff6ff;
+  color:#1e3a8a;
+  line-height:1.55;
+  font-weight:600;
+}
+.v162-account-settings .profile-info-list b{word-break:break-word;}
+.v162-position-matrix .month-position-matrix table{table-layout:auto;}
+.v162-position-matrix .summary-col{
+  min-width:72px!important;
+  max-width:72px!important;
+  width:72px!important;
+  background:#fff;
+  box-shadow:2px 0 0 #e5e7eb;
+}
+.v162-position-matrix thead .summary-col{background:#f6f9fc;z-index:4;}
+.v162-position-matrix .staff-col{left:0!important;}
+.v162-position-matrix .matrix-cell .cell-note{display:none!important;}
+.v162-position-matrix .matrix-cell{contain:layout paint;}
+.v162-daily-position-table table{min-width:920px;}
+.error-notice{border-color:#fecaca;background:#fef2f2;color:#991b1b;}
+@media(max-width:720px){
+  .v162-position-matrix .summary-col{min-width:62px!important;max-width:62px!important;width:62px!important;}
+  .login-helper-text{font-size:.92rem;}
+}
+.v162-position-matrix .summary-col{position:static!important;left:auto!important;}
+.v162-schedule-grid .clean-summary-head,
+.v162-schedule-grid .clean-summary-cell{position:static!important;left:auto!important;min-width:70px!important;width:70px!important;max-width:70px!important;background:#fff!important;box-shadow:2px 0 0 #e5e7eb;}
+.v162-schedule-grid thead .clean-summary-head{background:#f8fafc!important;}
+.v162-schedule-grid .clean-staff-head,
+.v162-schedule-grid .clean-staff-cell{left:0!important;}
