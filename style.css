@@ -2266,3 +2266,25 @@ thead .v179-sticky-first-col {
   z-index: 90 !important;
   background-color: #f6f9fc !important;
 }
+
+/* V180 HR Dummy Export + Admin OT compact forms */
+.v180-ot-page .section-title { align-items: flex-start; gap: 12px; }
+.v180-admin-card .form-grid { align-items: end; }
+.v180-admin-attendance-form,
+.v180-admin-ot-extra-form { gap: 12px; }
+.v180-admin-attendance-form .v180-calculated-hours {
+  font-weight: 700;
+  background: #eef8ff;
+  border-color: rgba(63, 150, 205, .45);
+}
+.v180-admin-ot-extra-form textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+.v180-ot-page [data-export-ot-hr-excel] {
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .v180-ot-page .section-title { align-items: stretch; }
+  .v180-ot-page [data-export-ot-hr-excel] { width: 100%; }
+}

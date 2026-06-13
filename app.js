@@ -8421,3 +8421,549 @@ function bindGlobalEvents() {
   window.applyFreezeFirstColumnV179 = applyFreezeFirstColumnV179;
   console.info(`${VERSION_V179} loaded`);
 })();
+
+/* =========================
+   V180 HR Dummy OT Export + Admin OT Compact Forms
+   - HR export cycle: 16 current month to 15 next month.
+   - Dummy shift generator: 8h slots, compresses adjacent slots into 16h rows, blocks leave dates, keeps max 16h/person/day, balances 3-5 people/shift.
+   - Admin mode OT forms: compact fields and real-time hours calculation.
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V180 = 'V180_HR_DUMMY_EXPORT_ADMIN_OT_UI';
+  const HR_HOURS_TOKEN = 'HR_HOURS=';
+  const SLOT_META_V180 = [
+    { key:'00-08', start:'0:00', end:'8:00', hours:8, idx:0 },
+    { key:'08-16', start:'8:00', end:'16:00', hours:8, idx:1 },
+    { key:'16-00', start:'16:00', end:'0:00', hours:8, idx:2 }
+  ];
+
+  function esc180(v){
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function safePad180(v, len=2){
+    try { return pad(v); } catch (_) { return String(v).padStart(len, '0'); }
+  }
+  function dateObj180(dateKey){
+    try { return parseDate(dateKey); }
+    catch (_) {
+      const [y,m,d] = String(dateKey || '').split('-').map(Number);
+      return new Date(y || 2000, (m || 1) - 1, d || 1);
+    }
+  }
+  function dateKey180(d){
+    return `${d.getFullYear()}-${safePad180(d.getMonth()+1)}-${safePad180(d.getDate())}`;
+  }
+  function addDays180(dateKey, days){
+    const d = dateObj180(normalizeDateKey(dateKey) || todayStr());
+    d.setDate(d.getDate() + Number(days || 0));
+    return dateKey180(d);
+  }
+  function nextMonthKey180(key){
+    const [y,m] = String(key || monthKey(new Date())).split('-').map(Number);
+    const d = new Date(y || new Date().getFullYear(), (m || 1), 1);
+    return `${d.getFullYear()}-${safePad180(d.getMonth()+1)}`;
+  }
+  function reportMonth180(){
+    try { return otReportMonth() || state.monthKey || monthKey(new Date()); }
+    catch (_) { return state.monthKey || monthKey(new Date()); }
+  }
+  function hrCycleRange180(month){
+    const key = month || reportMonth180();
+    const start = `${key}-16`;
+    const end = `${nextMonthKey180(key)}-15`;
+    return { month:key, start, end };
+  }
+  function dateList180(start, end){
+    const out = [];
+    let d = dateObj180(start);
+    const stop = dateObj180(end).getTime();
+    for (let i=0; i<45 && d.getTime() <= stop; i++) {
+      out.push(dateKey180(d));
+      d.setDate(d.getDate()+1);
+    }
+    return out;
+  }
+  function timeToMinutes180(t){
+    const m = String(t || '').match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  }
+  function calcDateTimeHours180(startDate, startTime, endDate, endTime){
+    const sDate = normalizeDateKey(startDate) || todayStr();
+    let eDate = normalizeDateKey(endDate) || sDate;
+    const sMin = timeToMinutes180(startTime);
+    const eMin = timeToMinutes180(endTime);
+    if (sMin == null || eMin == null) return 0;
+    let start = new Date(`${sDate}T${String(startTime).length === 5 ? `${startTime}:00` : startTime}`);
+    let end = new Date(`${eDate}T${String(endTime).length === 5 ? `${endTime}:00` : endTime}`);
+    if (end <= start) {
+      eDate = addDays180(sDate, 1);
+      end = new Date(`${eDate}T${String(endTime).length === 5 ? `${endTime}:00` : endTime}`);
+    }
+    const h = (end - start) / 36e5;
+    return Number.isFinite(h) && h > 0 ? Math.round(h * 10) / 10 : 0;
+  }
+  function explicitHoursFromText180(text){
+    const raw = String(text || '');
+    const token = raw.match(/HR_HOURS\s*=\s*(\d+(?:\.\d+)?)/i);
+    if (token) return Number(token[1]);
+    const th = raw.match(/(?:จำนวนเวลา\s*OT|ชั่วโมงที่ต้องการเบิก|ชั่วโมงเบิก|จำนวนชั่วโมง|manual\s*hours)\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
+    return th ? Number(th[1]) : null;
+  }
+  function explicitHoursFromRow180(row){
+    const fromField = Number(row?.manual_hours ?? row?.requested_hours ?? row?.hours ?? NaN);
+    if (Number.isFinite(fromField) && fromField > 0) return fromField;
+    const parsed = explicitHoursFromText180(`${row?.note || ''} ${row?.reason || ''}`);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  const previousCalcOtHoursV180 = window.calcOtHours || (typeof calcOtHours === 'function' ? calcOtHours : null);
+  window.calcOtHours = calcOtHours = function calcOtHoursV180(row){
+    const explicit = explicitHoursFromRow180(row);
+    if (explicit !== null) return Math.round(explicit * 10) / 10;
+    return previousCalcOtHoursV180 ? previousCalcOtHoursV180(row) : 0;
+  };
+
+  function activeStaffList180(){
+    const list = (state.staff || []).filter(s => {
+      const activeOk = Object.prototype.hasOwnProperty.call(s, 'active') ? (s.active === true || String(s.active).toLowerCase() === 'true') : true;
+      const scheduleOk = Object.prototype.hasOwnProperty.call(s, 'schedule') ? (s.schedule === true || String(s.schedule).toLowerCase() === 'true') : true;
+      const role = String(s.role || s.position || '').toLowerCase();
+      return activeOk && scheduleOk && !role.includes('physician') && !String(s.staff_type || '').includes('แพทย์');
+    });
+    try { return orderedStaff(list); }
+    catch (_) { return list.sort((a,b) => String(a.nickname || a.full_name || '').localeCompare(String(b.nickname || b.full_name || ''), 'th')); }
+  }
+  function staffOptions180(selectedId){
+    return activeStaffList180().map(s => `<option value="${esc180(s.id)}" ${String(s.id)===String(selectedId)?'selected':''}>${esc180(s.nickname || s.full_name || s.email || s.id)}</option>`).join('');
+  }
+  function dutyOptions180(selected=''){
+    const codes = (typeof DUTY_COLUMNS !== 'undefined' && Array.isArray(DUTY_COLUMNS)) ? DUTY_COLUMNS : ['ชบด1','ชบด2','ชบด3','ช4A','ช4B','ช3A','ช3B','ช9-เคิก','ช9-MT'];
+    return codes.map(code => `<option value="${esc180(code)}" ${String(code)===String(selected)?'selected':''}>${esc180((typeof DUTY_LABEL !== 'undefined' && DUTY_LABEL[code]) || code)}</option>`).join('');
+  }
+  function reasonOptions180(){
+    const reasons = Array.isArray(OT_REASONS) ? OT_REASONS : ['เวรปั่นเลือด','อื่นๆ'];
+    return reasons.map(r => `<option value="${esc180(r)}">${esc180(r)}</option>`).join('');
+  }
+  function hrCycleHint180(){
+    const r = hrCycleRange180(reportMonth180());
+    return `รอบเบิก HR: ${formatThaiDate(r.start)} - ${formatThaiDate(r.end)}`;
+  }
+
+  const previousRenderOtPageV180 = window.renderOtPage || (typeof renderOtPage === 'function' ? renderOtPage : null);
+  window.renderOtPage = renderOtPage = function renderOtPageV180(){
+    if (!isAdmin()) {
+      const html = previousRenderOtPageV180 ? previousRenderOtPageV180.apply(this, arguments) : '';
+      return html;
+    }
+    const today = todayStr();
+    const tomorrow = addDays180(today, 1);
+    const rows = state.otRequests || [];
+    return `<div class="grid grid-2 ot-page v180-ot-page">
+      <div class="card ot-card v180-admin-card">
+        <h3>ส่วนที่ 1 ยืนยันวันอยู่เวร</h3>
+        <p class="muted">Admin บันทึกแทนเจ้าหน้าที่ โดยระบบคำนวณชั่วโมงจากเวลาเริ่ม-สิ้นสุดแบบ Real-time</p>
+        <form id="attendanceAdminFormV180" class="form-grid compact-form attendance-form v180-admin-attendance-form">
+          <label>เลือกชื่อเจ้าหน้าที่ <select name="staff_id" required>${staffOptions180(currentStaffId())}</select></label>
+          <label>เลือกประเภทเวร <select name="duty_code" required>${dutyOptions180()}</select></label>
+          <label>วันที่อยู่เวร <input name="duty_date" type="date" value="${esc180(today)}" required></label>
+          <label>เวลาเริ่มทำงาน <input name="start_time" type="time" value="08:00" required></label>
+          <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${esc180(tomorrow)}" required></label>
+          <label>เวลาสิ้นสุด <input name="end_time" type="time" value="08:00" required></label>
+          <label>จำนวนเวลา OT (ชั่วโมง) <input name="manual_hours" class="v180-calculated-hours" type="number" min="0" max="48" step="0.5" value="24" readonly required></label>
+          <label>หมายเหตุ Admin <input name="admin_note" placeholder="เช่น ลงย้อนหลังแทนน้อง"></label>
+          <button class="primary-btn wide" type="submit">ยืนยันรับ OT / อยู่เวร</button>
+        </form>
+      </div>
+      <div class="card ot-card v180-admin-card">
+        <h3>ส่วนที่ 2 ขอ OT เพิ่ม / เวรปั่นเลือด</h3>
+        <p class="hint compact">โหมด Admin ใช้บันทึกยอดชั่วโมงที่ต้องการเบิกโดยตรง ระบบจะเก็บไว้เป็นรายการ OT รออนุมัติ</p>
+        <form id="otForm" class="form-grid v180-admin-ot-extra-form" data-admin-simple="1">
+          <label>เลือกชื่อเจ้าหน้าที่ <select name="staff_id" required>${staffOptions180(currentStaffId())}</select></label>
+          <label>ชั่วโมงที่ต้องการเบิก <input name="requested_hours" type="number" min="0.5" max="240" step="0.5" placeholder="เช่น 8 / 16 / 176" required></label>
+          <label class="wide">เหตุผล <textarea name="reason" rows="3" placeholder="เช่น เวรปั่นเลือด / งานเร่งด่วน / ปรับยอดเบิก OT" required></textarea></label>
+          <button class="primary-btn wide" type="submit">ยืนยันขอ OT เพิ่ม</button>
+        </form>
+      </div>
+      <div class="card wide-card" style="grid-column:1/-1;">
+        <div class="section-title"><h3>ส่วนที่ 3 อนุมัติ OT</h3><button class="ghost-btn" data-export-ot-excel>Export Excel สรุปเดือนนี้</button></div>
+        ${renderOtTable(rows)}
+      </div>
+      <div class="card" style="grid-column:1/-1;">
+        <div class="section-title"><div><h3>ส่วนที่ 4 สรุป OT รายเดือน</h3><p class="hint">สรุปเฉพาะรายการที่อนุมัติแล้ว • ${esc180(hrCycleHint180())}</p></div><button class="primary-btn" data-export-ot-hr-excel>Export Excel สำหรับเบิกเงิน</button></div>
+        ${renderOtSummary()}
+      </div>
+    </div>`;
+  };
+
+  function syncAdminAttendanceHours180(form){
+    if (!form) return;
+    const dutyDate = form.querySelector('[name="duty_date"]')?.value || todayStr();
+    const startTime = form.querySelector('[name="start_time"]')?.value || '08:00';
+    const endDateInput = form.querySelector('[name="end_date"]');
+    const endTime = form.querySelector('[name="end_time"]')?.value || '08:00';
+    let endDate = endDateInput?.value || dutyDate;
+    const h = calcDateTimeHours180(dutyDate, startTime, endDate, endTime);
+    const sMin = timeToMinutes180(startTime);
+    const eMin = timeToMinutes180(endTime);
+    if (endDateInput && normalizeDateKey(endDate) === normalizeDateKey(dutyDate) && sMin != null && eMin != null && eMin <= sMin) {
+      endDateInput.value = addDays180(dutyDate, 1);
+    }
+    const inp = form.querySelector('[name="manual_hours"]');
+    if (inp) inp.value = h ? String(h) : '';
+  }
+  window.syncAdminAttendanceHoursV180 = syncAdminAttendanceHours180;
+
+  async function writeOtWithFallback180(payload, existingId){
+    const attempts = [];
+    attempts.push({ ...payload });
+    const noEndDate = { ...payload }; delete noEndDate.end_date; attempts.push(noEndDate);
+    const noStart = { ...payload }; delete noStart.start_time; delete noStart.end_date; attempts.push(noStart);
+    let lastError = null;
+    for (const attempt of attempts) {
+      const res = existingId
+        ? await sb.from('ot_requests').update(attempt).eq('id', existingId)
+        : await sb.from('ot_requests').insert(attempt);
+      if (!res.error) return res;
+      lastError = res.error;
+      if (!/end_date|start_time|column|schema|cache/i.test(String(res.error?.message || ''))) break;
+    }
+    throw new Error(lastError?.message || 'บันทึกรายการ OT ไม่สำเร็จ');
+  }
+
+  async function saveAdminAttendance180(form){
+    if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้น', { tone:'error' });
+    syncAdminAttendanceHours180(form);
+    const fd = new FormData(form);
+    const staffId = String(fd.get('staff_id') || '').trim();
+    const dutyCode = String(fd.get('duty_code') || '').trim();
+    const dutyDate = normalizeDateKey(fd.get('duty_date'));
+    const startTime = String(fd.get('start_time') || '').trim();
+    let endDate = normalizeDateKey(fd.get('end_date')) || dutyDate;
+    const endTime = String(fd.get('end_time') || '').trim();
+    const adminNote = String(fd.get('admin_note') || '').trim();
+    const hours = calcDateTimeHours180(dutyDate, startTime, endDate, endTime);
+    if (!staffId) return showToast('กรุณาเลือกเจ้าหน้าที่', { tone:'error' });
+    if (!dutyCode) return showToast('กรุณาเลือกประเภทเวร', { tone:'error' });
+    if (!dutyDate || !startTime || !endTime) return showToast('กรุณาระบุวันที่และเวลาให้ครบ', { tone:'error' });
+    if (!Number.isFinite(hours) || hours <= 0) return showToast('คำนวณชั่วโมง OT ไม่ได้ กรุณาตรวจวันที่/เวลา', { tone:'error' });
+    if (hours > 48) return showToast('ช่วงเวลายาวเกิน 48 ชั่วโมง กรุณาตรวจวันที่/เวลาอีกครั้ง', { tone:'error' });
+    const start = new Date(`${dutyDate}T${startTime.length === 5 ? `${startTime}:00` : startTime}`);
+    let end = new Date(`${endDate}T${endTime.length === 5 ? `${endTime}:00` : endTime}`);
+    if (end <= start) {
+      endDate = addDays180(dutyDate, 1);
+      end = new Date(`${endDate}T${endTime.length === 5 ? `${endTime}:00` : endTime}`);
+    }
+    const pos = await getGps();
+    if (!pos.ok) return showGpsHelp(pos.message);
+    const deviceInfo = [navigator.userAgent, VERSION_V180, `admin:${staffNick(currentStaffId())}`, `start ${dutyDate} ${startTime}`, `end ${endDate} ${endTime}`].filter(Boolean).join(' | ').slice(0,250);
+    const attendancePayload = { staff_id: staffId, duty_date: dutyDate, check_in_at: start.toISOString(), lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device: deviceInfo };
+    const note = [`บันทึกแทนโดย Admin (${staffNick(currentStaffId())})`, `ประเภทเวร: ${dutyCode}`, `จำนวนเวลา OT: ${hours} ชั่วโมง`, `${HR_HOURS_TOKEN}${hours}`, adminNote ? `หมายเหตุ: ${adminNote}` : ''].filter(Boolean).join(' | ');
+    const otPayload = { staff_id: staffId, work_date: dutyDate, end_date: endDate, start_time: startTime, end_time: endTime, reason: 'ยืนยันอยู่เวรโดย Admin', note, status:'รออนุมัติ', lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device: deviceInfo };
+    setBusy(true, 'กำลังบันทึก Admin OT');
+    try {
+      const existingAttendance = await sb.from('attendance_logs').select('id').eq('staff_id', staffId).eq('duty_date', dutyDate).limit(1);
+      if (existingAttendance.error) throw new Error(existingAttendance.error.message);
+      const attId = existingAttendance.data?.[0]?.id || null;
+      const attWrite = attId ? await sb.from('attendance_logs').update(attendancePayload).eq('id', attId) : await sb.from('attendance_logs').insert(attendancePayload);
+      if (attWrite.error) throw new Error(attWrite.error.message);
+      const existingOt = await sb.from('ot_requests').select('id,status').eq('staff_id', staffId).eq('work_date', dutyDate).ilike('reason', '%ยืนยันอยู่เวร%').limit(1);
+      if (existingOt.error) throw new Error(existingOt.error.message);
+      await writeOtWithFallback180(otPayload, existingOt.data?.[0]?.id || null);
+      await loadAllData();
+      renderPage();
+      showToast(attId ? 'อัปเดตเวลายืนยันอยู่เวรและรายการ OT แล้ว' : 'บันทึกยืนยันอยู่เวรโดย Admin แล้ว');
+    } catch (err) {
+      console.error(`${VERSION_V180} saveAdminAttendance failed`, err);
+      showToast(err.message || 'บันทึก Admin OT ไม่สำเร็จ', { tone:'error' });
+    } finally { setBusy(false); }
+  }
+
+  const previousSaveOtRequestV180 = window.saveOtRequest || (typeof saveOtRequest === 'function' ? saveOtRequest : null);
+  window.saveOtRequest = saveOtRequest = async function saveOtRequestV180(form){
+    if (!isAdmin() || !form?.dataset?.adminSimple) {
+      return previousSaveOtRequestV180 ? previousSaveOtRequestV180(form) : undefined;
+    }
+    const fd = new FormData(form);
+    const staffId = String(fd.get('staff_id') || '').trim();
+    const hours = Number(fd.get('requested_hours'));
+    const reason = String(fd.get('reason') || '').trim();
+    if (!staffId) return showToast('กรุณาเลือกเจ้าหน้าที่', { tone:'error' });
+    if (!Number.isFinite(hours) || hours <= 0) return showToast('กรุณาระบุชั่วโมงที่ต้องการเบิกให้ถูกต้อง', { tone:'error' });
+    if (!reason) return showToast('กรุณาระบุเหตุผล', { tone:'error' });
+    const cycle = hrCycleRange180(reportMonth180());
+    const workDate = cycle.start;
+    const note = [`ชั่วโมงที่ต้องการเบิก: ${hours} ชั่วโมง`, `${HR_HOURS_TOKEN}${hours}`, `Admin บันทึกแทนโดย ${staffNick(currentStaffId())}`, `รอบเบิก ${cycle.start} ถึง ${cycle.end}`].join(' | ');
+    const pos = await getGps();
+    const payload = { staff_id: staffId, work_date: workDate, start_time:'00:00', end_time:'00:00', reason, note, status:'รออนุมัติ', lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device: `${navigator.userAgent} | ${VERSION_V180} admin simple OT`.slice(0,250) };
+    setBusy(true, 'กำลังบันทึก OT เพิ่ม');
+    try {
+      const res = await sb.from('ot_requests').insert(payload);
+      if (res.error) {
+        const fallback = { ...payload };
+        delete fallback.start_time;
+        const res2 = await sb.from('ot_requests').insert(fallback);
+        if (res2.error) throw new Error(res2.error.message);
+      }
+      await loadAllData();
+      renderPage();
+      showToast('บันทึกคำขอ OT เพิ่มโดย Admin แล้ว');
+    } catch (err) {
+      showToast(err.message || 'บันทึก OT เพิ่มไม่สำเร็จ', { tone:'error' });
+    } finally { setBusy(false); }
+  };
+
+  function approvedRowsInHrCycle180(month){
+    const c = hrCycleRange180(month);
+    return (state.otRequests || []).filter(r => {
+      const d = normalizeDateKey(r.work_date);
+      return r.status === 'อนุมัติ' && d && d >= c.start && d <= c.end;
+    });
+  }
+  function employeeCode180(staffId){
+    const s = (state.staff || []).find(x => String(x.id) === String(staffId)) || {};
+    const raw = String(s.employee_code || s.emp_code || s.code || '').replace(/\D/g, '');
+    return raw ? raw.padStart(7, '0') : String(staffId || '').replace(/\D/g, '').padStart(7, '0').slice(-7);
+  }
+  function isLeaveType180(l){
+    const type = String(l?.type || l?.leave_type || '').trim();
+    if (!type || type === 'ไม่รับเวร') return false;
+    return type.includes('ลา') || /leave|vacation|sick|personal/i.test(type);
+  }
+  function isActiveLeaveStatus180(l){
+    const st = String(l?.status || '').toLowerCase();
+    if (/reject|cancel|ไม่อนุมัติ|ยกเลิก/.test(st)) return false;
+    return true;
+  }
+  function staffHasLeaveOnDate180(staffId, date){
+    const d = normalizeDateKey(date);
+    return (state.leaves || []).some(l => {
+      if (String(l.staff_id) !== String(staffId)) return false;
+      if (!isLeaveType180(l) || !isActiveLeaveStatus180(l)) return false;
+      const s = normalizeDateKey(l.start_date || l.leave_date || l.date);
+      const e = normalizeDateKey(l.end_date || l.start_date || l.leave_date || l.date);
+      return s && e && d >= s && d <= e;
+    });
+  }
+  function initCountMap180(dates){
+    const counts = {};
+    dates.forEach(d => { counts[d] = {}; SLOT_META_V180.forEach(s => counts[d][s.key] = new Set()); });
+    return counts;
+  }
+  function staffDaySlots180(assignments, staffId, date){
+    const keys = assignments.filter(a => String(a.staff_id) === String(staffId) && a.date === date).map(a => a.slotKey);
+    return new Set(keys);
+  }
+  function canAssignSlot180(assignments, counts, staffId, date, slotKey){
+    if (staffHasLeaveOnDate180(staffId, date)) return false;
+    if (counts?.[date]?.[slotKey]?.has(staffId)) return false;
+    const set = staffDaySlots180(assignments, staffId, date);
+    if (set.has(slotKey)) return false;
+    if (set.size >= 2) return false;
+    if (set.size === 1) {
+      const oldIdx = SLOT_META_V180.find(s => set.has(s.key))?.idx;
+      const newIdx = SLOT_META_V180.find(s => s.key === slotKey)?.idx;
+      if (oldIdx == null || newIdx == null || Math.abs(oldIdx - newIdx) !== 1) return false;
+    }
+    return true;
+  }
+  function pickStaffForSlot180(remaining, assignments, counts, date, slotKey){
+    const candidates = Object.entries(remaining)
+      .filter(([,h]) => h >= 8)
+      .map(([staff_id,h]) => ({ staff_id, h }))
+      .filter(x => canAssignSlot180(assignments, counts, x.staff_id, date, slotKey));
+    candidates.sort((a,b) => (b.h - a.h) || ((staffDaySlots180(assignments, a.staff_id, date).size) - (staffDaySlots180(assignments, b.staff_id, date).size)) || staffNick(a.staff_id).localeCompare(staffNick(b.staff_id), 'th'));
+    return candidates[0]?.staff_id || null;
+  }
+  function addSlotAssignment180(assignments, counts, remaining, staffId, date, slot){
+    assignments.push({ staff_id: staffId, date, slotKey: slot.key, start: slot.start, end: slot.end, hours: 8 });
+    counts[date][slot.key].add(staffId);
+    remaining[staffId] = Math.round((remaining[staffId] - 8) * 10) / 10;
+  }
+  function compressAssignments180(assignments){
+    const by = {};
+    assignments.forEach(a => {
+      const k = `${a.staff_id}|${a.date}`;
+      by[k] = by[k] || [];
+      by[k].push(a);
+    });
+    const rows = [];
+    Object.values(by).forEach(list => {
+      list.sort((a,b) => SLOT_META_V180.find(s => s.key === a.slotKey).idx - SLOT_META_V180.find(s => s.key === b.slotKey).idx);
+      if (list.length === 2) {
+        const keys = list.map(x => x.slotKey).join(',');
+        if (keys === '00-08,08-16') rows.push({ staff_id:list[0].staff_id, date:list[0].date, start:'0:00', end:'16:00', hours:16 });
+        else if (keys === '08-16,16-00') rows.push({ staff_id:list[0].staff_id, date:list[0].date, start:'8:00', end:'0:00', hours:16 });
+        else list.forEach(x => rows.push(x));
+      } else {
+        list.forEach(x => rows.push(x));
+      }
+    });
+    return rows.sort((a,b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || staffNick(a.staff_id).localeCompare(staffNick(b.staff_id), 'th'));
+  }
+  function allocateDummyShifts180(totals, month){
+    const cycle = hrCycleRange180(month);
+    const dates = dateList180(cycle.start, cycle.end);
+    const counts = initCountMap180(dates);
+    const remaining = { ...totals };
+    const assignments = [];
+    const totalStart = Object.values(remaining).reduce((s,h) => s + Number(h || 0), 0);
+    const invalid = Object.entries(remaining).filter(([,h]) => Math.abs((Number(h || 0) % 8)) > 0.001).map(([id,h]) => `${staffNick(id)} ${h} ชม.`);
+    if (invalid.length) return { ok:false, message:`ยอดชั่วโมงต้องหาร 8 ลงตัวก่อน Export: ${invalid.join(', ')}` };
+
+    // Phase 1: เติม slot ที่ยังน้อยกว่า 3 คนก่อน ตามลำดับวันและรอบเวร
+    let guard = 0;
+    while (Object.values(remaining).some(h => h >= 8) && guard++ < 5000) {
+      let placed = false;
+      for (const date of dates) {
+        for (const slot of SLOT_META_V180) {
+          while (counts[date][slot.key].size < 3) {
+            const staffId = pickStaffForSlot180(remaining, assignments, counts, date, slot.key);
+            if (!staffId) break;
+            addSlotAssignment180(assignments, counts, remaining, staffId, date, slot);
+            placed = true;
+            if (!Object.values(remaining).some(h => h >= 8)) break;
+          }
+          if (!Object.values(remaining).some(h => h >= 8)) break;
+        }
+        if (!Object.values(remaining).some(h => h >= 8)) break;
+      }
+      if (!placed) break;
+    }
+
+    // Phase 2: ถ้ายังมีชั่วโมงเหลือ ให้หยอดเฉพาะ slot ที่ยังไม่เกิน 5 คน และกระจายไปช่องที่คนน้อยสุดก่อน
+    guard = 0;
+    while (Object.values(remaining).some(h => h >= 8) && guard++ < 5000) {
+      const slotOrder = [];
+      dates.forEach(date => SLOT_META_V180.forEach(slot => slotOrder.push({ date, slot, count: counts[date][slot.key].size })));
+      slotOrder.sort((a,b) => (a.count - b.count) || a.date.localeCompare(b.date) || a.slot.idx - b.slot.idx);
+      let placed = false;
+      for (const item of slotOrder) {
+        if (counts[item.date][item.slot.key].size >= 5) continue;
+        const staffId = pickStaffForSlot180(remaining, assignments, counts, item.date, item.slot.key);
+        if (!staffId) continue;
+        addSlotAssignment180(assignments, counts, remaining, staffId, item.date, item.slot);
+        placed = true;
+        break;
+      }
+      if (!placed) {
+        const left = Object.entries(remaining).filter(([,h]) => h >= 8).map(([id,h]) => `${staffNick(id)} เหลือ ${h} ชม.`).join(', ');
+        return { ok:false, message:`จัดเวรดัมมี่ไม่ครบ เพราะติดเงื่อนไขวันลา/ไม่เกิน 16 ชม./คน/วัน หรือจำนวนคนต่อรอบเวรเต็มแล้ว: ${left}` };
+      }
+    }
+    const leftHours = Object.values(remaining).reduce((s,h) => s + Number(h || 0), 0);
+    if (Math.round(leftHours * 10) / 10 !== 0) return { ok:false, message:'จัดชั่วโมง OT ได้ไม่ครบพอดี กรุณาตรวจยอดชั่วโมงรวมอีกครั้ง' };
+    const rows = compressAssignments180(assignments);
+    const rowHours = rows.reduce((s,r) => s + Number(r.hours || 0), 0);
+    if (Math.round(rowHours * 10) / 10 !== Math.round(totalStart * 10) / 10) return { ok:false, message:'ยอดชั่วโมงหลังจัด Dummy Shift ไม่ตรงกับยอดตั้งต้น' };
+    return { ok:true, rows, cycle, counts };
+  }
+  function buildHrDummyExportRows180(month){
+    const rows = approvedRowsInHrCycle180(month);
+    const totals = {};
+    rows.forEach(r => {
+      const h = Number(calcOtHours(r));
+      if (!Number.isFinite(h) || h <= 0) return;
+      totals[r.staff_id] = Math.round(((totals[r.staff_id] || 0) + h) * 10) / 10;
+    });
+    if (!Object.keys(totals).length) return { ok:false, message:'ยังไม่มี OT ที่อนุมัติแล้วในรอบเบิกนี้' };
+    const allocated = allocateDummyShifts180(totals, month);
+    if (!allocated.ok) return allocated;
+    const data = allocated.rows.map(r => ({
+      no: employeeCode180(r.staff_id),
+      'วันที่': Number(String(r.date).slice(-2)),
+      'เวลาเข้า': r.start,
+      'เวลาออก': r.end
+    }));
+    return { ok:true, data, allocated, totals };
+  }
+  function exportHrDummyExcel180(){
+    if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้น', { tone:'error' });
+    if (typeof XLSX === 'undefined') return showToast('ไม่พบไลบรารี XLSX สำหรับ Export Excel', { tone:'error' });
+    const month = reportMonth180();
+    const result = buildHrDummyExportRows180(month);
+    if (!result.ok) return showToast(result.message, { tone:'error' });
+    const ws = XLSX.utils.json_to_sheet(result.data, { header:['no','วันที่','เวลาเข้า','เวลาออก'] });
+    for (let r=2; r <= result.data.length + 1; r++) {
+      const cell = ws[`A${r}`];
+      if (cell) { cell.t = 's'; cell.z = '@'; }
+    }
+    ws['!cols'] = [{ wch:12 }, { wch:8 }, { wch:12 }, { wch:12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'HR_OT');
+    const c = result.allocated.cycle;
+    XLSX.writeFile(wb, `HR_OT_${c.start}_to_${c.end}.xlsx`);
+    showToast(`Export Excel สำหรับเบิกเงินแล้ว (${result.data.length} รายการ)`);
+  }
+
+  document.addEventListener('submit', function(e){
+    const form = e.target;
+    if (form && form.id === 'attendanceAdminFormV180') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      saveAdminAttendance180(form);
+    }
+  }, true);
+  document.addEventListener('input', function(e){
+    const form = e.target?.closest?.('#attendanceAdminFormV180');
+    if (form && ['duty_date','start_time','end_date','end_time'].includes(e.target.name)) syncAdminAttendanceHours180(form);
+  }, true);
+  document.addEventListener('change', function(e){
+    const form = e.target?.closest?.('#attendanceAdminFormV180');
+    if (form && ['duty_date','start_time','end_date','end_time'].includes(e.target.name)) syncAdminAttendanceHours180(form);
+  }, true);
+  document.addEventListener('click', function(e){
+    const btn = e.target?.closest?.('[data-export-ot-hr-excel]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    exportHrDummyExcel180();
+  }, true);
+  document.addEventListener('DOMContentLoaded', function(){
+    syncAdminAttendanceHours180(document.getElementById('attendanceAdminFormV180'));
+  });
+
+  window.v180HrDummyExport = { hrCycleRange180, buildHrDummyExportRows180, allocateDummyShifts180, exportHrDummyExcel180, explicitHoursFromRow180 };
+  console.info(`${VERSION_V180} loaded`);
+})();
+
+/* V180B: make Admin OT summary match HR cycle used by the HR export button */
+(function(){
+  'use strict';
+  const previousRenderOtSummaryV180B = window.renderOtSummary || (typeof renderOtSummary === 'function' ? renderOtSummary : null);
+  function esc180b(v){ try { return escapeHtml(v == null ? '' : String(v)); } catch (_) { return String(v ?? ''); } }
+  function pad180b(v){ try { return pad(v); } catch (_) { return String(v).padStart(2,'0'); } }
+  function nextMonthKey180b(key){
+    const [y,m] = String(key || '').split('-').map(Number);
+    const d = new Date(y || new Date().getFullYear(), (m || 1), 1);
+    return `${d.getFullYear()}-${pad180b(d.getMonth()+1)}`;
+  }
+  function reportMonth180b(){
+    try { return otReportMonth() || state.monthKey || monthKey(new Date()); }
+    catch (_) { return state.monthKey || monthKey(new Date()); }
+  }
+  function cycle180b(){ const key = reportMonth180b(); return { key, start:`${key}-16`, end:`${nextMonthKey180b(key)}-15` }; }
+  window.renderOtSummary = renderOtSummary = function renderOtSummaryV180B(){
+    if (!isAdmin()) return previousRenderOtSummaryV180B ? previousRenderOtSummaryV180B() : '';
+    const c = cycle180b();
+    const approved = (state.otRequests || []).filter(x => {
+      const d = normalizeDateKey(x.work_date);
+      return x.status === 'อนุมัติ' && d && d >= c.start && d <= c.end;
+    });
+    const map = {};
+    approved.forEach(r => {
+      const hours = Number(calcOtHours(r));
+      if (!Number.isFinite(hours) || hours <= 0) return;
+      map[r.staff_id] = map[r.staff_id] || { hours:0, count:0 };
+      map[r.staff_id].hours = Math.round((map[r.staff_id].hours + hours) * 10) / 10;
+      map[r.staff_id].count += 1;
+    });
+    const rows = Object.entries(map).sort((a,b) => staffNick(a[0]).localeCompare(staffNick(b[0]), 'th'));
+    if (!rows.length) return empty(`ยังไม่มี OT ที่อนุมัติในรอบเบิก ${formatThaiDate(c.start)} - ${formatThaiDate(c.end)}`);
+    return `<div class="table-wrap"><table id="otSummaryTable"><thead><tr><th>ชื่อ</th><th>ชั่วโมง OT</th><th>จำนวนครั้ง</th><th>รอบเบิก</th></tr></thead><tbody>${rows.map(([id,r]) => `<tr><td>${staffPill(id)}</td><td>${Number(r.hours || 0).toFixed(1)}</td><td>${r.count}</td><td>${esc180b(formatThaiDate(c.start))} - ${esc180b(formatThaiDate(c.end))}</td></tr>`).join('')}</tbody></table></div>`;
+  };
+})();
