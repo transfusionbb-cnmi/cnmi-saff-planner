@@ -7852,3 +7852,213 @@ function bindGlobalEvents() {
   });
   console.info(`${VERSION_V172} loaded`);
 })();
+
+/* =========================
+   V174 Smart Month Save / Auto-initialize
+   - Save monthly roster even if roster_months record is missing.
+   - Save monthly positions from current draft/screen and auto-build if user forgot to click create.
+   - Prevents blocking error: ต้องสร้างข้อมูลเริ่มต้นก่อนบันทึก
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V174 = 'V174_SMART_MONTH_SAVE_AUTO_INIT';
+
+  function toastV174(message){
+    try { showToast(message); } catch (_) { console.warn(message); }
+  }
+  function safeErrV174(error){
+    try { return friendlyDbError(error); } catch (_) { return error?.message || String(error || 'เกิดข้อผิดพลาด'); }
+  }
+  function normIdV174(v){ return String(v ?? '').trim(); }
+  function getMonthRangeSafeV174(key){
+    try { return getMonthRange(key); }
+    catch (_) {
+      const [yy, mm] = String(key || monthKey(new Date())).split('-').map(Number);
+      return { y: yy, m: mm, start: `${yy}-${pad(mm)}-01`, end: `${yy}-${pad(mm)}-31` };
+    }
+  }
+  function dedupeByV174(rows, keyFn){
+    const map = new Map();
+    (rows || []).forEach(row => {
+      const k = keyFn(row);
+      if (!k) return;
+      map.set(k, row);
+    });
+    return Array.from(map.values());
+  }
+
+  async function selectRosterMonthV174(y, m){
+    const res = await sb.from('roster_months').select('*').eq('year', y).eq('month', m).limit(1);
+    if (res.error) return { data:null, error:res.error };
+    return { data:Array.isArray(res.data) ? (res.data[0] || null) : null, error:null };
+  }
+
+  async function ensureRosterMonthV174(key, status){
+    const { y, m } = getMonthRangeSafeV174(key);
+    const existingState = (state.rosterMonths || []).find(x => Number(x.year) === Number(y) && Number(x.month) === Number(m));
+    const payload = { year:y, month:m, status, updated_by: currentStaffId() };
+
+    if (existingState?.id) {
+      const upd = await sb.from('roster_months').update(payload).eq('id', existingState.id).select('*').single();
+      if (!upd.error && upd.data) return { data:upd.data, autoCreated:false, error:null };
+      const refetch = await selectRosterMonthV174(y, m);
+      if (refetch.data?.id) return { data:refetch.data, autoCreated:false, error:null };
+      if (upd.error) return { data:null, autoCreated:false, error:upd.error };
+    }
+
+    const fetched = await selectRosterMonthV174(y, m);
+    if (fetched.error) return { data:null, autoCreated:false, error:fetched.error };
+    if (fetched.data?.id) {
+      const upd = await sb.from('roster_months').update(payload).eq('id', fetched.data.id).select('*').single();
+      if (upd.error) return { data:null, autoCreated:false, error:upd.error };
+      return { data:upd.data || fetched.data, autoCreated:false, error:null };
+    }
+
+    const insPayload = { ...payload, created_by: currentStaffId() };
+    let ins = await sb.from('roster_months').insert(insPayload).select('*').single();
+    if (!ins.error && ins.data) return { data:ins.data, autoCreated:true, error:null };
+
+    // Race-condition guard: another client may have created the month between select and insert.
+    const retry = await selectRosterMonthV174(y, m);
+    if (retry.data?.id) {
+      const upd = await sb.from('roster_months').update(payload).eq('id', retry.data.id).select('*').single();
+      if (upd.error) return { data:null, autoCreated:false, error:upd.error };
+      return { data:upd.data || retry.data, autoCreated:false, error:null };
+    }
+    return { data:null, autoCreated:false, error:ins.error };
+  }
+
+  function currentRosterRowsFromScreenV174(key){
+    let rows = [];
+    try {
+      if (state.rosterDraft?.monthKey === key && Array.isArray(state.rosterDraft.assignments) && state.rosterDraft.assignments.length) {
+        rows = state.rosterDraft.assignments.map(r => ({ ...r }));
+      } else {
+        rows = (typeof getAssignmentsForMonth === 'function' ? getAssignmentsForMonth(key) : [])
+          .filter(Boolean)
+          .map(r => ({ ...r }));
+      }
+    } catch (_) { rows = []; }
+
+    if (!rows.length) {
+      try { rows = generateEmptyAssignments(key).map(r => ({ ...r })); } catch (_) { rows = []; }
+    }
+
+    const byId = new Map(rows.map(r => [normIdV174(r.id || r._temp_id), r]).filter(([id]) => !!id));
+    document.querySelectorAll('[data-roster-slot-select]').forEach(sel => {
+      const id = normIdV174(sel.dataset.rosterSlotSelect);
+      if (!id || !byId.has(id)) return;
+      byId.get(id).staff_id = sel.value || null;
+    });
+    return rows;
+  }
+
+  window.saveRosterDraft = saveRosterDraft = async function saveRosterDraftV174(status='draft'){
+    if (!isAdmin()) return toastV174('เฉพาะ Admin เท่านั้น');
+    const key = state.monthKey || monthKey(new Date());
+    const sourceRows = currentRosterRowsFromScreenV174(key);
+    if (!sourceRows.length) return toastV174('ยังไม่มีโครงตารางสำหรับเดือนนี้');
+
+    const monthResult = await ensureRosterMonthV174(key, status);
+    if (monthResult.error || !monthResult.data?.id) return toastV174(safeErrV174(monthResult.error || 'สร้างข้อมูลเดือนนี้ไม่สำเร็จ'));
+    const month = monthResult.data;
+
+    const rows = dedupeByV174(sourceRows, a => `${normalizeDateKey(a?.duty_date)}|${a?.duty_code || ''}`)
+      .filter(a => a?.duty_date && a?.duty_code)
+      .map(a => {
+        const row = {
+          roster_month_id: month.id,
+          duty_date: normalizeDateKey(a.duty_date),
+          duty_code: a.duty_code,
+          required_role: a.required_role || dutyRuleForDate(a.duty_date).find(x => x.code === a.duty_code)?.role || '',
+          staff_id: a.staff_id || null,
+          is_locked: !!a.is_locked,
+          updated_by: currentStaffId()
+        };
+        if (a.id) row.id = a.id;
+        return row;
+      });
+
+    const up = rows.length ? await sb.from('roster_assignments').upsert(rows, { onConflict:'roster_month_id,duty_date,duty_code' }) : { error:null };
+    if (up.error) return toastV174(safeErrV174(up.error));
+
+    state.rosterDraft = null;
+    await loadAllData();
+    renderPage();
+    const autoMsg = monthResult.autoCreated ? ' ระบบสร้างข้อมูลเริ่มต้นของเดือนนี้ให้อัตโนมัติแล้ว' : '';
+    toastV174((status === 'published' ? 'ประกาศตารางแล้ว' : status === 'locked' ? 'ล็อกตารางแล้ว' : 'บันทึกร่างแล้ว') + autoMsg);
+  };
+
+  function monthlyPositionRowsFromScreenV174(key){
+    const screenRows = [];
+    document.querySelectorAll('[data-month-position-edit]').forEach(sel => {
+      const [dateRaw, staffIdRaw] = String(sel.dataset.monthPositionEdit || '').split('|');
+      const date = normalizeDateKey(dateRaw);
+      const staffId = normIdV174(staffIdRaw);
+      const code = String(sel.value || '').trim();
+      if (!date || !staffId || !code) return;
+      screenRows.push(makeMonthPositionRow(date, staffId, code));
+    });
+    if (screenRows.length) return screenRows;
+    if (state.monthPositionDraft?.monthKey === key && Array.isArray(state.monthPositionDraft.rows) && state.monthPositionDraft.rows.length) {
+      return state.monthPositionDraft.rows.map(r => ({ ...r, updated_by: currentStaffId() }));
+    }
+    const saved = (state.positions || []).filter(r => normalizeDateKey(r?.work_date).startsWith(key));
+    if (saved.length) return saved.map(r => ({ ...r, updated_by: currentStaffId() }));
+    try {
+      const draft = buildMonthlyPositionDraft(key);
+      return (draft.rows || []).map(r => ({ ...r, updated_by: currentStaffId() }));
+    } catch (_) { return []; }
+  }
+
+  window.saveMonthlyPositions = saveMonthlyPositions = async function saveMonthlyPositionsV174(){
+    if (!isAdmin()) return toastV174('เฉพาะ Admin เท่านั้น');
+    const key = state.positionMonthKey || state.monthKey || monthKey(new Date());
+    const { start, end } = getMonthRangeSafeV174(key);
+    const rows = dedupeByV174(monthlyPositionRowsFromScreenV174(key), r => `${normalizeDateKey(r?.work_date)}|${normIdV174(r?.staff_id)}|${r?.position_code || ''}`)
+      .filter(r => normalizeDateKey(r?.work_date).startsWith(key) && r?.position_code && r?.staff_id)
+      .map(r => ({
+        work_date: normalizeDateKey(r.work_date),
+        position_code: r.position_code,
+        zone: r.zone || positionTemplateByCode(r.position_code, r.work_date)?.zone || 'รอตรวจสอบ',
+        break_time: r.break_time || positionTemplateByCode(r.position_code, r.work_date)?.break_time || '-',
+        main_rule: r.main_rule || positionTemplateByCode(r.position_code, r.work_date)?.main_rule || '',
+        job_desc: r.job_desc || positionTemplateByCode(r.position_code, r.work_date)?.job_desc || '',
+        staff_id: r.staff_id,
+        updated_by: currentStaffId()
+      }));
+
+    if (!rows.length) return toastV174('ยังไม่มีข้อมูลตำแหน่งให้บันทึก ระบบไม่พบร่างบนหน้าจอ');
+
+    // Save the visible month as a snapshot. This preserves cleared cells by removing old rows first,
+    // while still auto-initializing rows when the user forgot to press “สร้างแผนทั้งเดือน”.
+    const del = await sb.from('daily_positions').delete().gte('work_date', start).lte('work_date', end);
+    if (del.error) return toastV174(safeErrV174(del.error));
+    const ins = await sb.from('daily_positions').insert(rows);
+    if (ins.error) return toastV174(safeErrV174(ins.error));
+
+    const dates = [...new Set(rows.map(r => r.work_date))];
+    const statusRows = dates.map(date => ({ work_date: date, month_key:key, status:'draft', updated_by:currentStaffId() }));
+    if (statusRows.length) {
+      const st = await sb.from('daily_position_day_status').upsert(statusRows, { onConflict:'work_date' });
+      if (st.error) return toastV174(safeErrV174(st.error));
+    }
+
+    state.monthPositionDraft = null;
+    await loadAllData();
+    renderPage();
+    toastV174('บันทึกแผนตำแหน่งรายเดือนแล้ว หากยังไม่มีข้อมูลเริ่มต้น ระบบสร้างจากร่างบนหน้าจอให้อัตโนมัติ');
+  };
+
+  const oldRenderPositionMonthPageV174 = window.renderPositionMonthPage || (typeof renderPositionMonthPage === 'function' ? renderPositionMonthPage : null);
+  if (oldRenderPositionMonthPageV174) {
+    window.renderPositionMonthPage = renderPositionMonthPage = function renderPositionMonthPageV174(){
+      let html = String(oldRenderPositionMonthPageV174.apply(this, arguments) || '');
+      if (html.includes('v174-save-mode-note')) return html;
+      const note = '<div class="notice soft-notice compact v174-save-mode-note">โหมดบันทึกใหม่: ถ้าลืมกด “สร้างแผนทั้งเดือน” ปุ่มบันทึกจะสร้างข้อมูลเริ่มต้นจากร่างบนหน้าจอให้อัตโนมัติ ไม่บล็อกงานที่จัดไว้แล้ว</div>';
+      return html.replace(/(<\/div>\s*<div class="monthly-matrix-wrap)/, `${note}$1`).replace(/(<\/div>\s*<div class="empty-state)/, `${note}$1`);
+    };
+  }
+
+  console.info(`${VERSION_V174} loaded`);
+})();
