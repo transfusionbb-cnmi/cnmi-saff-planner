@@ -8967,3 +8967,553 @@ function bindGlobalEvents() {
     return `<div class="table-wrap"><table id="otSummaryTable"><thead><tr><th>ชื่อ</th><th>ชั่วโมง OT</th><th>จำนวนครั้ง</th><th>รอบเบิก</th></tr></thead><tbody>${rows.map(([id,r]) => `<tr><td>${staffPill(id)}</td><td>${Number(r.hours || 0).toFixed(1)}</td><td>${r.count}</td><td>${esc180b(formatThaiDate(c.start))} - ${esc180b(formatThaiDate(c.end))}</td></tr>`).join('')}</tbody></table></div>`;
   };
 })();
+
+/* =========================
+   V181 OT Claim History + Pending Summary + HR Export Claim Status
+   - Section 4 shows approved OT with claim_status Pending only, without date limitation.
+   - HR Export uses only Pending rows inside HR cycle 16-current-month to 15-next-month, then marks exported rows as Claimed with batch ID.
+   - New Claim History page with row-level and batch-level Revert.
+   - loadAllData refreshes all OT rows without date window so old approved OT is not hidden from Section 4.
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V181 = 'V181_OT_CLAIM_HISTORY_PENDING_EXPORT';
+  const CLAIM_PENDING = 'Pending';
+  const CLAIM_CLAIMED = 'Claimed';
+  const HR_HOURS_TOKEN_V181 = 'HR_HOURS=';
+  const SLOT_META_V181 = [
+    { key:'00-08', start:'0:00', end:'8:00', hours:8, idx:0 },
+    { key:'08-16', start:'8:00', end:'16:00', hours:8, idx:1 },
+    { key:'16-00', start:'16:00', end:'0:00', hours:8, idx:2 }
+  ];
+
+  function esc181(v){
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function pad181(v, len=2){
+    try { return pad(v); } catch (_) { return String(v).padStart(len, '0'); }
+  }
+  function normalize181(v){
+    try { return normalizeDateKey(v); } catch (_) { return String(v || '').slice(0,10); }
+  }
+  function dateObj181(dateKey){
+    try { return parseDate(dateKey); }
+    catch (_) {
+      const [y,m,d] = String(dateKey || '').split('-').map(Number);
+      return new Date(y || 2000, (m || 1) - 1, d || 1);
+    }
+  }
+  function dateKey181(d){ return `${d.getFullYear()}-${pad181(d.getMonth()+1)}-${pad181(d.getDate())}`; }
+  function addDays181(dateKey, days){
+    const d = dateObj181(normalize181(dateKey) || (typeof todayStr === 'function' ? todayStr() : dateKey181(new Date())));
+    d.setDate(d.getDate() + Number(days || 0));
+    return dateKey181(d);
+  }
+  function nextMonthKey181(key){
+    const [y,m] = String(key || '').split('-').map(Number);
+    const d = new Date(y || new Date().getFullYear(), (m || 1), 1);
+    return `${d.getFullYear()}-${pad181(d.getMonth()+1)}`;
+  }
+  function reportMonth181(){
+    try { return otReportMonth() || state.monthKey || monthKey(new Date()); }
+    catch (_) { return state.monthKey || monthKey(new Date()); }
+  }
+  function hrCycleRange181(month){
+    const key = month || reportMonth181();
+    return { month:key, start:`${key}-16`, end:`${nextMonthKey181(key)}-15` };
+  }
+  function dateList181(start, end){
+    const out = [];
+    let d = dateObj181(start);
+    const stop = dateObj181(end).getTime();
+    for (let i=0; i<45 && d.getTime() <= stop; i++) {
+      out.push(dateKey181(d));
+      d.setDate(d.getDate()+1);
+    }
+    return out;
+  }
+  function timeToMinutes181(t){
+    const m = String(t || '').match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  }
+  function calcDateTimeHours181(startDate, startTime, endDate, endTime){
+    const sDate = normalize181(startDate) || (typeof todayStr === 'function' ? todayStr() : dateKey181(new Date()));
+    let eDate = normalize181(endDate) || sDate;
+    const sMin = timeToMinutes181(startTime);
+    const eMin = timeToMinutes181(endTime);
+    if (sMin == null || eMin == null) return 0;
+    const sTime = String(startTime || '').length === 5 ? `${startTime}:00` : startTime;
+    const eTime = String(endTime || '').length === 5 ? `${endTime}:00` : endTime;
+    let start = new Date(`${sDate}T${sTime}`);
+    let end = new Date(`${eDate}T${eTime}`);
+    if (end <= start) {
+      eDate = addDays181(sDate, 1);
+      end = new Date(`${eDate}T${eTime}`);
+    }
+    const h = (end - start) / 36e5;
+    return Number.isFinite(h) && h > 0 ? Math.round(h * 10) / 10 : 0;
+  }
+  function explicitHoursFromText181(text){
+    const raw = String(text || '');
+    const token = raw.match(/HR_HOURS\s*=\s*(\d+(?:\.\d+)?)/i);
+    if (token) return Number(token[1]);
+    const th = raw.match(/(?:จำนวนเวลา\s*OT|ชั่วโมงที่ต้องการเบิก|ชั่วโมงเบิก|จำนวนชั่วโมง|manual\s*hours)\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
+    return th ? Number(th[1]) : null;
+  }
+  function explicitHoursFromRow181(row){
+    const fromField = Number(row?.manual_hours ?? row?.requested_hours ?? row?.hours ?? NaN);
+    if (Number.isFinite(fromField) && fromField > 0) return fromField;
+    const parsed = explicitHoursFromText181(`${row?.note || ''} ${row?.reason || ''}`);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  const previousCalcOtHoursV181 = window.calcOtHours || (typeof calcOtHours === 'function' ? calcOtHours : null);
+  window.calcOtHours = calcOtHours = function calcOtHoursV181(row){
+    const explicit = explicitHoursFromRow181(row);
+    if (explicit !== null) return Math.round(explicit * 10) / 10;
+    return previousCalcOtHoursV181 ? previousCalcOtHoursV181(row) : 0;
+  };
+
+  function claimStatus181(row){
+    const raw = row?.claim_status;
+    if (raw == null || String(raw).trim() === '') return CLAIM_PENDING;
+    const s = String(raw).trim().toLowerCase();
+    if (s === 'claimed' || s === 'เบิกแล้ว') return CLAIM_CLAIMED;
+    return CLAIM_PENDING;
+  }
+  function isApproved181(row){ return String(row?.status || '').trim() === 'อนุมัติ'; }
+  function isPendingClaim181(row){ return isApproved181(row) && claimStatus181(row) === CLAIM_PENDING; }
+  function isClaimed181(row){ return isApproved181(row) && claimStatus181(row) === CLAIM_CLAIMED; }
+  function formatMaybeThaiDate181(dateKey){
+    try { return formatThaiDate(dateKey); } catch (_) { return dateKey || '-'; }
+  }
+  function hrCycleHint181(){
+    const r = hrCycleRange181(reportMonth181());
+    return `รอบ Export HR: ${formatMaybeThaiDate181(r.start)} - ${formatMaybeThaiDate181(r.end)}`;
+  }
+
+  function activeStaffList181(){
+    const list = (state.staff || []).filter(s => {
+      const activeOk = Object.prototype.hasOwnProperty.call(s, 'active') ? (s.active === true || String(s.active).toLowerCase() === 'true') : (s.is_active !== false && String(s.is_active).toLowerCase() !== 'false');
+      const scheduleOk = Object.prototype.hasOwnProperty.call(s, 'schedule') ? (s.schedule === true || String(s.schedule).toLowerCase() === 'true') : true;
+      const role = String(s.role || s.position || '').toLowerCase();
+      return activeOk && scheduleOk && !role.includes('physician') && !String(s.staff_type || '').includes('แพทย์');
+    });
+    try { return orderedStaff(list); }
+    catch (_) { return list.sort((a,b) => String(a.nickname || a.full_name || '').localeCompare(String(b.nickname || b.full_name || ''), 'th')); }
+  }
+  function staffOptions181(selectedId){
+    return activeStaffList181().map(s => `<option value="${esc181(s.id)}" ${String(s.id)===String(selectedId)?'selected':''}>${esc181(s.nickname || s.full_name || s.email || s.id)}</option>`).join('');
+  }
+  function dutyOptions181(selected=''){
+    const codes = (typeof DUTY_COLUMNS !== 'undefined' && Array.isArray(DUTY_COLUMNS)) ? DUTY_COLUMNS : ['ชบด1','ชบด2','ชบด3','ช4A','ช4B','ช3A','ช3B','ช9-เคิก','ช9-MT'];
+    return codes.map(code => `<option value="${esc181(code)}" ${String(code)===String(selected)?'selected':''}>${esc181((typeof DUTY_LABEL !== 'undefined' && DUTY_LABEL[code]) || code)}</option>`).join('');
+  }
+
+  const previousLoadAllDataV181 = window.loadAllData || (typeof loadAllData === 'function' ? loadAllData : null);
+  if (previousLoadAllDataV181) {
+    window.loadAllData = loadAllData = async function loadAllDataV181(){
+      await previousLoadAllDataV181.apply(this, arguments);
+      if (!state.profile || !sb) return;
+      try {
+        const res = await sb.from('ot_requests').select('*').order('work_date', { ascending:false });
+        if (res.error) throw res.error;
+        state.otRequests = res.data || [];
+      } catch (err) {
+        console.warn(`${VERSION_V181}: full OT load failed; keeping previous OT window`, err);
+      }
+    };
+  }
+
+  function pendingApprovedRows181(){ return (state.otRequests || []).filter(isPendingClaim181); }
+  function claimedApprovedRows181(){ return (state.otRequests || []).filter(isClaimed181); }
+  function pendingApprovedRowsInCycle181(month){
+    const c = hrCycleRange181(month);
+    return pendingApprovedRows181().filter(r => {
+      const d = normalize181(r.work_date);
+      return d && d >= c.start && d <= c.end;
+    });
+  }
+
+  window.renderOtSummary = renderOtSummary = function renderOtSummaryV181(){
+    const approved = pendingApprovedRows181();
+    const map = {};
+    approved.forEach(r => {
+      const h = Number(calcOtHours(r));
+      if (!Number.isFinite(h) || h <= 0) return;
+      const id = r.staff_id || '-';
+      map[id] = map[id] || { hours:0, count:0, minDate:'', maxDate:'' };
+      map[id].hours = Math.round((map[id].hours + h) * 10) / 10;
+      map[id].count += 1;
+      const d = normalize181(r.work_date);
+      if (d) {
+        if (!map[id].minDate || d < map[id].minDate) map[id].minDate = d;
+        if (!map[id].maxDate || d > map[id].maxDate) map[id].maxDate = d;
+      }
+    });
+    const rows = Object.entries(map).sort((a,b) => staffNick(a[0]).localeCompare(staffNick(b[0]), 'th'));
+    if (!rows.length) return empty('ยังไม่มี OT สถานะอนุมัติที่รอเบิก (Pending)');
+    return `<div class="table-wrap v181-pending-summary"><table id="otSummaryTable"><thead><tr><th>ชื่อ</th><th>ชั่วโมง OT Pending</th><th>จำนวนรายการ</th><th>ช่วงวันที่ของรายการ</th><th>สถานะเบิก</th></tr></thead><tbody>${rows.map(([id,r]) => `<tr><td>${staffPill(id)}</td><td>${Number(r.hours || 0).toFixed(1)}</td><td>${r.count}</td><td>${esc181(r.minDate ? `${formatMaybeThaiDate181(r.minDate)} - ${formatMaybeThaiDate181(r.maxDate)}` : '-')}</td><td><span class="badge yellow">Pending</span></td></tr>`).join('')}</tbody></table></div>`;
+  };
+
+  const previousRenderOtPageV181 = window.renderOtPage || (typeof renderOtPage === 'function' ? renderOtPage : null);
+  window.renderOtPage = renderOtPage = function renderOtPageV181(){
+    if (!isAdmin()) return previousRenderOtPageV181 ? previousRenderOtPageV181.apply(this, arguments) : '';
+    const today = (typeof todayStr === 'function' ? todayStr() : dateKey181(new Date()));
+    const tomorrow = addDays181(today, 1);
+    const rows = state.otRequests || [];
+    const c = hrCycleRange181(reportMonth181());
+    const pendingInCycleCount = pendingApprovedRowsInCycle181(reportMonth181()).length;
+    return `<div class="grid grid-2 ot-page v181-ot-page">
+      <div class="card ot-card v181-admin-card">
+        <h3>ส่วนที่ 1 ยืนยันวันอยู่เวร</h3>
+        <p class="muted">Admin บันทึกแทนเจ้าหน้าที่ โดยระบบคำนวณชั่วโมงจากเวลาเริ่ม-สิ้นสุดแบบ Real-time</p>
+        <form id="attendanceAdminFormV180" class="form-grid compact-form attendance-form v181-admin-attendance-form">
+          <label>เลือกชื่อเจ้าหน้าที่ <select name="staff_id" required>${staffOptions181(currentStaffId())}</select></label>
+          <label>เลือกประเภทเวร <select name="duty_code" required>${dutyOptions181()}</select></label>
+          <label>วันที่อยู่เวร <input name="duty_date" type="date" value="${esc181(today)}" required></label>
+          <label>เวลาเริ่มทำงาน <input name="start_time" type="time" value="08:00" required></label>
+          <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${esc181(tomorrow)}" required></label>
+          <label>เวลาสิ้นสุด <input name="end_time" type="time" value="08:00" required></label>
+          <label>จำนวนเวลา OT (ชั่วโมง) <input name="manual_hours" class="v180-calculated-hours" type="number" min="0" max="48" step="0.5" value="24" readonly required></label>
+          <label>หมายเหตุ Admin <input name="admin_note" placeholder="เช่น ลงย้อนหลังแทนน้อง"></label>
+          <button class="primary-btn wide" type="submit">ยืนยันรับ OT / อยู่เวร</button>
+        </form>
+      </div>
+      <div class="card ot-card v181-admin-card">
+        <h3>ส่วนที่ 2 ขอ OT เพิ่ม / เวรปั่นเลือด</h3>
+        <p class="hint compact">โหมด Admin ใช้บันทึกยอดชั่วโมงที่ต้องการเบิกโดยตรง ระบบจะเก็บไว้เป็นรายการ OT รออนุมัติ</p>
+        <form id="otForm" class="form-grid v181-admin-ot-extra-form" data-admin-simple="1">
+          <label>เลือกชื่อเจ้าหน้าที่ <select name="staff_id" required>${staffOptions181(currentStaffId())}</select></label>
+          <label>ชั่วโมงที่ต้องการเบิก <input name="requested_hours" type="number" min="0.5" max="240" step="0.5" placeholder="เช่น 8 / 16 / 176" required></label>
+          <label class="wide">เหตุผล <textarea name="reason" rows="3" placeholder="เช่น เวรปั่นเลือด / งานเร่งด่วน / ปรับยอดเบิก OT" required></textarea></label>
+          <button class="primary-btn wide" type="submit">ยืนยันขอ OT เพิ่ม</button>
+        </form>
+      </div>
+      <div class="card wide-card" style="grid-column:1/-1;">
+        <div class="section-title"><h3>ส่วนที่ 3 อนุมัติ OT</h3><button class="ghost-btn" data-export-ot-excel>Export Excel สรุปเดือนนี้</button></div>
+        ${renderOtTable(rows)}
+      </div>
+      <div class="card" style="grid-column:1/-1;">
+        <div class="section-title"><div><h3>ส่วนที่ 4 สรุป OT รายเดือน</h3><p class="hint">แสดงเฉพาะรายการที่อนุมัติแล้วและยังไม่เบิก (Pending) โดยไม่จำกัดช่วงวันที่ • ${esc181(hrCycleHint181())} • ในรอบนี้มี ${pendingInCycleCount} รายการพร้อม Export</p></div><div class="actions"><button class="ghost-btn" data-page="claimHistory">ประวัติการเบิก</button><button class="primary-btn" data-export-ot-hr-excel-v181>Export Excel สำหรับเบิกเงิน</button></div></div>
+        ${renderOtSummary()}
+      </div>
+    </div>`;
+  };
+
+  function createClaimBatchId181(){
+    const d = new Date();
+    return `${d.getFullYear()}${pad181(d.getMonth()+1)}${pad181(d.getDate())}-${pad181(d.getHours())}${pad181(d.getMinutes())}${pad181(d.getSeconds())}`;
+  }
+  function employeeCode181(staffId){
+    const s = (state.staff || []).find(x => String(x.id) === String(staffId)) || {};
+    const raw = String(s.employee_code || s.emp_code || s.code || '').replace(/\D/g, '');
+    return raw ? raw.padStart(7, '0') : String(staffId || '').replace(/\D/g, '').padStart(7, '0').slice(-7);
+  }
+  function isLeaveType181(l){
+    const type = String(l?.type || l?.leave_type || '').trim();
+    if (!type || type === 'ไม่รับเวร') return false;
+    return type.includes('ลา') || /leave|vacation|sick|personal/i.test(type);
+  }
+  function isActiveLeaveStatus181(l){
+    const st = String(l?.status || '').toLowerCase();
+    return !/reject|cancel|ไม่อนุมัติ|ยกเลิก/.test(st);
+  }
+  function staffHasLeaveOnDate181(staffId, date){
+    const d = normalize181(date);
+    return (state.leaves || []).some(l => {
+      if (String(l.staff_id) !== String(staffId)) return false;
+      if (!isLeaveType181(l) || !isActiveLeaveStatus181(l)) return false;
+      const s = normalize181(l.start_date || l.leave_date || l.date);
+      const e = normalize181(l.end_date || l.start_date || l.leave_date || l.date);
+      return s && e && d >= s && d <= e;
+    });
+  }
+  function initCountMap181(dates){
+    const counts = {};
+    dates.forEach(d => { counts[d] = {}; SLOT_META_V181.forEach(s => counts[d][s.key] = new Set()); });
+    return counts;
+  }
+  function staffDaySlots181(assignments, staffId, date){
+    return new Set(assignments.filter(a => String(a.staff_id) === String(staffId) && a.date === date).map(a => a.slotKey));
+  }
+  function canAssignSlot181(assignments, counts, staffId, date, slotKey){
+    if (staffHasLeaveOnDate181(staffId, date)) return false;
+    if (counts?.[date]?.[slotKey]?.has(staffId)) return false;
+    const set = staffDaySlots181(assignments, staffId, date);
+    if (set.has(slotKey)) return false;
+    if (set.size >= 2) return false;
+    if (set.size === 1) {
+      const oldIdx = SLOT_META_V181.find(s => set.has(s.key))?.idx;
+      const newIdx = SLOT_META_V181.find(s => s.key === slotKey)?.idx;
+      if (oldIdx == null || newIdx == null || Math.abs(oldIdx - newIdx) !== 1) return false;
+    }
+    return true;
+  }
+  function pickStaffForSlot181(remaining, assignments, counts, date, slotKey){
+    const candidates = Object.entries(remaining)
+      .filter(([,h]) => h >= 8)
+      .map(([staff_id,h]) => ({ staff_id, h }))
+      .filter(x => canAssignSlot181(assignments, counts, x.staff_id, date, slotKey));
+    candidates.sort((a,b) => (b.h - a.h) || (staffDaySlots181(assignments, a.staff_id, date).size - staffDaySlots181(assignments, b.staff_id, date).size) || staffNick(a.staff_id).localeCompare(staffNick(b.staff_id), 'th'));
+    return candidates[0]?.staff_id || null;
+  }
+  function addSlotAssignment181(assignments, counts, remaining, staffId, date, slot){
+    assignments.push({ staff_id: staffId, date, slotKey: slot.key, start: slot.start, end: slot.end, hours: 8 });
+    counts[date][slot.key].add(staffId);
+    remaining[staffId] = Math.round((remaining[staffId] - 8) * 10) / 10;
+  }
+  function compressAssignments181(assignments){
+    const by = {};
+    assignments.forEach(a => {
+      const k = `${a.staff_id}|${a.date}`;
+      by[k] = by[k] || [];
+      by[k].push(a);
+    });
+    const rows = [];
+    Object.values(by).forEach(list => {
+      list.sort((a,b) => SLOT_META_V181.find(s => s.key === a.slotKey).idx - SLOT_META_V181.find(s => s.key === b.slotKey).idx);
+      if (list.length === 2) {
+        const keys = list.map(x => x.slotKey).join(',');
+        if (keys === '00-08,08-16') rows.push({ staff_id:list[0].staff_id, date:list[0].date, start:'0:00', end:'16:00', hours:16 });
+        else if (keys === '08-16,16-00') rows.push({ staff_id:list[0].staff_id, date:list[0].date, start:'8:00', end:'0:00', hours:16 });
+        else list.forEach(x => rows.push(x));
+      } else list.forEach(x => rows.push(x));
+    });
+    return rows.sort((a,b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || staffNick(a.staff_id).localeCompare(staffNick(b.staff_id), 'th'));
+  }
+  function allocateDummyShifts181(totals, month){
+    const cycle = hrCycleRange181(month);
+    const dates = dateList181(cycle.start, cycle.end);
+    const counts = initCountMap181(dates);
+    const remaining = { ...totals };
+    const assignments = [];
+    const totalStart = Object.values(remaining).reduce((s,h) => s + Number(h || 0), 0);
+    const invalid = Object.entries(remaining).filter(([,h]) => Math.abs((Number(h || 0) % 8)) > 0.001).map(([id,h]) => `${staffNick(id)} ${h} ชม.`);
+    if (invalid.length) return { ok:false, message:`ยอดชั่วโมงต้องหาร 8 ลงตัวก่อน Export: ${invalid.join(', ')}` };
+
+    let guard = 0;
+    while (Object.values(remaining).some(h => h >= 8) && guard++ < 5000) {
+      let placed = false;
+      for (const date of dates) {
+        for (const slot of SLOT_META_V181) {
+          while (counts[date][slot.key].size < 3) {
+            const staffId = pickStaffForSlot181(remaining, assignments, counts, date, slot.key);
+            if (!staffId) break;
+            addSlotAssignment181(assignments, counts, remaining, staffId, date, slot);
+            placed = true;
+            if (!Object.values(remaining).some(h => h >= 8)) break;
+          }
+          if (!Object.values(remaining).some(h => h >= 8)) break;
+        }
+        if (!Object.values(remaining).some(h => h >= 8)) break;
+      }
+      if (!placed) break;
+    }
+
+    guard = 0;
+    while (Object.values(remaining).some(h => h >= 8) && guard++ < 5000) {
+      const slotOrder = [];
+      dates.forEach(date => SLOT_META_V181.forEach(slot => slotOrder.push({ date, slot, count: counts[date][slot.key].size })));
+      slotOrder.sort((a,b) => (a.count - b.count) || a.date.localeCompare(b.date) || a.slot.idx - b.slot.idx);
+      let placed = false;
+      for (const item of slotOrder) {
+        if (counts[item.date][item.slot.key].size >= 5) continue;
+        const staffId = pickStaffForSlot181(remaining, assignments, counts, item.date, item.slot.key);
+        if (!staffId) continue;
+        addSlotAssignment181(assignments, counts, remaining, staffId, item.date, item.slot);
+        placed = true;
+        break;
+      }
+      if (!placed) {
+        const left = Object.entries(remaining).filter(([,h]) => h >= 8).map(([id,h]) => `${staffNick(id)} เหลือ ${h} ชม.`).join(', ');
+        return { ok:false, message:`จัดเวรดัมมี่ไม่ครบ เพราะติดเงื่อนไขวันลา/ไม่เกิน 16 ชม./คน/วัน หรือจำนวนคนต่อรอบเวรเต็มแล้ว: ${left}` };
+      }
+    }
+    const leftHours = Object.values(remaining).reduce((s,h) => s + Number(h || 0), 0);
+    if (Math.round(leftHours * 10) / 10 !== 0) return { ok:false, message:'จัดชั่วโมง OT ได้ไม่ครบพอดี กรุณาตรวจยอดชั่วโมงรวมอีกครั้ง' };
+    const rows = compressAssignments181(assignments);
+    const rowHours = rows.reduce((s,r) => s + Number(r.hours || 0), 0);
+    if (Math.round(rowHours * 10) / 10 !== Math.round(totalStart * 10) / 10) return { ok:false, message:'ยอดชั่วโมงหลังจัด Dummy Shift ไม่ตรงกับยอดตั้งต้น' };
+    return { ok:true, rows, cycle, counts };
+  }
+  function buildHrDummyExportRows181(month){
+    const sourceRows = pendingApprovedRowsInCycle181(month);
+    const totals = {};
+    sourceRows.forEach(r => {
+      const h = Number(calcOtHours(r));
+      if (!Number.isFinite(h) || h <= 0) return;
+      totals[r.staff_id] = Math.round(((totals[r.staff_id] || 0) + h) * 10) / 10;
+    });
+    if (!Object.keys(totals).length) return { ok:false, message:'ยังไม่มี OT Pending ที่อนุมัติแล้วในรอบเบิกนี้' };
+    const allocated = allocateDummyShifts181(totals, month);
+    if (!allocated.ok) return allocated;
+    const data = allocated.rows.map(r => ({
+      no: employeeCode181(r.staff_id),
+      'วันที่': Number(String(r.date).slice(-2)),
+      'เวลาเข้า': r.start,
+      'เวลาออก': r.end
+    }));
+    return { ok:true, data, allocated, totals, sourceRows };
+  }
+  async function markOtClaimed181(ids, batchId){
+    const payload = { claim_status: CLAIM_CLAIMED, claim_batch_id: batchId, claimed_at: new Date().toISOString(), claimed_by: currentStaffId() };
+    const res = await sb.from('ot_requests').update(payload).in('id', ids);
+    if (res.error) throw new Error(claimSqlErrorMessage181(res.error));
+    return res;
+  }
+  function claimSqlErrorMessage181(err){
+    const msg = String(err?.message || err || '');
+    if (/claim_status|claim_batch_id|claimed_at|claimed_by|column|schema cache/i.test(msg)) {
+      return 'ฐานข้อมูลยังไม่มีคอลัมน์ Claim History กรุณารันไฟล์ supabase_v181_ot_claim_history.sql ใน Supabase SQL Editor ก่อนใช้งาน Export/Revert';
+    }
+    return msg || 'อัปเดตสถานะการเบิกไม่สำเร็จ';
+  }
+  async function exportHrDummyExcel181(){
+    if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้น', { tone:'error' });
+    if (typeof XLSX === 'undefined') return showToast('ไม่พบไลบรารี XLSX สำหรับ Export Excel', { tone:'error' });
+    const month = reportMonth181();
+    const result = buildHrDummyExportRows181(month);
+    if (!result.ok) return showToast(result.message, { tone:'error' });
+    const ids = [...new Set((result.sourceRows || []).map(r => r.id).filter(Boolean))];
+    if (!ids.length) return showToast('ไม่พบ ID รายการ OT สำหรับเปลี่ยนสถานะ Claim', { tone:'error' });
+    const batchId = createClaimBatchId181();
+    setBusy(true, 'กำลัง Export และบันทึกสถานะ Claim');
+    try {
+      await markOtClaimed181(ids, batchId);
+      const ws = XLSX.utils.json_to_sheet(result.data, { header:['no','วันที่','เวลาเข้า','เวลาออก'] });
+      for (let r=2; r <= result.data.length + 1; r++) {
+        const cell = ws[`A${r}`];
+        if (cell) { cell.t = 's'; cell.z = '@'; }
+      }
+      ws['!cols'] = [{ wch:12 }, { wch:8 }, { wch:12 }, { wch:12 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'HR_OT');
+      const c = result.allocated.cycle;
+      XLSX.writeFile(wb, `HR_OT_${batchId}_${c.start}_to_${c.end}.xlsx`);
+      await loadAllData();
+      renderPage();
+      showToast(`Export Excel แล้ว และบันทึก Batch ${batchId} เป็น Claimed (${ids.length} รายการ OT / ${result.data.length} แถว Excel)`);
+    } catch (err) {
+      console.error(`${VERSION_V181} export failed`, err);
+      showToast(err.message || 'Export Excel ไม่สำเร็จ', { tone:'error' });
+    } finally { setBusy(false); }
+  }
+
+  function claimedBatches181(){
+    const groups = {};
+    claimedApprovedRows181().forEach(r => {
+      const batch = r.claim_batch_id || 'ไม่พบ Batch ID';
+      groups[batch] = groups[batch] || { rows:[], hours:0, minDate:'', maxDate:'', claimedAt:'' };
+      groups[batch].rows.push(r);
+      const h = Number(calcOtHours(r));
+      if (Number.isFinite(h)) groups[batch].hours = Math.round((groups[batch].hours + h) * 10) / 10;
+      const d = normalize181(r.work_date);
+      if (d) {
+        if (!groups[batch].minDate || d < groups[batch].minDate) groups[batch].minDate = d;
+        if (!groups[batch].maxDate || d > groups[batch].maxDate) groups[batch].maxDate = d;
+      }
+      if (r.claimed_at && (!groups[batch].claimedAt || String(r.claimed_at) > String(groups[batch].claimedAt))) groups[batch].claimedAt = r.claimed_at;
+    });
+    return Object.entries(groups).sort((a,b) => String(b[1].claimedAt || b[0]).localeCompare(String(a[1].claimedAt || a[0])));
+  }
+  function renderClaimHistoryPage181(){
+    if (!isAdmin()) return empty('เฉพาะ Admin เท่านั้น');
+    const batches = claimedBatches181();
+    const allCount = batches.reduce((sum, [,g]) => sum + g.rows.length, 0);
+    const allHours = batches.reduce((sum, [,g]) => sum + g.hours, 0);
+    if (!batches.length) {
+      return `<div class="card"><div class="section-title"><div><h3>ประวัติการเบิก OT</h3><p class="hint">รายการที่ Export แล้วจะมาอยู่หน้านี้ และสามารถ Revert กลับเป็น Pending ได้</p></div><button class="ghost-btn" data-page="ot">กลับไปส่วนที่ 4</button></div>${empty('ยังไม่มีรายการ Claimed')}</div>`;
+    }
+    return `<div class="grid grid-1 v181-claim-history">
+      <div class="card"><div class="section-title"><div><h3>ประวัติการเบิก OT</h3><p class="hint">รวม ${allCount} รายการ • ${allHours.toFixed(1)} ชั่วโมง • กด Revert เพื่อส่งกลับไป Pending ในส่วนที่ 4</p></div><button class="ghost-btn" data-page="ot">กลับไปส่วนที่ 4</button></div></div>
+      ${batches.map(([batch,g]) => {
+        const rows = [...g.rows].sort((a,b) => String(b.work_date || '').localeCompare(String(a.work_date || '')) || staffNick(a.staff_id).localeCompare(staffNick(b.staff_id), 'th'));
+        return `<div class="card v181-claim-batch">
+          <div class="section-title"><div><h3>Batch ${esc181(batch)}</h3><p class="hint">${rows.length} รายการ • ${Number(g.hours || 0).toFixed(1)} ชั่วโมง • วันที่ OT ${esc181(g.minDate ? `${formatMaybeThaiDate181(g.minDate)} - ${formatMaybeThaiDate181(g.maxDate)}` : '-')} • Export เมื่อ ${esc181(g.claimedAt ? new Date(g.claimedAt).toLocaleString('th-TH') : '-')}</p></div><button class="danger-btn" data-revert-claim-batch="${esc181(batch)}">Revert ทั้ง Batch</button></div>
+          <div class="table-wrap"><table><thead><tr><th>วันที่ OT</th><th>เจ้าหน้าที่</th><th>ชั่วโมง</th><th>เหตุผล</th><th>สถานะเบิก</th><th>จัดการ</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc181(formatMaybeThaiDate181(normalize181(r.work_date)))}</td><td>${staffPill(r.staff_id)}</td><td>${Number(calcOtHours(r) || 0).toFixed(1)}</td><td>${esc181(r.reason || '-')}</td><td><span class="badge green">Claimed</span></td><td><button class="tiny-btn danger" data-revert-claim-row="${esc181(r.id)}">Revert</button></td></tr>`).join('')}</tbody></table></div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  async function revertClaimRows181(ids){
+    if (!ids.length) return showToast('ไม่พบรายการที่ต้อง Revert', { tone:'error' });
+    const ok = typeof confirmDialog === 'function'
+      ? await confirmDialog(`ต้องการ Revert ${ids.length} รายการกลับเป็น Pending ใช่หรือไม่?`, 'ยืนยัน Revert')
+      : window.confirm(`ต้องการ Revert ${ids.length} รายการกลับเป็น Pending ใช่หรือไม่?`);
+    if (!ok) return;
+    setBusy(true, 'กำลัง Revert Claim');
+    try {
+      const res = await sb.from('ot_requests').update({ claim_status: CLAIM_PENDING, claim_batch_id: null, claimed_at: null, claimed_by: null }).in('id', ids);
+      if (res.error) throw new Error(claimSqlErrorMessage181(res.error));
+      await loadAllData();
+      renderPage();
+      showToast(`Revert กลับเป็น Pending แล้ว ${ids.length} รายการ`);
+    } catch (err) {
+      showToast(err.message || 'Revert ไม่สำเร็จ', { tone:'error' });
+    } finally { setBusy(false); }
+  }
+  async function revertClaimBatch181(batchId){
+    const ids = claimedApprovedRows181().filter(r => String(r.claim_batch_id || 'ไม่พบ Batch ID') === String(batchId)).map(r => r.id).filter(Boolean);
+    await revertClaimRows181(ids);
+  }
+
+  if (Array.isArray(NAV_ITEMS) && !NAV_ITEMS.some(x => x.id === 'claimHistory')) {
+    const otIdx = NAV_ITEMS.findIndex(x => x.id === 'ot');
+    NAV_ITEMS.splice(otIdx >= 0 ? otIdx + 1 : NAV_ITEMS.length, 0, { id:'claimHistory', icon:'🧾', title:'ประวัติการเบิก OT', subtitle:'รายการ Claimed และ Revert กลับ Pending', group:'admin' });
+  }
+
+  const previousRenderPageV181 = window.renderPage || (typeof renderPage === 'function' ? renderPage : null);
+  window.renderPage = renderPage = function renderPageV181(){
+    if (state.page !== 'claimHistory') return previousRenderPageV181 ? previousRenderPageV181.apply(this, arguments) : undefined;
+    const item = NAV_ITEMS.find(x => x.id === state.page) || { title:'ประวัติการเบิก OT', subtitle:'รายการ Claimed และ Revert กลับ Pending' };
+    const title = $('pageTitle'); if (title) title.textContent = item.title;
+    const subtitle = $('pageSubtitle'); if (subtitle) subtitle.textContent = item.subtitle;
+    renderNav();
+    const content = $('pageContent'); if (content) content.innerHTML = renderClaimHistoryPage181();
+  };
+
+  document.addEventListener('click', async function(e){
+    const exportBtn = e.target?.closest?.('[data-export-ot-hr-excel-v181]');
+    if (exportBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      await exportHrDummyExcel181();
+      return;
+    }
+    const rowBtn = e.target?.closest?.('[data-revert-claim-row]');
+    if (rowBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      await revertClaimRows181([rowBtn.getAttribute('data-revert-claim-row')]);
+      return;
+    }
+    const batchBtn = e.target?.closest?.('[data-revert-claim-batch]');
+    if (batchBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      await revertClaimBatch181(batchBtn.getAttribute('data-revert-claim-batch'));
+    }
+  }, true);
+
+  document.addEventListener('input', function(e){
+    const form = e.target?.closest?.('#attendanceAdminFormV180');
+    if (!form || !['duty_date','start_time','end_date','end_time'].includes(e.target.name)) return;
+    const dutyDate = form.querySelector('[name="duty_date"]')?.value || (typeof todayStr === 'function' ? todayStr() : dateKey181(new Date()));
+    const startTime = form.querySelector('[name="start_time"]')?.value || '08:00';
+    const endDateInput = form.querySelector('[name="end_date"]');
+    const endTime = form.querySelector('[name="end_time"]')?.value || '08:00';
+    const h = calcDateTimeHours181(dutyDate, startTime, endDateInput?.value || dutyDate, endTime);
+    const sMin = timeToMinutes181(startTime);
+    const eMin = timeToMinutes181(endTime);
+    if (endDateInput && normalize181(endDateInput.value) === normalize181(dutyDate) && sMin != null && eMin != null && eMin <= sMin) endDateInput.value = addDays181(dutyDate, 1);
+    const inp = form.querySelector('[name="manual_hours"]');
+    if (inp) inp.value = h ? String(h) : '';
+  }, true);
+
+  window.v181OtClaim = { hrCycleRange181, buildHrDummyExportRows181, allocateDummyShifts181, exportHrDummyExcel181, renderClaimHistoryPage181 };
+  console.info(`${VERSION_V181} loaded`);
+})();

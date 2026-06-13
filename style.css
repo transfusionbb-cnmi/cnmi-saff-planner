@@ -2288,3 +2288,24 @@ thead .v179-sticky-first-col {
   .v180-ot-page .section-title { align-items: stretch; }
   .v180-ot-page [data-export-ot-hr-excel] { width: 100%; }
 }
+
+/* V181 OT Claim History */
+.v181-claim-history .section-title,
+.v181-claim-batch .section-title { gap: 12px; align-items: flex-start; }
+.v181-pending-summary table th,
+.v181-pending-summary table td { white-space: nowrap; }
+.danger-btn {
+  border: 1px solid #fecaca;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.danger-btn:hover { filter: brightness(.98); }
+.v181-admin-card textarea { width: 100%; resize: vertical; }
+@media (max-width: 780px) {
+  .v181-ot-page .section-title { align-items: stretch; }
+  .v181-ot-page .section-title .actions { width: 100%; display: grid; grid-template-columns: 1fr; }
+}
