@@ -2132,3 +2132,62 @@ textarea {
   position: relative;
   z-index: 12;
 }
+
+/* V178: freeze staff-name first column in Position Overview modal
+   Scope: Popup "ภาพรวมจัดตำแหน่ง" only. Prevents the first column from disappearing during horizontal scroll. */
+.v169-overview-modal .v169-overview-table {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  max-width: 100% !important;
+  position: relative !important;
+  isolation: isolate !important;
+  background: #ffffff !important;
+}
+
+.v169-overview-modal .v169-overview-table table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  width: max-content !important;
+  min-width: 100% !important;
+}
+
+.v169-overview-modal .v169-overview-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 30 !important;
+  background: #f6f9fc !important;
+}
+
+.v169-overview-modal .v169-overview-table table > thead > tr > th:first-child,
+.v169-overview-modal .v169-overview-table table > tbody > tr > th:first-child,
+.v169-overview-modal .v169-overview-table table > tbody > tr > td:first-child,
+.v169-overview-modal .v169-overview-table .sticky-name-col {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 40 !important;
+  background: #ffffff !important;
+  border-right: 1px solid rgba(23, 53, 77, .14) !important;
+  box-shadow: 10px 0 20px rgba(15, 35, 52, .10) !important;
+  transform: translateZ(0);
+}
+
+.v169-overview-modal .v169-overview-table table > thead > tr > th:first-child,
+.v169-overview-modal .v169-overview-table thead .sticky-name-col {
+  top: 0 !important;
+  z-index: 60 !important;
+  background: #f6f9fc !important;
+}
+
+.v169-overview-modal .v169-overview-table table > tbody > tr > th:first-child,
+.v169-overview-modal .v169-overview-table table > tbody > tr > td:first-child,
+.v169-overview-modal .v169-overview-table tbody .sticky-name-col {
+  z-index: 45 !important;
+  background: #ffffff !important;
+}
+
+.v169-overview-modal .v169-overview-table .sticky-name-col .staff-color-pill,
+.v169-overview-modal .v169-overview-table table > tbody > tr > th:first-child .staff-color-pill,
+.v169-overview-modal .v169-overview-table table > tbody > tr > td:first-child .staff-color-pill {
+  position: relative;
+  z-index: 70;
+}
