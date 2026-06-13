@@ -7096,3 +7096,118 @@ function bindGlobalEvents() {
   // When auth signs out without the visible button path, avoid carrying Staff mode into a fresh login.
   document.addEventListener('cnmi:force-clear-view-mode', clearModeV167);
 })();
+
+/* =========================
+   V168 Preserve table scroll after re-render
+   - Keeps scrollLeft/scrollTop for wide monthly/daily tables after select/save/reload actions.
+   - Avoids the UX jump back to top-left when popup success modal is closed.
+   ========================= */
+(function(){
+  'use strict';
+  const TABLE_SCROLL_SELECTORS_V168 = [
+    '.month-position-matrix',
+    '.daily-position-table',
+    '.monthly-schedule-table',
+    '.schedule-table-wrap',
+    '.roster-board .table-wrap',
+    '.monthly-position-page .table-wrap',
+    '.readonly-month-position-page .table-wrap',
+    '.table-wrap',
+    '.staff-pool'
+  ];
+
+  function qsaV168(selector){
+    try { return Array.from(document.querySelectorAll(selector)); }
+    catch (_) { return []; }
+  }
+
+  function isScrollableV168(el){
+    if (!el) return false;
+    return el.scrollLeft || el.scrollTop || el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+  }
+
+  function contextKeyV168(){
+    const p = state || {};
+    return [
+      p.page || '',
+      p.monthKey || '',
+      p.positionMonthKey || '',
+      p.positionMonthViewKey || '',
+      p.positionDate || '',
+      p.scheduleMobileView || '',
+      p.tradeFilterStaff || '',
+      p.schedulePersonFilter || ''
+    ].join('|');
+  }
+
+  function captureTableScrollV168(){
+    const seen = new Set();
+    const items = [];
+    TABLE_SCROLL_SELECTORS_V168.forEach(selector => {
+      const matches = qsaV168(selector);
+      matches.forEach((el, index) => {
+        if (!el || seen.has(el) || !isScrollableV168(el)) return;
+        seen.add(el);
+        items.push({ selector, index, left: el.scrollLeft || 0, top: el.scrollTop || 0 });
+      });
+    });
+    return {
+      context: contextKeyV168(),
+      windowX: window.scrollX || 0,
+      windowY: window.scrollY || 0,
+      items
+    };
+  }
+
+  function restoreTableScrollV168(snapshot){
+    if (!snapshot || snapshot.context !== contextKeyV168()) return;
+    const apply = () => {
+      if (snapshot.context !== contextKeyV168()) return;
+      try { window.scrollTo(snapshot.windowX || 0, snapshot.windowY || 0); } catch (_) {}
+      (snapshot.items || []).forEach(item => {
+        const el = qsaV168(item.selector)[item.index];
+        if (!el) return;
+        el.scrollLeft = item.left || 0;
+        el.scrollTop = item.top || 0;
+      });
+    };
+    requestAnimationFrame(() => {
+      apply();
+      requestAnimationFrame(apply);
+      setTimeout(apply, 0);
+      setTimeout(apply, 80);
+    });
+  }
+
+  window.captureTableScrollV168 = captureTableScrollV168;
+  window.restoreTableScrollV168 = restoreTableScrollV168;
+  window.withPreservedTableScrollV168 = function withPreservedTableScrollV168(fn){
+    const snapshot = captureTableScrollV168();
+    const result = typeof fn === 'function' ? fn() : undefined;
+    restoreTableScrollV168(snapshot);
+    return result;
+  };
+
+  const previousRenderPageV168 = window.renderPage || (typeof renderPage === 'function' ? renderPage : null);
+  if (previousRenderPageV168) {
+    window.renderPage = renderPage = function renderPageV168(){
+      const snapshot = captureTableScrollV168();
+      const result = previousRenderPageV168.apply(this, arguments);
+      restoreTableScrollV168(snapshot);
+      return result;
+    };
+  }
+
+  // Extra guard for the monthly position dropdown: keep the exact horizontal/vertical point
+  // even when the edit triggers a full table refresh and then opens the success modal.
+  const previousApplyMonthPositionEditV168 = window.applyMonthPositionEdit || (typeof applyMonthPositionEdit === 'function' ? applyMonthPositionEdit : null);
+  if (previousApplyMonthPositionEditV168) {
+    window.applyMonthPositionEdit = applyMonthPositionEdit = function applyMonthPositionEditV168(){
+      const snapshot = captureTableScrollV168();
+      const result = previousApplyMonthPositionEditV168.apply(this, arguments);
+      restoreTableScrollV168(snapshot);
+      return result;
+    };
+  }
+})();
+
