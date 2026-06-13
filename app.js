@@ -10788,3 +10788,416 @@ function bindGlobalEvents() {
   window.v190HrRateNormalization = { normalizeHours, otNormalizationBreakdown190, buildHrNormalizedExportRows190, exportHrNormalizedExcel190 };
   console.info(`${VERSION_V190} loaded`);
 })();
+
+/* =========================
+   V191 OT Approval RBAC + Admin Edit/Delete
+   - Staff Section 3 always shows only own OT rows and never shows Admin approval buttons.
+   - Admin Section 3 shows every OT row with Edit/Delete + existing approval actions.
+   - Editing approved rows requires resetting approval back to pending; claimed/exported rows are protected.
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V191 = 'V191_OT_APPROVAL_RBAC_ADMIN_EDIT_DELETE';
+
+  function esc191(v){
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function normDate191(v){
+    try { return normalizeDateKey(v); }
+    catch (_) { return String(v || '').slice(0,10); }
+  }
+  function round191(v, digits=1){
+    const n = Number(v || 0);
+    if (!Number.isFinite(n)) return 0;
+    const m = Math.pow(10, digits);
+    return Math.round(n * m) / m;
+  }
+  function isActualAdmin191(){
+    try { return typeof isActualAdmin === 'function' ? isActualAdmin() : String(state?.profile?.role || '').toLowerCase() === 'admin'; }
+    catch (_) { return false; }
+  }
+  function isAdminMode191(){
+    try { return typeof isAdmin === 'function' && isAdmin(); }
+    catch (_) { return false; }
+  }
+  function currentSid191(){
+    try { return currentStaffId(); } catch (_) { return state?.profile?.id || ''; }
+  }
+  function claimStatus191(row){
+    const raw = row?.claim_status;
+    if (raw == null || String(raw).trim() === '') return 'Pending';
+    const s = String(raw).trim().toLowerCase();
+    return (s === 'claimed' || s === 'เบิกแล้ว') ? 'Claimed' : 'Pending';
+  }
+  function isClaimed191(row){ return claimStatus191(row) === 'Claimed'; }
+  function statusText191(row){ return String(row?.status || '').trim(); }
+  function isApproved191(row){ return statusText191(row) === 'อนุมัติ'; }
+  function isRejected191(row){
+    const s = statusText191(row).replace(/\s+/g, ' ').toLowerCase();
+    return ['ไม่อนุมัติ','ไม่อนุมัติแล้ว','rejected','reject','denied','not_approved','not approved'].includes(s);
+  }
+  function canStaffEdit191(row){
+    const owner = String(row?.staff_id || '') === String(currentSid191() || '');
+    return owner && !isApproved191(row) && !isClaimed191(row);
+  }
+  function canAdminEdit191(row){ return isAdminMode191() && !isClaimed191(row); }
+  function canAdminDelete191(row){ return isAdminMode191() && !isClaimed191(row); }
+  function findOtRow191(id){ return (state.otRequests || []).find(r => String(r.id) === String(id)); }
+  function noteStartTime191(note){
+    const m = String(note || '').match(/เวลาเริ่ม\s*([0-2]?\d:[0-5]\d)/);
+    return m ? m[1] : '';
+  }
+  function noteEndDate191(note){
+    const m = String(note || '').match(/วันที่สิ้นสุด\s*(\d{4}-\d{2}-\d{2})/);
+    return m ? normDate191(m[1]) : '';
+  }
+  function explicitHours191(row){
+    const field = Number(row?.manual_hours ?? row?.requested_hours ?? row?.hours ?? NaN);
+    if (Number.isFinite(field) && field > 0) return field;
+    const raw = `${row?.note || ''} ${row?.reason || ''}`;
+    const token = raw.match(/HR_HOURS\s*=\s*(\d+(?:\.\d+)?)/i);
+    if (token) return Number(token[1]);
+    const th = raw.match(/(?:จำนวนเวลา\s*OT|ชั่วโมงที่ต้องการเบิก|ชั่วโมงเบิก|จำนวนชั่วโมง|manual\s*hours)\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
+    if (th) return Number(th[1]);
+    try {
+      const h = Number(calcOtHours(row));
+      return Number.isFinite(h) && h > 0 ? h : 0;
+    } catch (_) { return 0; }
+  }
+  function endDate191(row){ return normDate191(row?.end_date) || noteEndDate191(row?.note) || normDate191(row?.work_date); }
+  function timeText191(row){
+    const sDate = normDate191(row?.work_date);
+    const eDate = endDate191(row) || sDate;
+    const sTime = String(row?.start_time || noteStartTime191(row?.note) || '').trim();
+    const eTime = String(row?.end_time || '').trim();
+    const st = sTime ? `${formatThaiDate(sDate)} ${esc191(sTime)}` : formatThaiDate(sDate);
+    const et = eTime ? `${formatThaiDate(eDate)} ${esc191(eTime)}` : formatThaiDate(eDate);
+    return `${st}<br><span class="muted">ถึง ${et}</span>`;
+  }
+  function stripGeneratedNote191(note){
+    return String(note || '')
+      .split('|')
+      .map(x => x.trim())
+      .filter(Boolean)
+      .filter(x => !/^HR_HOURS\s*=/i.test(x))
+      .filter(x => !/^จำนวนเวลา\s*OT\s*:?/i.test(x))
+      .filter(x => !/^ชั่วโมงที่ต้องการเบิก\s*:?/i.test(x))
+      .join(' | ');
+  }
+  function buildNote191(hours, note){
+    const h = round191(hours, 2);
+    const clean = stripGeneratedNote191(note);
+    return [`จำนวนเวลา OT: ${h} ชั่วโมง`, clean].filter(Boolean).join(' | ');
+  }
+  function reasonHtml191(row){
+    try {
+      const helpers = window.v176OtReasonHelpers;
+      if (helpers?.compactOtReasonText176) {
+        const t = helpers.compactOtReasonText176(row);
+        return `${esc191(t.main || '-')}${t.detail ? `<br><span class="muted">${esc191(t.detail)}</span>` : ''}`;
+      }
+    } catch (_) {}
+    return `${esc191(row?.reason || '-')}${row?.note ? `<br><span class="muted">${esc191(row.note)}</span>` : ''}`;
+  }
+  function statusBadge191(row){
+    const s = row?.status || '-';
+    const status = badge(s, s === 'อนุมัติ' ? 'green' : s === 'ไม่อนุมัติ' ? 'red' : s === 'ส่งกลับแก้ไข' ? 'orange' : 'black');
+    return `${status}${isClaimed191(row) ? '<br><span class="badge yellow">Exported</span>' : ''}`;
+  }
+  function hourCells191(row){
+    const actual = round191(explicitHours191(row), 1);
+    let hr = actual;
+    try {
+      const n = window.v190HrRateNormalization?.otNormalizationBreakdown190?.(row);
+      if (n && Number.isFinite(Number(n.hrHours))) hr = Number(n.hrHours);
+    } catch (_) {}
+    const changed = Math.abs(Number(hr || 0) - Number(actual || 0)) > 0.004;
+    return {
+      actual:`<b>${round191(actual, 1).toFixed(1)}</b>`,
+      hr:`<b>${round191(hr, 2).toFixed(2)}</b>${changed ? '<br><span class="badge yellow">Normalize</span>' : ''}`,
+      mobile:`<b>ชั่วโมงจริง:</b> ${round191(actual, 1).toFixed(1)}<br><b>ชั่วโมงเบิก HR:</b> ${round191(hr, 2).toFixed(2)}${changed ? ' <span class="badge yellow">Normalize</span>' : ''}`
+    };
+  }
+  function statusActions191(row){
+    if (!Array.isArray(OT_STATUSES)) return '';
+    return `<div class="actions v191-status-actions">${OT_STATUSES.map(s => `<button class="tiny-btn" type="button" data-ot-status="${esc191(row.id)}|${esc191(s)}">${esc191(s)}</button>`).join('')}</div>`;
+  }
+  function adminActionButtons191(row){
+    const editDisabled = canAdminEdit191(row) ? '' : 'disabled';
+    const deleteDisabled = canAdminDelete191(row) ? '' : 'disabled';
+    const guardTitle = isClaimed191(row) ? 'รายการนี้ Export HR แล้ว ห้ามแก้ไข/ลบ' : 'แก้ไขรายการ OT';
+    return `<div class="actions v191-ot-actions">
+      <button class="tiny-btn icon-btn" type="button" data-edit-ot="${esc191(row.id)}" ${editDisabled} title="${esc191(guardTitle)}">✏️</button>
+      <button class="tiny-btn icon-btn danger" type="button" data-delete-ot-admin="${esc191(row.id)}" ${deleteDisabled} title="${isClaimed191(row) ? 'รายการนี้ Export HR แล้ว ห้ามลบ' : 'ลบรายการ OT'}">🗑️</button>
+      ${statusActions191(row)}
+    </div>`;
+  }
+  function staffActionButtons191(row){
+    const buttons = [];
+    if (canStaffEdit191(row)) buttons.push(`<button class="tiny-btn" type="button" data-edit-ot="${esc191(row.id)}">แก้ไข</button>`);
+    if (isRejected191(row) && String(row?.staff_id || '') === String(currentSid191() || '')) buttons.push(`<button class="tiny-btn danger" type="button" data-delete-rejected-ot="${esc191(row.id)}">ลบ</button>`);
+    return buttons.length ? `<div class="actions v191-ot-actions">${buttons.join('')}</div>` : '-';
+  }
+  function actionButtons191(row){ return isAdminMode191() ? adminActionButtons191(row) : staffActionButtons191(row); }
+  function visibleRows191(rows){
+    const source = Array.isArray(rows) ? rows : (state.otRequests || []);
+    const currentId = currentSid191();
+    const base = isAdminMode191()
+      ? (typeof filteredOtRows === 'function' ? filteredOtRows(source) : source)
+      : source.filter(r => String(r?.staff_id || '') === String(currentId || ''));
+    return base.slice().sort((a,b) => normDate191(b?.work_date).localeCompare(normDate191(a?.work_date)) || String(b?.created_at || '').localeCompare(String(a?.created_at || '')));
+  }
+
+  const previousRenderOtTableV191 = window.renderOtTable || (typeof renderOtTable === 'function' ? renderOtTable : null);
+  window.renderOtTable = renderOtTable = function renderOtTableV191(rows){
+    try {
+      const visible = visibleRows191(rows);
+      const filters = isAdminMode191() ? (typeof renderOtFilters === 'function' ? renderOtFilters() : '') : '';
+      if (!visible.length) return filters + empty(isAdminMode191() ? 'ยังไม่มีรายการ OT ตามตัวกรองนี้' : 'ยังไม่มีรายการ OT ของฉัน');
+      const tableRows = visible.map(r => {
+        const h = hourCells191(r);
+        return `<tr><td>${staffPill(r.staff_id)}</td><td>${timeText191(r)}</td><td>${reasonHtml191(r)}</td><td>${h.actual}</td><td>${h.hr}</td><td>${statusBadge191(r)}</td><td>${actionButtons191(r)}</td></tr>`;
+      }).join('');
+      const table = `<div class="table-wrap ot-desktop-table v190-ot-table v191-ot-table"><table><thead><tr><th>ชื่อ</th><th>ช่วงเวลาทำงาน</th><th>เหตุผล</th><th>ชั่วโมงจริง</th><th>ชั่วโมงเบิก HR</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>${tableRows}</tbody></table></div>`;
+      const cards = `<div class="mobile-cards ot-mobile-cards v190-ot-cards v191-ot-cards">${visible.map(r => {
+        const h = hourCells191(r);
+        const actions = actionButtons191(r);
+        return `<div class="mobile-card"><div class="mobile-day-head">${staffPill(r.staff_id)}${statusBadge191(r)}</div><div><b>ช่วงเวลาทำงาน</b><br>${timeText191(r)}</div><div><b>เหตุผล:</b> ${reasonHtml191(r)}</div><div>${h.mobile}</div>${actions !== '-' ? actions : ''}</div>`;
+      }).join('')}</div>`;
+      return filters + table + cards;
+    } catch (err) {
+      console.warn(`${VERSION_V191} renderOtTable fallback`, err);
+      return previousRenderOtTableV191 ? previousRenderOtTableV191(rows) : empty('แสดงตาราง OT ไม่สำเร็จ');
+    }
+  };
+
+  const previousLoadAllDataV191 = window.loadAllData || (typeof loadAllData === 'function' ? loadAllData : null);
+  if (previousLoadAllDataV191) {
+    window.loadAllData = loadAllData = async function loadAllDataV191(){
+      await previousLoadAllDataV191.apply(this, arguments);
+      if (!state?.profile || !sb || isActualAdmin191()) return;
+      const sid = currentSid191();
+      if (!sid) return;
+      try {
+        const res = await sb.from('ot_requests').select('*').eq('staff_id', sid).order('work_date', { ascending:false });
+        if (!res.error) state.otRequests = res.data || [];
+      } catch (err) {
+        console.warn(`${VERSION_V191}: staff-only OT fetch failed; render filter still protects UI`, err);
+      }
+    };
+  }
+
+  function staffOptions191(selectedId){
+    const list = (state.staff || []).filter(s => {
+      const activeOk = Object.prototype.hasOwnProperty.call(s, 'active') ? (s.active === true || String(s.active).toLowerCase() === 'true') : (s.is_active !== false && String(s.is_active).toLowerCase() !== 'false');
+      return activeOk;
+    });
+    let ordered = list;
+    try { ordered = orderedStaff(list); } catch (_) { ordered = list.sort((a,b) => String(a.nickname || '').localeCompare(String(b.nickname || ''), 'th')); }
+    return ordered.map(s => `<option value="${esc191(s.id)}" ${String(s.id)===String(selectedId)?'selected':''}>${esc191(s.nickname || s.full_name || s.email || s.id)}</option>`).join('');
+  }
+  function modalNotice191(row){
+    if (isClaimed191(row)) return `<div class="notice error-notice compact"><b>รายการนี้ Export HR แล้ว</b><br>ระบบล็อกไม่ให้แก้ไข/ลบ เพื่อไม่ให้ยอดเบิก HR เพี้ยน ต้อง Revert Claim History ก่อนจึงจะแก้ได้</div>`;
+    if (isApproved191(row)) return `<div class="notice soft-notice compact"><b>รายการนี้อนุมัติแล้ว</b><br>หากแก้ไข ระบบจะปรับสถานะกลับเป็น “รออนุมัติ” เพื่อให้ตรวจซ้ำก่อนนำไปเบิก HR</div>`;
+    return '';
+  }
+  function hoursFromDateTime191(form){
+    const sDate = normDate191(form.querySelector('[name="work_date"]')?.value);
+    let eDate = normDate191(form.querySelector('[name="end_date"]')?.value) || sDate;
+    const sTime = form.querySelector('[name="start_time"]')?.value || '';
+    const eTime = form.querySelector('[name="end_time"]')?.value || '';
+    if (!sDate || !sTime || !eTime) return 0;
+    const start = new Date(`${sDate}T${sTime.length === 5 ? `${sTime}:00` : sTime}`);
+    let end = new Date(`${eDate}T${eTime.length === 5 ? `${eTime}:00` : eTime}`);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return 0;
+    if (end <= start) {
+      const d = new Date(start.getTime());
+      d.setDate(d.getDate() + 1);
+      eDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const endDateInput = form.querySelector('[name="end_date"]');
+      if (endDateInput) endDateInput.value = eDate;
+      end = new Date(`${eDate}T${eTime.length === 5 ? `${eTime}:00` : eTime}`);
+    }
+    const h = (end - start) / 36e5;
+    return Number.isFinite(h) && h > 0 ? round191(h, 2) : 0;
+  }
+  function syncEditHours191(form){
+    if (!form) return;
+    const auto = hoursFromDateTime191(form);
+    const input = form.querySelector('[name="requested_hours"]');
+    const hint = form.querySelector('[data-v191-hours-hint]');
+    if (auto > 0 && input && (!input.dataset.userEdited || input.value === '' || Number(input.value) === Number(input.dataset.lastAuto || NaN))) {
+      input.value = String(auto);
+      input.dataset.lastAuto = String(auto);
+    }
+    if (hint) hint.textContent = auto > 0 ? `คำนวณจากช่วงเวลาได้ ${auto} ชั่วโมง` : 'กรอกจำนวนชั่วโมงเองได้ หากเป็นรายการปรับยอดเบิก';
+  }
+  function openEditOtModal191(id){
+    const row = findOtRow191(id);
+    if (!row) return showToast('ไม่พบรายการ OT นี้ กรุณารีเฟรชหน้าอีกครั้ง', { tone:'error' });
+    const admin = isAdminMode191();
+    if (!admin && !canStaffEdit191(row)) return showToast('แก้ไขได้เฉพาะรายการของตัวเองที่ยังไม่อนุมัติ', { tone:'error' });
+    if (admin && isClaimed191(row)) return showToast('รายการนี้ Export HR แล้ว ต้อง Revert Claim History ก่อนแก้ไข', { tone:'error' });
+    const disabled = isClaimed191(row) ? 'disabled' : '';
+    const workDate = normDate191(row.work_date) || todayStr();
+    const eDate = endDate191(row) || workDate;
+    const startTime = String(row.start_time || noteStartTime191(row.note) || '00:00').slice(0,5);
+    const endTime = String(row.end_time || '00:00').slice(0,5);
+    const hours = explicitHours191(row);
+    const note = stripGeneratedNote191(row.note || '');
+    const staffField = admin
+      ? `<label>ชื่อผู้ขอ <select name="staff_id" ${disabled} required>${staffOptions191(row.staff_id)}</select></label>`
+      : `<label>ชื่อผู้ขอ <input value="${esc191(staffNick(row.staff_id))}" disabled><input type="hidden" name="staff_id" value="${esc191(row.staff_id)}"></label>`;
+    const approvedGuard = isApproved191(row) && !isClaimed191(row)
+      ? `<label class="wide v191-approval-reset"><input type="checkbox" name="reset_approval" required> ยืนยันให้ระบบปรับสถานะกลับเป็น “รออนุมัติ” หลังบันทึกการแก้ไข</label>`
+      : '';
+    showModal(`<div class="v191-ot-edit-modal">
+      <h2>แก้ไขรายการ OT</h2>
+      ${modalNotice191(row)}
+      <form id="otEditFormV191" class="form-grid compact-form">
+        <input type="hidden" name="id" value="${esc191(row.id)}">
+        ${staffField}
+        <label>วันที่เริ่ม/วันที่ทำ OT <input name="work_date" type="date" value="${esc191(workDate)}" ${disabled} required></label>
+        <label>เวลาเริ่ม <input name="start_time" type="time" value="${esc191(startTime)}" ${disabled}></label>
+        <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${esc191(eDate)}" ${disabled}></label>
+        <label>เวลาสิ้นสุด <input name="end_time" type="time" value="${esc191(endTime)}" ${disabled}></label>
+        <label>จำนวนชั่วโมงจริง <input name="requested_hours" type="number" min="0" max="240" step="0.01" value="${esc191(hours || '')}" ${disabled} required><span class="hint" data-v191-hours-hint></span></label>
+        <label class="wide">เหตุผล <textarea name="reason" rows="3" ${disabled} required>${esc191(row.reason || '')}</textarea></label>
+        <label class="wide">รายละเอียด/หมายเหตุ <textarea name="note" rows="3" ${disabled} placeholder="เช่น ลงย้อนหลังแทนน้อง / รอเทียบ LIS">${esc191(note)}</textarea></label>
+        ${approvedGuard}
+        <div class="actions wide modal-form-actions"><button type="button" class="ghost-btn" onclick="closeModal()">ยกเลิก</button>${isClaimed191(row) ? '' : '<button class="primary-btn" type="submit">บันทึกการแก้ไข</button>'}</div>
+      </form>
+    </div>`, { large:true });
+    setTimeout(() => syncEditHours191(document.getElementById('otEditFormV191')), 30);
+  }
+  async function updateOtWithFallback191(id, payload){
+    const attempts = [];
+    attempts.push({ ...payload });
+    const noEnd = { ...payload }; delete noEnd.end_date; attempts.push(noEnd);
+    const noStart = { ...payload }; delete noStart.start_time; delete noStart.end_date; attempts.push(noStart);
+    let lastError = null;
+    for (const p of attempts) {
+      const res = await sb.from('ot_requests').update(p).eq('id', id).select('id').maybeSingle();
+      if (!res.error) return res;
+      lastError = res.error;
+      if (!/end_date|start_time|column|schema cache/i.test(String(res.error?.message || ''))) break;
+    }
+    throw lastError || new Error('บันทึกการแก้ไข OT ไม่สำเร็จ');
+  }
+  async function saveEditOt191(form){
+    const fd = new FormData(form);
+    const id = String(fd.get('id') || '').trim();
+    const row = findOtRow191(id);
+    if (!row) return showToast('ไม่พบรายการ OT นี้ กรุณารีเฟรชหน้าอีกครั้ง', { tone:'error' });
+    const admin = isAdminMode191();
+    if (!admin && !canStaffEdit191(row)) return showToast('แก้ไขได้เฉพาะรายการของตัวเองที่ยังไม่อนุมัติ', { tone:'error' });
+    if (isClaimed191(row)) return showToast('รายการนี้ Export HR แล้ว ต้อง Revert Claim History ก่อนแก้ไข', { tone:'error' });
+    if (isApproved191(row) && fd.get('reset_approval') !== 'on') return showToast('กรุณายืนยันการปรับสถานะกลับเป็นรออนุมัติ', { tone:'error' });
+    const staffId = admin ? String(fd.get('staff_id') || '').trim() : String(row.staff_id || '');
+    const workDate = normDate191(fd.get('work_date'));
+    const endDate = normDate191(fd.get('end_date')) || workDate;
+    const startTime = String(fd.get('start_time') || '').trim();
+    const endTime = String(fd.get('end_time') || '').trim();
+    const hours = Number(fd.get('requested_hours'));
+    const reason = String(fd.get('reason') || '').trim();
+    const noteText = String(fd.get('note') || '').trim();
+    if (!staffId) return showToast('กรุณาเลือกชื่อผู้ขอ', { tone:'error' });
+    if (!workDate) return showToast('กรุณาระบุวันที่ทำ OT', { tone:'error' });
+    if (!Number.isFinite(hours) || hours < 0) return showToast('กรุณาระบุจำนวนชั่วโมงให้ถูกต้อง', { tone:'error' });
+    if (!reason) return showToast('กรุณาระบุเหตุผล', { tone:'error' });
+    const payload = {
+      staff_id: staffId,
+      work_date: workDate,
+      start_time: startTime || null,
+      end_date: endDate || workDate,
+      end_time: endTime || null,
+      reason,
+      note: buildNote191(hours, noteText),
+      device: `${row.device || ''} | edited ${VERSION_V191} by ${staffNick(currentSid191())}`.slice(0,250)
+    };
+    if (!admin || isApproved191(row) || isRejected191(row) || statusText191(row) === 'ส่งกลับแก้ไข') {
+      payload.status = 'รออนุมัติ';
+      payload.reviewed_by = null;
+      payload.reviewed_at = null;
+    }
+    setBusy(true, 'กำลังบันทึกการแก้ไข OT');
+    try {
+      await updateOtWithFallback191(id, payload);
+      closeModal();
+      await loadAllData();
+      renderPage();
+      showToast(payload.status === 'รออนุมัติ' ? 'บันทึกการแก้ไขแล้ว และปรับสถานะกลับเป็นรออนุมัติ' : 'บันทึกการแก้ไข OT แล้ว');
+    } catch (err) {
+      const msg = String(err?.message || err || '');
+      const friendly = /row-level security|permission/i.test(msg)
+        ? 'สิทธิ์ฐานข้อมูลยังไม่อนุญาตให้แก้ไข OT กรุณารันไฟล์ supabase_v191_ot_admin_rbac.sql ใน Supabase SQL Editor'
+        : msg;
+      showToast(friendly, { tone:'error' });
+    } finally { setBusy(false); }
+  }
+  async function deleteAdminOt191(id){
+    if (!isAdminMode191()) return showToast('เฉพาะ Admin เท่านั้น', { tone:'error' });
+    const row = findOtRow191(id);
+    if (!row) return showToast('ไม่พบรายการ OT นี้ กรุณารีเฟรชหน้าอีกครั้ง', { tone:'error' });
+    if (isClaimed191(row)) return showToast('รายการนี้ Export HR แล้ว ต้อง Revert Claim History ก่อนลบ', { tone:'error' });
+    const msg = isApproved191(row)
+      ? `รายการ OT ของ ${staffNick(row.staff_id)} วันที่ ${formatThaiDate(normDate191(row.work_date))} อนุมัติแล้ว หากลบ ยอด Pending สำหรับเบิก HR จะเปลี่ยน ต้องการลบจริงหรือไม่?`
+      : `ลบรายการ OT ของ ${staffNick(row.staff_id)} วันที่ ${formatThaiDate(normDate191(row.work_date))} ใช่หรือไม่?`;
+    const ok = await confirmDialog(msg, isApproved191(row) ? 'ยืนยันลบรายการที่อนุมัติแล้ว' : 'ยืนยันลบรายการ OT');
+    if (!ok) return;
+    setBusy(true, 'กำลังลบรายการ OT');
+    try {
+      const res = await sb.from('ot_requests').delete().eq('id', id);
+      if (res.error) throw res.error;
+      await loadAllData();
+      renderPage();
+      showToast('ลบรายการ OT แล้ว');
+    } catch (err) {
+      const msg2 = String(err?.message || err || '');
+      const friendly = /row-level security|permission/i.test(msg2)
+        ? 'สิทธิ์ฐานข้อมูลยังไม่อนุญาตให้ Admin ลบ OT กรุณารันไฟล์ supabase_v191_ot_admin_rbac.sql ใน Supabase SQL Editor'
+        : msg2;
+      showToast(friendly, { tone:'error' });
+    } finally { setBusy(false); }
+  }
+
+  window.openEditModal = window.openEditOtModal = openEditOtModal191;
+
+  document.addEventListener('click', async function(e){
+    const editBtn = e.target?.closest?.('[data-edit-ot]');
+    if (editBtn) {
+      e.preventDefault(); e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      openEditOtModal191(editBtn.getAttribute('data-edit-ot'));
+      return;
+    }
+    const delBtn = e.target?.closest?.('[data-delete-ot-admin]');
+    if (delBtn) {
+      e.preventDefault(); e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      await deleteAdminOt191(delBtn.getAttribute('data-delete-ot-admin'));
+      return;
+    }
+  }, true);
+
+  document.addEventListener('submit', async function(e){
+    if (e.target?.id !== 'otEditFormV191') return;
+    e.preventDefault(); e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    await saveEditOt191(e.target);
+  }, true);
+
+  document.addEventListener('input', function(e){
+    const form = e.target?.closest?.('#otEditFormV191');
+    if (!form) return;
+    if (e.target.name === 'requested_hours') e.target.dataset.userEdited = '1';
+    if (['work_date','start_time','end_date','end_time'].includes(e.target.name)) syncEditHours191(form);
+  }, true);
+  document.addEventListener('change', function(e){
+    const form = e.target?.closest?.('#otEditFormV191');
+    if (form && ['work_date','start_time','end_date','end_time'].includes(e.target.name)) syncEditHours191(form);
+  }, true);
+
+  console.info(`${VERSION_V191} loaded`);
+})();
