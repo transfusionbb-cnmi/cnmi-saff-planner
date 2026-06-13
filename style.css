@@ -2037,3 +2037,22 @@ textarea {
     font-size: 12px;
   }
 }
+
+
+/* V170 OT cross-day end date layout */
+.v170-checkin-fields {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(220px, 1fr)) !important;
+  gap: 14px !important;
+  width: 100%;
+}
+.v170-checkin-fields label {
+  min-width: 0;
+}
+.v170-checkin-fields input {
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 820px) {
+  .v170-checkin-fields { grid-template-columns: 1fr !important; }
+}

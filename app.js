@@ -6546,9 +6546,10 @@ function bindGlobalEvents() {
         ${myLoggedToday ? `<div class="notice soft-notice compact">วันนี้มีบันทึกลงชื่ออยู่เวรแล้ว</div>` : ''}
         ${proxyBox}
         <form id="attendanceForm" class="form-grid compact-form attendance-form">
-          <div class="form-grid two-cols">
+          <div class="form-grid two-cols v170-checkin-fields" data-v170-last-start="${esc(today)}">
             <label>วันที่อยู่เวร <input name="duty_date" type="date" value="${esc(today)}" required></label>
             <label>เวลาเริ่มทำงาน <input name="start_time" type="time" value="${pad(otStartHourForDate(today))}:00" required></label>
+            <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${esc(today)}" required></label>
             <label>เวลาสิ้นสุด <input name="end_time" type="time" value="${esc(timeNowShort())}" required></label>
           </div>
           ${staffMode}
@@ -6581,6 +6582,7 @@ function bindGlobalEvents() {
   async function saveAttendanceV163(form){
     const fd = new FormData(form);
     const dutyDate = normalizeDateKey(fd.get('duty_date'));
+    const endDate = normalizeDateKey(fd.get('end_date')) || dutyDate;
     const startTime = String(fd.get('start_time') || '').trim();
     const endTime = String(fd.get('end_time') || '').trim();
     let staffId = isAdmin() ? String(fd.get('staff_id') || '') : String(currentStaffId() || '');
@@ -6589,8 +6591,14 @@ function bindGlobalEvents() {
     const manualHours = manualHoursRaw === '' ? null : Number(manualHoursRaw);
     const adminNote = String(fd.get('admin_note') || '').trim();
     if (!dutyDate) return showToast('กรุณาเลือกวันที่อยู่เวร', { tone:'error' });
+    if (!endDate) return showToast('กรุณาเลือกวันที่สิ้นสุด', { tone:'error' });
     if (!startTime || !endTime) return showToast('กรุณาระบุเวลาเริ่มทำงานและเวลาสิ้นสุด', { tone:'error' });
     if (!staffId) return showToast('กรุณาเลือกเจ้าหน้าที่', { tone:'error' });
+    const startDateTime = new Date(`${dutyDate}T${startTime.length === 5 ? `${startTime}:00` : startTime}`);
+    const endDateTime = new Date(`${endDate}T${endTime.length === 5 ? `${endTime}:00` : endTime}`);
+    if (!Number.isFinite(startDateTime.getTime()) || !Number.isFinite(endDateTime.getTime())) return showToast('รูปแบบวันที่/เวลาไม่ถูกต้อง', { tone:'error' });
+    if (endDateTime <= startDateTime) return showToast('วันที่/เวลาสิ้นสุดต้องมากกว่าจุดเริ่มต้น', { tone:'error' });
+    const calculatedHours = Math.round(((endDateTime - startDateTime) / 36e5) * 10) / 10;
     if (manualHours !== null && (!Number.isFinite(manualHours) || manualHours < 0 || manualHours > 24)) return showToast('จำนวนเวลา OT ต้องอยู่ระหว่าง 0–24 ชั่วโมง', { tone:'error' });
 
     const duties = rosterDutiesFor(staffId, dutyDate);
@@ -6610,8 +6618,8 @@ function bindGlobalEvents() {
     const pos = await getGps();
     if (!pos.ok) return showGpsHelp(pos.message);
     if (!isInsideGeofence(pos) && CFG.GEOFENCE?.enabled) return showGpsHelp('ไม่ได้อยู่ในพื้นที่โรงพยาบาล');
-    const checkInDate = new Date(`${dutyDate}T${startTime.length === 5 ? `${startTime}:00` : startTime}`);
-    const deviceInfo = [navigator.userAgent, `V163 start ${startTime}`, `end ${endTime}`, proxyText, isAdmin() ? `admin:${staffNick(currentStaffId())}` : ''].filter(Boolean).join(' | ').slice(0, 250);
+    const checkInDate = startDateTime;
+    const deviceInfo = [navigator.userAgent, `V170 start ${dutyDate} ${startTime}`, `end ${endDate} ${endTime}`, proxyText, isAdmin() ? `admin:${staffNick(currentStaffId())}` : ''].filter(Boolean).join(' | ').slice(0, 250);
 
     setBusy(true, 'กำลังบันทึกการอยู่เวร');
     try {
@@ -6625,17 +6633,25 @@ function bindGlobalEvents() {
         const noteParts = [
           isAdmin() ? `Admin บันทึกแทนโดย ${staffNick(currentStaffId())}` : 'สร้างจากส่วนที่ 1 ยืนยันอยู่เวร',
           `เวลาเริ่ม ${startTime}`,
+          `วันที่สิ้นสุด ${endDate}`,
           `เวลาสิ้นสุด ${endTime}`,
+          `ชั่วโมงคำนวณ ${calculatedHours} ชั่วโมง`,
           chosenDuty ? `ประเภทเวร ${DUTY_LABEL[chosenDuty] || chosenDuty}` : '',
           autoHours !== null ? `จำนวนเวลา ${autoHours} ชั่วโมง` : '',
           proxyText,
           adminNote
         ].filter(Boolean);
-        const otBase = { staff_id: staffId, work_date: dutyDate, start_time: startTime, end_time: endTime, reason: isAdmin() ? 'ยืนยันอยู่เวรโดย Admin' : 'ยืนยันอยู่เวรตามตาราง', note: noteParts.join(' | '), status: 'รออนุมัติ', lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device: deviceInfo };
+        const otBase = { staff_id: staffId, work_date: dutyDate, end_date: endDate, start_time: startTime, end_time: endTime, reason: isAdmin() ? 'ยืนยันอยู่เวรโดย Admin' : 'ยืนยันอยู่เวรตามตาราง', note: noteParts.join(' | '), status: 'รออนุมัติ', lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device: deviceInfo };
         let ot = await sb.from('ot_requests').insert(otBase);
+        if (ot.error && /end_date|column|schema/i.test(ot.error.message || '')) {
+          const fallback = { ...otBase, note: `${otBase.note} | วันที่สิ้นสุด ${endDate}` };
+          delete fallback.end_date;
+          ot = await sb.from('ot_requests').insert(fallback);
+        }
         if (ot.error && /start_time|column|schema/i.test(ot.error.message || '')) {
-          const fallback = { ...otBase, note: `${otBase.note} | เวลาเริ่ม ${startTime}` };
+          const fallback = { ...otBase, note: `${otBase.note} | เวลาเริ่ม ${startTime} | วันที่สิ้นสุด ${endDate}` };
           delete fallback.start_time;
+          delete fallback.end_date;
           ot = await sb.from('ot_requests').insert(fallback);
         }
         if (ot.error) showToast(`ลงชื่อสำเร็จ แต่สร้างรายการ OT ไม่สำเร็จ: ${ot.error.message}`, { tone:'error' });
@@ -6818,9 +6834,10 @@ function bindGlobalEvents() {
         ${myLoggedToday ? `<div class="notice soft-notice compact">วันนี้มีบันทึกลงชื่ออยู่เวรแล้ว</div>` : ''}
         ${proxyBox}
         <form id="attendanceForm" class="form-grid compact-form attendance-form v165-attendance-form">
-          <div class="v165-checkin-fields">
+          <div class="v165-checkin-fields v170-checkin-fields" data-v170-last-start="${esc165(today)}">
             <label>วันที่อยู่เวร <input name="duty_date" type="date" value="${esc165(today)}" required></label>
             <label>เวลาเริ่มทำงาน <input name="start_time" type="time" value="${pad(otStartHourForDate(today))}:00" required></label>
+            <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${esc165(today)}" required></label>
             <label>เวลาสิ้นสุด <input name="end_time" type="time" value="${esc165(timeNowShortV165())}" required></label>
           </div>
           ${staffMode}
@@ -6929,7 +6946,7 @@ function bindGlobalEvents() {
         const mine = (state.otRequests || []).filter(x => String(x.staff_id) === String(currentStaffId()));
         const rows = isAdmin() ? (state.otRequests || []) : mine;
         return `<div class="grid grid-2 ot-page v165-ot-page v166-ot-page">
-          <div class="card ot-card"><h3>ส่วนที่ 1 ยืนยันวันอยู่เวร</h3><form id="attendanceForm" class="form-grid compact-form attendance-form v165-attendance-form"><div class="v165-checkin-fields"><label>วันที่อยู่เวร <input name="duty_date" type="date" value="${esc166(today)}" required></label><label>เวลาเริ่มทำงาน <input name="start_time" type="time" value="${pad(otStartHourForDate(today))}:00" required></label><label>เวลาสิ้นสุด <input name="end_time" type="time" required></label></div><button class="primary-btn wide" type="submit">ยืนยันรับ OT / อยู่เวร</button></form><p class="hint gps-help compact">โหมดสำรอง: ระบบตัดส่วนที่ทำให้ render ค้างออกชั่วคราว แต่ยังลงชื่ออยู่เวรได้</p></div>
+          <div class="card ot-card"><h3>ส่วนที่ 1 ยืนยันวันอยู่เวร</h3><form id="attendanceForm" class="form-grid compact-form attendance-form v165-attendance-form"><div class="v165-checkin-fields v170-checkin-fields" data-v170-last-start="${esc166(today)}"><label>วันที่อยู่เวร <input name="duty_date" type="date" value="${esc166(today)}" required></label><label>เวลาเริ่มทำงาน <input name="start_time" type="time" value="${pad(otStartHourForDate(today))}:00" required></label><label>วันที่สิ้นสุด <input name="end_date" type="date" value="${esc166(today)}" required></label><label>เวลาสิ้นสุด <input name="end_time" type="time" required></label></div><button class="primary-btn wide" type="submit">ยืนยันรับ OT / อยู่เวร</button></form><p class="hint gps-help compact">โหมดสำรอง: ระบบตัดส่วนที่ทำให้ render ค้างออกชั่วคราว แต่ยังลงชื่ออยู่เวรได้</p></div>
           <div class="card ot-card"><h3>ส่วนที่ 2 ขอ OT เพิ่ม / เวรปั่นเลือด</h3><form id="otForm" class="form-grid v165-ot-extra-form"><label>วันที่ <input name="work_date" type="date" value="${esc166(today)}" required></label><label>ตั้งแต่เวลา <input name="start_time" type="time" value="${pad(otStartHourForDate(today))}:00" required></label><label>ถึงเวลา <input name="end_time" type="time" required></label><label>เหตุผล <select name="reason">${OT_REASONS.map(r => `<option>${esc166(r)}</option>`).join('')}</select></label><label class="wide">รายละเอียด <input name="note"></label><button class="primary-btn wide" type="submit">ยืนยันขอ OT เพิ่ม</button></form></div>
           <div class="card wide-card" style="grid-column:1/-1;"><div class="section-title"><h3>${isAdmin() ? 'ส่วนที่ 3 อนุมัติ OT' : 'รายการ OT ของฉัน'}</h3>${isAdmin() ? '<button class="ghost-btn" data-export-ot-excel>Export Excel สรุปเดือนนี้</button>' : ''}</div>${renderOtTable(rows)}</div>
           <div class="card" style="grid-column:1/-1;"><h3>ส่วนที่ 4 สรุป OT รายเดือน</h3><p class="hint">สรุปเฉพาะรายการที่อนุมัติแล้ว</p>${renderOtSummary()}</div>
@@ -7486,4 +7503,121 @@ function bindGlobalEvents() {
 
   window.renderPositionOverviewModalV169 = renderPositionOverviewModalV169;
   window.renderQcRotationModalV169 = renderQcRotationModalV169;
+})();
+
+
+/* =========================
+   V170 OT End Date + Cross-day Attendance Hours
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V170 = 'V170_OT_END_DATE_CROSS_DAY';
+
+  function esc170(v){
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function noteStartTimeV170(note){
+    const m = String(note || '').match(/เวลาเริ่ม\s*([0-2]?\d:[0-5]\d)/);
+    return m ? m[1] : '';
+  }
+  function noteEndDateV170(note){
+    const m = String(note || '').match(/วันที่สิ้นสุด\s*(\d{4}-\d{2}-\d{2})/);
+    return m ? normalizeDateKey(m[1]) : '';
+  }
+  function noteManualHoursV170(note){
+    const m = String(note || '').match(/จำนวนเวลา\s*([0-9]+(?:\.[0-9]+)?)\s*ชั่วโมง/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+  function normalizeTimeV170(time){
+    const t = String(time || '').trim();
+    if (!t) return '';
+    return t.length === 5 ? `${t}:00` : t;
+  }
+  function calcDateTimeHoursV170(startDate, startTime, endDate, endTime, allowLegacyRoll){
+    const sDate = normalizeDateKey(startDate);
+    const eDate = normalizeDateKey(endDate) || sDate;
+    const sTime = normalizeTimeV170(startTime);
+    const eTime = normalizeTimeV170(endTime);
+    if (!sDate || !eDate || !sTime || !eTime) return 0;
+    const start = new Date(`${sDate}T${sTime}`);
+    let end = new Date(`${eDate}T${eTime}`);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return 0;
+    if (end < start && allowLegacyRoll) end = new Date(end.getTime() + 24 * 36e5);
+    const hours = (end - start) / 36e5;
+    if (!Number.isFinite(hours) || hours < 0) return 0;
+    return Math.round(hours * 10) / 10;
+  }
+  function otEndDateV170(row){
+    return normalizeDateKey(row?.end_date) || noteEndDateV170(row?.note) || normalizeDateKey(row?.work_date);
+  }
+  function otTimeTextV170(row){
+    const startDate = normalizeDateKey(row?.work_date);
+    const endDate = otEndDateV170(row);
+    const startTime = String(row?.start_time || noteStartTimeV170(row?.note) || '').trim();
+    const endTime = String(row?.end_time || '').trim();
+    const startText = startTime ? `${formatThaiDate(startDate)} ${esc170(startTime)}` : formatThaiDate(startDate);
+    const endText = endTime ? `${formatThaiDate(endDate)} ${esc170(endTime)}` : formatThaiDate(endDate);
+    return `${startText}<br><span class="muted">ถึง ${endText}</span>`;
+  }
+
+  const previousCalcOtHoursV170 = window.calcOtHours || (typeof calcOtHours === 'function' ? calcOtHours : null);
+  window.calcOtHours = calcOtHours = function calcOtHoursV170(row){
+    try {
+      const workDate = normalizeDateKey(row?.work_date);
+      if (!workDate) return 0;
+      const manual = noteManualHoursV170(row?.note);
+      if (manual !== null && String(row?.reason || '').includes('ยืนยันอยู่เวร')) return manual;
+      const startTime = String(row?.start_time || noteStartTimeV170(row?.note) || '').trim();
+      const endTime = String(row?.end_time || '').trim();
+      const explicitEndDate = normalizeDateKey(row?.end_date) || noteEndDateV170(row?.note);
+      const endDate = explicitEndDate || workDate;
+      if (startTime && endTime) {
+        const hours = calcDateTimeHoursV170(workDate, startTime, endDate, endTime, !explicitEndDate);
+        if (hours > 0) return hours;
+      }
+      return previousCalcOtHoursV170 ? previousCalcOtHoursV170(row) : 0;
+    } catch (err) {
+      console.warn(`${VERSION_V170} calc fallback`, err);
+      return previousCalcOtHoursV170 ? previousCalcOtHoursV170(row) : 0;
+    }
+  };
+
+  const previousRenderOtTableV170 = window.renderOtTable || (typeof renderOtTable === 'function' ? renderOtTable : null);
+  window.renderOtTable = renderOtTable = function renderOtTableV170(rows){
+    try {
+      const visible = (isAdmin() ? filteredOtRows(rows) : rows.slice().sort((a,b) => normalizeDateKey(b.work_date).localeCompare(normalizeDateKey(a.work_date)) || String(b.created_at || '').localeCompare(String(a.created_at || ''))));
+      const filters = isAdmin() ? renderOtFilters() : '';
+      if (!visible.length) return filters + empty(isAdmin() ? 'ยังไม่มีรายการ OT ตามตัวกรองนี้' : 'ยังไม่มีรายการ OT');
+      const actionButtons = r => isAdmin() ? `<div class="actions">${OT_STATUSES.map(s => `<button class="tiny-btn" data-ot-status="${r.id}|${s}">${s}</button>`).join('')}</div>` : '-';
+      const statusBadgeLocal = r => badge(r.status, r.status==='อนุมัติ'?'green':r.status==='ไม่อนุมัติ'?'red':r.status==='ส่งกลับแก้ไข'?'orange':'black');
+      const table = `<div class="table-wrap ot-desktop-table"><table><thead><tr><th>ชื่อ</th><th>ช่วงเวลาทำงาน</th><th>เหตุผล</th><th>ชั่วโมง</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
+        ${visible.map(r => `<tr><td>${staffPill(r.staff_id)}</td><td>${otTimeTextV170(r)}</td><td>${esc170(r.reason || '')}<br><span class="muted">${esc170(r.note || '')}</span></td><td>${calcOtHours(r).toFixed(1)}</td><td>${statusBadgeLocal(r)}</td><td>${actionButtons(r)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+      const cards = `<div class="mobile-cards ot-mobile-cards">${visible.map(r => `<div class="mobile-card"><div class="mobile-day-head">${staffPill(r.staff_id)}${statusBadgeLocal(r)}</div><div><b>ช่วงเวลาทำงาน</b><br>${otTimeTextV170(r)}</div><div><b>เหตุผล:</b> ${esc170(r.reason || '')}<br><span class="muted">${esc170(r.note || '')}</span></div><div><b>ชั่วโมง:</b> ${calcOtHours(r).toFixed(1)}</div>${isAdmin() ? `<div class="actions">${OT_STATUSES.map(s => `<button class="tiny-btn" data-ot-status="${r.id}|${s}">${s}</button>`).join('')}</div>` : ''}</div>`).join('')}</div>`;
+      return filters + table + cards;
+    } catch (err) {
+      console.warn(`${VERSION_V170} table fallback`, err);
+      return previousRenderOtTableV170 ? previousRenderOtTableV170(rows) : empty('แสดงตาราง OT ไม่สำเร็จ');
+    }
+  };
+
+  function syncAttendanceEndDateV170(form){
+    if (!form) return;
+    const start = form.querySelector('input[name="duty_date"]');
+    const end = form.querySelector('input[name="end_date"]');
+    if (!start || !end) return;
+    const oldStart = form.dataset.v170LastStart || start.defaultValue || '';
+    if (!end.value || end.value === oldStart) end.value = start.value || '';
+    form.dataset.v170LastStart = start.value || '';
+  }
+  document.addEventListener('change', function(e){
+    const input = e.target?.closest?.('#attendanceForm input[name="duty_date"]');
+    if (!input) return;
+    syncAttendanceEndDateV170(input.form);
+  }, true);
+
+  window.v170OtEndDateHelpers = { otEndDateV170, calcDateTimeHoursV170, noteEndDateV170 };
 })();
