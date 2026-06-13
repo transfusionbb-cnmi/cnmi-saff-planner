@@ -2343,3 +2343,240 @@ thead .v179-sticky-first-col {
     flex:1 1 auto;
   }
 }
+
+
+/* V184 Restore monthly position matrix styling
+   Scope: only the monthly position matrix rendered by V182. */
+.v182-position-matrix {
+  --month-staff-col-width: 112px;
+  --month-summary-col-width: 72px;
+  --month-day-col-width: 108px;
+  --month-row-height: 46px;
+}
+.v182-position-matrix .matrix-legend {
+  margin-bottom: 10px;
+}
+.v182-position-matrix .month-position-matrix {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+.v182-position-matrix .month-position-matrix table {
+  table-layout: fixed !important;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: calc(var(--month-staff-col-width) + var(--month-summary-col-width) + (31 * var(--month-day-col-width)));
+  width: max-content;
+  background: #fff;
+}
+.v182-position-matrix .month-position-matrix th,
+.v182-position-matrix .month-position-matrix td {
+  box-sizing: border-box;
+  height: var(--month-row-height);
+  min-height: var(--month-row-height);
+  padding: 7px 8px !important;
+  text-align: center;
+  vertical-align: middle;
+  border-right: 1px solid #eef2f7;
+  border-bottom: 1px solid #e5eaf0;
+  overflow: hidden;
+}
+.v182-position-matrix .month-position-matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #f8fafc;
+  font-weight: 900;
+}
+.v182-position-matrix .month-position-matrix thead .missing-role-row th {
+  top: 46px;
+  z-index: 19;
+}
+.v182-position-matrix .month-position-matrix .staff-col {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 30;
+  width: var(--month-staff-col-width) !important;
+  min-width: var(--month-staff-col-width) !important;
+  max-width: var(--month-staff-col-width) !important;
+  text-align: left;
+  box-shadow: 4px 0 10px rgba(31, 50, 72, .08);
+}
+.v182-position-matrix .month-position-matrix thead .staff-col {
+  z-index: 40;
+  background: #f8fafc !important;
+}
+.v182-position-matrix .month-position-matrix .summary-col {
+  position: sticky !important;
+  left: var(--month-staff-col-width) !important;
+  z-index: 28;
+  width: var(--month-summary-col-width) !important;
+  min-width: var(--month-summary-col-width) !important;
+  max-width: var(--month-summary-col-width) !important;
+  background: #fff;
+  box-shadow: 4px 0 10px rgba(31, 50, 72, .05);
+}
+.v182-position-matrix .month-position-matrix thead .summary-col {
+  z-index: 38;
+  background: #f8fafc !important;
+}
+.v182-position-matrix .month-position-matrix .date-head,
+.v182-position-matrix .month-position-matrix .missing-role-cell,
+.v182-position-matrix .month-position-matrix .matrix-cell {
+  width: var(--month-day-col-width) !important;
+  min-width: var(--month-day-col-width) !important;
+  max-width: var(--month-day-col-width) !important;
+}
+.v182-position-matrix .date-head {
+  font-size: 12px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.v182-position-matrix .date-head b,
+.v182-position-matrix .date-head span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v182-position-matrix .staff-color-cell {
+  padding: 5px 8px !important;
+  line-height: 1.05 !important;
+}
+.v182-position-matrix .matrix-staff-name {
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  min-height: 30px;
+  overflow: hidden;
+}
+.v182-position-matrix .matrix-staff-name b,
+.v182-position-matrix .matrix-staff-name small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v182-position-matrix .matrix-staff-name b {
+  font-size: 12px;
+  line-height: 1.1;
+}
+.v182-position-matrix .matrix-staff-name small {
+  font-size: 9px;
+  line-height: 1.05;
+  opacity: .88;
+}
+.v182-position-matrix .summary-action-cell {
+  padding: 5px 6px !important;
+  text-align: center !important;
+}
+.v182-position-matrix .summary-action-cell .staff-summary-trigger {
+  max-width: 100%;
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v182-position-matrix .matrix-cell {
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.18;
+  background: #fff;
+}
+.v182-position-matrix .matrix-cell > span,
+.v182-position-matrix .no-position-day span,
+.v182-position-matrix .needs-review-cell span {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v182-position-matrix .matrix-cell span br {
+  display: none;
+}
+.v182-position-matrix .cell-note {
+  display: none !important;
+}
+.v182-position-matrix .month-position-select {
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: 32px;
+  padding: 5px 7px !important;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v182-position-matrix .missing-role-cell {
+  padding: 4px 5px !important;
+  font-size: 10px;
+  line-height: 1.1;
+  white-space: nowrap !important;
+}
+.v182-position-matrix .missing-role-cell span {
+  display: inline-block;
+  max-width: calc(100% - 6px);
+  margin: 0;
+  padding: 2px 5px;
+  border-radius: 999px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.v182-position-matrix .missing-role-cell span + span {
+  display: none;
+}
+.v182-position-matrix .holiday-cell,
+.v182-position-matrix .weekend-cell,
+.v182-position-matrix .holiday-head,
+.v182-position-matrix .weekend-head {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+}
+.v182-position-matrix .outing-cell,
+.v182-position-matrix .outing-head {
+  background: #ffe9ee !important;
+  color: #b3354c !important;
+}
+.v182-position-matrix .needs-review-cell {
+  background: #fff4df !important;
+  color: #8a5a00 !important;
+}
+.v182-position-matrix tbody tr:nth-child(even) .matrix-cell:not(.holiday-cell):not(.weekend-cell):not(.outing-cell):not(.leave-cell):not(.needs-review-cell) {
+  background: #fcfdff;
+}
+@media (max-width: 720px) {
+  .v182-position-matrix {
+    --month-staff-col-width: 96px;
+    --month-summary-col-width: 62px;
+    --month-day-col-width: 96px;
+    --month-row-height: 44px;
+  }
+  .v182-position-matrix .month-position-matrix table {
+    min-width: calc(var(--month-staff-col-width) + var(--month-summary-col-width) + (31 * var(--month-day-col-width)));
+  }
+  .v182-position-matrix .month-position-matrix thead .missing-role-row th {
+    top: 44px;
+  }
+  .v182-position-matrix .month-position-matrix th,
+  .v182-position-matrix .month-position-matrix td {
+    padding: 5px 6px !important;
+    font-size: 11px;
+  }
+  .v182-position-matrix .month-position-select {
+    height: 30px;
+    font-size: 10px;
+  }
+}

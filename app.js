@@ -9834,8 +9834,9 @@ function bindGlobalEvents() {
       const options = monthOptionsForDate182(key, current);
       return `<td class="matrix-cell ${cls}"><select class="month-position-select" data-month-position-edit="${esc182(key)}|${esc182(staff?.id || '')}"><option value="">รอตรวจสอบ</option>${options.map(t => `<option value="${esc182(t.code)}" ${current===t.code?'selected':''}>${esc182(positionLabelForCell(t.code))}</option>`).join('')}</select>${outing ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
     }
-    const text = cleanCodes.length ? cleanCodes.join('<br>') : (isRealLeave ? esc182(v182LeaveText(leaveRow)) : '');
-    return `<td class="matrix-cell ${cls}">${text ? `<span>${text}</span>` : ''}${outing && cleanCodes.length ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
+    const text = cleanCodes.length ? cleanCodes.join(' / ') : (isRealLeave ? v182LeaveText(leaveRow) : '');
+    const safeText = text ? esc182(text) : '';
+    return `<td class="matrix-cell ${cls}">${safeText ? `<span title="${safeText}">${safeText}</span>` : ''}${outing && cleanCodes.length ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
   }
   window.renderMonthPositionMatrix = renderMonthPositionMatrix = function renderMonthPositionMatrixV182(rows, dates){
     rows = Array.isArray(rows) ? rows : [];
