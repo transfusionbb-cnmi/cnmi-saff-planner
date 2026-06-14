@@ -166,6 +166,7 @@ let state = {
   calendarDate: new Date(),
   calendarView: 'month',
   scheduleMobileView: 'day',
+  scheduleSelectedDate: todayStr(),
   tradeFilterStaff: '',
   hrFilterStaff: '',
   hrFilterMonth: '',
@@ -1662,17 +1663,20 @@ function renderCalendarMobileMonth(events, monthDate) {
   const last = new Date(y, m, 0).getDate();
   const all = !!state.mobileCalendarAll;
   const rows = [];
+  const mainTypes = new Set(['duty','holiday','training','meeting','outing','standard','code','activity']);
   for (let day=1; day<=last; day++) {
     const ds = `${y}-${pad(m)}-${pad(day)}`;
     const evs = events.filter(e => e.date === ds);
     if (!all && !evs.length && ds !== todayStr()) continue;
-    rows.push(`<div class="mobile-day-card ${ds===todayStr()?'today':''}" data-day-detail="${ds}">
+    const main = evs.filter(e => mainTypes.has(e.type));
+    const hidden = Math.max(0, evs.length - Math.min(main.length, 3));
+    rows.push(`<div class="mobile-day-card compact-calendar-card ${ds===todayStr()?'today':''}" data-day-detail="${ds}">
       <div class="mobile-day-head"><b>${day}</b><span>${parseDate(ds).toLocaleDateString('th-TH', { weekday:'short' })}</span><button class="tiny-btn" data-day-detail="${ds}">ดู</button></div>
-      ${evs.length ? evs.slice(0,6).map(e => `<button class="event-pill event-${e.type}" data-day-detail="${ds}">${escapeHtml(e.title)}</button>`).join('') : '<span class="hint">ไม่มีรายการ</span>'}
-      ${evs.length > 6 ? `<span class="hint">+${evs.length - 6} รายการ</span>` : ''}
+      ${main.length ? main.slice(0,3).map(e => `<button class="event-pill event-${e.type}" data-day-detail="${ds}">${escapeHtml(e.title)}</button>`).join('') : (evs.length ? '<span class="hint">มีรายการซ่อนอยู่</span>' : '<span class="hint">ไม่มีรายการ</span>')}
+      ${hidden > 0 ? `<button class="mobile-more-count" data-day-detail="${ds}">+${hidden} รายการ</button>` : ''}
     </div>`);
   }
-  return `<div class="mobile-calendar-tools"><button class="soft-btn" data-toggle-mobile-calendar>${all ? 'ซ่อนวันที่ไม่มีรายการ' : 'แสดงทุกวัน'}</button><span class="hint">มือถือแสดงแบบรายการเพื่อลดการไถยาว</span></div><div class="mobile-calendar-list">${rows.length ? rows.join('') : empty('เดือนนี้ยังไม่มีรายการ')}</div>`;
+  return `<div class="mobile-calendar-tools"><button class="soft-btn" data-toggle-mobile-calendar>${all ? 'ซ่อนวันที่ไม่มีรายการ' : 'แสดงทุกวัน'}</button><span class="hint">แตะ Card เพื่อดูรายละเอียดทั้งหมด</span></div><div class="mobile-calendar-list compact-calendar-list">${rows.length ? rows.join('') : empty('เดือนนี้ยังไม่มีรายการ')}</div>`;
 }
 function renderCalendarWeek() {
   const start = new Date(state.calendarDate); start.setDate(start.getDate() - start.getDay());
@@ -2132,14 +2136,19 @@ function renderScheduleTabs(active) {
 }
 function renderCalendarCardView(staffList, assignments, key=state.monthKey) {
   const dates = scheduleMonthDates(key);
-  return `<div class="clean-calendar-cards">${dates.map(date => {
+  const mobile = isMobileView();
+  const defaultDate = todayStr().startsWith(key) ? todayStr() : dates[0];
+  const selectedDate = dates.includes(state.scheduleSelectedDate) ? state.scheduleSelectedDate : defaultDate;
+  const visibleDates = mobile ? [selectedDate] : dates;
+  const controls = mobile ? `<div class="single-day-control no-print"><label>เลือกวันที่ <input type="date" id="scheduleSelectedDate" min="${dates[0]}" max="${dates[dates.length-1]}" value="${selectedDate}"></label><button class="tiny-btn" data-schedule-today>วันนี้</button></div>` : '';
+  return `${controls}<div class="clean-calendar-cards ${mobile ? 'single-day-cards' : ''}">${visibleDates.map(date => {
     const d = parseDate(date);
     const rows = assignments
       .filter(a => normalizeDateKey(a.duty_date) === date && a.staff_id)
       .sort((a,b) => dutySortIndex(a.duty_code) - dutySortIndex(b.duty_code));
     const dayOff = isWeekend(date) || isHolidayDate(date);
     return `<section class="clean-day-card ${dayOff ? 'is-offday' : ''}">
-      <div class="clean-day-head"><b>${d.getDate()}</b><span>${d.toLocaleDateString('th-TH', { weekday:'short' })}</span>${isHolidayDate(date) ? badge(holidayName(date), 'yellow') : ''}</div>
+      <div class="clean-day-head"><b>${d.getDate()}</b><span>${d.toLocaleDateString('th-TH', { weekday:'short', day:'numeric', month:'short' })}</span>${isHolidayDate(date) ? badge(holidayName(date), 'yellow') : ''}</div>
       ${rows.length ? rows.map(a => `<div class="clean-day-line"><span>${escapeHtml(dutyDisplayLabel(a.duty_code))}</span>${scheduleShiftButton(a)}</div>`).join('') : '<span class="muted">ไม่มีเวร</span>'}
     </section>`;
   }).join('')}</div>`;
@@ -3029,6 +3038,7 @@ async function handleClick(e) {
   if (t.dataset.clearSlot) { updateDraftSlot(t.dataset.clearSlot, { staff_id:null }); renderPage(); return; }
   if (t.dataset.toggleLockSlot) { const slot = findDraftSlot(t.dataset.toggleLockSlot); updateDraftSlot(t.dataset.toggleLockSlot, { is_locked: !slot?.is_locked }); renderPage(); return; }
   if (t.dataset.scheduleMobileView) { state.scheduleMobileView = t.dataset.scheduleMobileView; renderPage(); return; }
+  if (t.hasAttribute('data-schedule-today')) { state.scheduleSelectedDate = todayStr().startsWith(state.monthKey) ? todayStr() : scheduleMonthDates(state.monthKey)[0]; renderPage(); return; }
   if (t.hasAttribute('data-show-fairness')) { showFairness(); return; }
   if (t.dataset.staffStat) { showStaffStats(t.dataset.staffStat); return; }
   if (t.dataset.monthPositionStat) { showMonthPositionStaffSummary(t.dataset.monthPositionStat); return; }
@@ -3062,7 +3072,7 @@ async function handleClick(e) {
   if (t.dataset.auditDetail) { showAuditDetail(t.dataset.auditDetail); return; }
 }
 function handleChange(e) {
-  if (e.target.id === 'rosterMonthInput' || e.target.id === 'scheduleMonthInput') { state.monthKey = e.target.value; state.rosterDraft = null; renderPage(); }
+  if (e.target.id === 'rosterMonthInput' || e.target.id === 'scheduleMonthInput') { state.monthKey = e.target.value; state.rosterDraft = null; state.scheduleSelectedDate = `${e.target.value}-01`; renderPage(); }
   if (e.target.id === 'positionDateInput') { state.positionDate = e.target.value; renderPage(); }
   if (e.target.id === 'auditDateInput') { state.auditDate = e.target.value; renderPage(); }
   if (e.target.id === 'eligibilityStaffSelect') { state.eligibilityStaffId = e.target.value; renderPage(); }
@@ -3071,6 +3081,7 @@ function handleChange(e) {
   if (e.target.id === 'positionMonthViewInput') { state.positionMonthViewKey = e.target.value; renderPage(); }
   if (e.target.id === 'tradeFilterStaff') { state.tradeFilterStaff = e.target.value; renderPage(); }
   if (e.target.id === 'schedulePersonFilter') { state.schedulePersonFilter = e.target.value; renderPage(); }
+  if (e.target.id === 'scheduleSelectedDate') { state.scheduleSelectedDate = e.target.value || state.scheduleSelectedDate; renderPage(); }
   if (e.target.id === 'hrFilterStaff') { state.hrFilterStaff = e.target.value; renderPage(); }
   if (e.target.id === 'hrFilterMonth') { state.hrFilterMonth = e.target.value; renderPage(); }
   if (e.target.id === 'hrSummaryFilterStaff') { state.hrSummaryFilterStaff = e.target.value; renderPage(); }
