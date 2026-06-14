@@ -433,6 +433,172 @@ function clearCachedAppSession() {
   try { storage?.removeItem(APP_SESSION_CACHE_KEY); } catch (_) {}
 }
 
+/* =========================================================
+   V199 Browser Session Guard + API No-Cache
+   - Clear stale browser-side auth/session cache when API returns 401 Unauthorized.
+   - Force API requests to no-cache/no-store without touching database schema.
+   - Check-and-clean stale Supabase/Auth cache before normal Login screen loads.
+   ========================================================= */
+const CNMI_SESSION_GUARD_VERSION = 'V199_SESSION_401_NO_CACHE';
+const CNMI_NO_CACHE_HEADERS_V199 = {
+  'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0'
+};
+window.CNMI_NO_CACHE_HEADERS_V199 = CNMI_NO_CACHE_HEADERS_V199;
+
+function supabaseProjectRefV199() {
+  try { return new URL(CFG.SUPABASE_URL || '').hostname.split('.')[0] || ''; } catch (_) { return ''; }
+}
+function storageKeyLooksLikeAuthOrAppSessionV199(key) {
+  const k = String(key || '');
+  const ref = supabaseProjectRefV199();
+  return Boolean(
+    k === APP_SESSION_CACHE_KEY ||
+    k === PASSWORD_SETUP_FORCE_KEY ||
+    k === 'cnmi_login_audit_' ||
+    k.startsWith('cnmi_') ||
+    k.startsWith('cnmi.') ||
+    k.startsWith('cnmiDuty') ||
+    k.startsWith('CNMI') ||
+    k.startsWith('supabase.auth.') ||
+    (ref && k.startsWith(`sb-${ref}-`)) ||
+    /^sb-[a-z0-9-]+-auth-token/i.test(k)
+  );
+}
+function removeMatchingStorageKeysV199(storage, reason='') {
+  if (!storage) return 0;
+  let removed = 0;
+  try {
+    const keys = [];
+    for (let i = 0; i < storage.length; i += 1) keys.push(storage.key(i));
+    keys.filter(storageKeyLooksLikeAuthOrAppSessionV199).forEach(key => {
+      try { storage.removeItem(key); removed += 1; } catch (_) {}
+    });
+  } catch (_) {}
+  if (removed) console.info(`${CNMI_SESSION_GUARD_VERSION}: cleared ${removed} storage keys`, reason || '');
+  return removed;
+}
+function clearBrowserAuthSessionV199(reason='') {
+  try { clearCachedAppSession(); } catch (_) {}
+  try { removeMatchingStorageKeysV199(window.localStorage, reason); } catch (_) {}
+  try { removeMatchingStorageKeysV199(window.sessionStorage, reason); } catch (_) {}
+  try { state.session = null; state.profile = null; } catch (_) {}
+  try { document.dispatchEvent(new CustomEvent('cnmi:force-clear-view-mode')); } catch (_) {}
+}
+function authErrorLooksUnauthorizedV199(error) {
+  const status = Number(error?.status || error?.code || error?.statusCode || 0);
+  const msg = String(error?.message || error?.error_description || error || '').toLowerCase();
+  return status === 401 || /unauthorized|jwt expired|invalid jwt|invalid token|refresh_token_not_found|session.*expired|auth session missing/i.test(msg);
+}
+function currentUrlHasActiveAuthLinkV199() {
+  try {
+    const info = getAuthRedirectInfo();
+    return Boolean(info.isRecovery || info.hasToken || isPasswordRecoveryUrl());
+  } catch (_) { return false; }
+}
+async function handleUnauthorizedResponseV199(response, input) {
+  if (!response || response.status !== 401) return;
+  if (currentUrlHasActiveAuthLinkV199()) return;
+  if (window.__CNMI_HANDLING_401_V199__) return;
+  window.__CNMI_HANDLING_401_V199__ = true;
+  const url = (() => { try { return typeof input === 'string' ? input : input?.url || ''; } catch (_) { return ''; } })();
+  console.warn(`${CNMI_SESSION_GUARD_VERSION}: 401 Unauthorized detected, clearing stale browser session`, url);
+  clearBrowserAuthSessionV199('api-401');
+  try { await sb?.auth?.signOut?.({ scope: 'local' }); } catch (_) {}
+  try { if (typeof exitApp === 'function') exitApp(); else if (typeof showLoginPanel === 'function') showLoginPanel(); } catch (_) {}
+  try { showToast('Session หมดอายุหรือข้อมูลเข้าสู่ระบบค้าง ระบบล้างข้อมูลใน Browser แล้ว กรุณาเข้าสู่ระบบใหม่อีกครั้ง', { tone:'error' }); } catch (_) {}
+  setTimeout(() => { window.__CNMI_HANDLING_401_V199__ = false; }, 1500);
+}
+function mergeNoCacheHeadersV199(headers) {
+  const merged = new Headers(headers || {});
+  Object.entries(CNMI_NO_CACHE_HEADERS_V199).forEach(([k, v]) => merged.set(k, v));
+  return merged;
+}
+function requestUrlV199(input) {
+  try { return typeof input === 'string' ? input : input?.url || ''; } catch (_) { return ''; }
+}
+function shouldAttachNoCacheHeadersV199(input) {
+  const url = requestUrlV199(input);
+  if (!url) return false;
+  // Keep request headers only on Supabase API calls. Cross-origin Apps Script requests must stay simple
+  // so the browser does not trigger an OPTIONS preflight that Apps Script may not answer.
+  return Boolean(CFG.SUPABASE_URL && url.startsWith(CFG.SUPABASE_URL));
+}
+(function installNoCacheFetchV199(){
+  if (window.__CNMI_NO_CACHE_FETCH_INSTALLED_V199__) return;
+  if (typeof window.fetch !== 'function') return;
+  const nativeFetch = window.fetch.bind(window);
+  window.__CNMI_NATIVE_FETCH_V199__ = nativeFetch;
+  window.CNMI_NO_CACHE_FETCH_V199 = async function cnmiNoCacheFetchV199(input, init={}) {
+    const opts = { ...(init || {}) };
+    opts.cache = 'no-store';
+    if (shouldAttachNoCacheHeadersV199(input)) opts.headers = mergeNoCacheHeadersV199(opts.headers);
+    const response = await nativeFetch(input, opts);
+    if (response?.status === 401) await handleUnauthorizedResponseV199(response, input);
+    return response;
+  };
+  window.fetch = window.CNMI_NO_CACHE_FETCH_V199;
+  window.__CNMI_NO_CACHE_FETCH_INSTALLED_V199__ = true;
+})();
+async function checkAndCleanBeforeLoginV199() {
+  if (!sb?.auth || currentUrlHasActiveAuthLinkV199()) return { cleaned:false, reason:'auth-link' };
+  try {
+    const { data, error } = await sb.auth.getSession();
+    if (error && authErrorLooksUnauthorizedV199(error)) {
+      clearBrowserAuthSessionV199('getSession-unauthorized');
+      try { await sb.auth.signOut({ scope:'local' }); } catch (_) {}
+      showLoginPanel();
+      return { cleaned:true, reason:'getSession-unauthorized' };
+    }
+
+    const session = data?.session || null;
+    if (!session) {
+      clearBrowserAuthSessionV199('no-session-before-login');
+      showLoginPanel();
+      return { cleaned:false, reason:'no-session' };
+    }
+
+    const expiresAtMs = session.expires_at ? Number(session.expires_at) * 1000 : 0;
+    if (expiresAtMs && expiresAtMs < Date.now() - 30000) {
+      const refreshed = await sb.auth.refreshSession().catch(err => ({ error: err, data: null }));
+      if (refreshed?.error || !refreshed?.data?.session) {
+        clearBrowserAuthSessionV199('expired-refresh-failed');
+        try { await sb.auth.signOut({ scope:'local' }); } catch (_) {}
+        showLoginPanel();
+        return { cleaned:true, reason:'expired-refresh-failed' };
+      }
+      state.session = refreshed.data.session;
+      return { cleaned:false, reason:'refreshed' };
+    }
+
+    const userCheck = await sb.auth.getUser().catch(err => ({ error: err, data: null }));
+    if (userCheck?.error && authErrorLooksUnauthorizedV199(userCheck.error)) {
+      clearBrowserAuthSessionV199('getUser-unauthorized');
+      try { await sb.auth.signOut({ scope:'local' }); } catch (_) {}
+      showLoginPanel();
+      return { cleaned:true, reason:'getUser-unauthorized' };
+    }
+    if (!userCheck?.error && !userCheck?.data?.user && session?.access_token) {
+      clearBrowserAuthSessionV199('getUser-empty-user');
+      try { await sb.auth.signOut({ scope:'local' }); } catch (_) {}
+      showLoginPanel();
+      return { cleaned:true, reason:'getUser-empty-user' };
+    }
+
+    return { cleaned:false, reason:'valid-session' };
+  } catch (err) {
+    if (authErrorLooksUnauthorizedV199(err)) {
+      clearBrowserAuthSessionV199('check-clean-catch-unauthorized');
+      try { await sb.auth.signOut({ scope:'local' }); } catch (_) {}
+      showLoginPanel();
+      return { cleaned:true, reason:'check-clean-catch-unauthorized' };
+    }
+    console.warn(`${CNMI_SESSION_GUARD_VERSION}: check-and-clean skipped because validation failed`, err);
+    return { cleaned:false, reason:'validation-skipped' };
+  }
+}
+
 function authRedirectUrl(mode='') {
   // V132: Always redirect Supabase Auth links back to the GitHub Pages app root.
   // This avoids /update-password/ or other deep paths becoming 404 on GitHub Pages.
@@ -638,11 +804,20 @@ async function init() {
       detectSessionInUrl: true,
       storage: window.localStorage,
       flowType: 'implicit'
+    },
+    global: {
+      fetch: window.CNMI_NO_CACHE_FETCH_V199 || window.fetch,
+      headers: CNMI_NO_CACHE_HEADERS_V199
     }
   });
 
   const continueInit = await handleInitialAuthRedirectOnce();
   if (!continueInit) { setBusy(false); return; }
+
+  if (!recoveryAtPageOpen && !RECOVERY_INTENT && !isPasswordRecoveryUrl() && !isPasswordSetupForced()) {
+    const cleanResult = await checkAndCleanBeforeLoginV199();
+    if (cleanResult.cleaned) { setBusy(false); return; }
+  }
 
   sb.auth.onAuthStateChange(async (event, session) => {
     state.session = session;
