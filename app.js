@@ -504,8 +504,11 @@ async function handleUnauthorizedResponseV199(response, input) {
   window.__CNMI_HANDLING_401_V199__ = true;
   const url = (() => { try { return typeof input === 'string' ? input : input?.url || ''; } catch (_) { return ''; } })();
   console.warn(`${CNMI_SESSION_GUARD_VERSION}: 401 Unauthorized detected, clearing stale browser session`, url);
-  clearBrowserAuthSessionV199('api-401');
   try { await sb?.auth?.signOut?.({ scope: 'local' }); } catch (_) {}
+  try {
+    if (typeof clearBrowserAuthSessionV200 === 'function') clearBrowserAuthSessionV200('api-401');
+    else clearBrowserAuthSessionV199('api-401');
+  } catch (_) { clearBrowserAuthSessionV199('api-401'); }
   try { if (typeof exitApp === 'function') exitApp(); else if (typeof showLoginPanel === 'function') showLoginPanel(); } catch (_) {}
   try { showToast('Session หมดอายุหรือข้อมูลเข้าสู่ระบบค้าง ระบบล้างข้อมูลใน Browser แล้ว กรุณาเข้าสู่ระบบใหม่อีกครั้ง', { tone:'error' }); } catch (_) {}
   setTimeout(() => { window.__CNMI_HANDLING_401_V199__ = false; }, 1500);
@@ -541,6 +544,113 @@ function shouldAttachNoCacheHeadersV199(input) {
   window.fetch = window.CNMI_NO_CACHE_FETCH_V199;
   window.__CNMI_NO_CACHE_FETCH_INSTALLED_V199__ = true;
 })();
+
+/* =========================================================
+   V200 Auto Logout + Force Clear Session
+   - Auto logout when the browser is idle for 30 minutes.
+   - Provide a Force Logout/Clear Session button on the Login screen.
+   - Browser-side only: localStorage/sessionStorage cleanup; no database/schema changes.
+   ========================================================= */
+const CNMI_SESSION_CLEAN_VERSION_V200 = 'V200_IDLE_FORCE_LOGOUT';
+const CNMI_IDLE_TIMEOUT_MS_V200 = 30 * 60 * 1000;
+const CNMI_IDLE_EVENTS_V200 = ['mousemove','mousedown','keydown','scroll','touchstart','touchmove','pointerdown','visibilitychange'];
+let cnmiIdleTimerV200 = null;
+let cnmiIdleInstalledV200 = false;
+let cnmiForceRedirectingV200 = false;
+
+function clearBrowserAuthSessionV200(reason='') {
+  // V200 intentionally uses full browser storage clearing for the cleanest recovery path.
+  // This follows the operational requirement for stuck sessions: clear old browser-side state only.
+  try { clearBrowserAuthSessionV199(reason || 'v200-clear'); } catch (_) {}
+  try { window.localStorage.clear(); } catch (_) {}
+  try { window.sessionStorage.clear(); } catch (_) {}
+  try { state.session = null; state.profile = null; state.page = 'dashboard'; } catch (_) {}
+  try { document.dispatchEvent(new CustomEvent('cnmi:force-clear-view-mode')); } catch (_) {}
+  console.info(`${CNMI_SESSION_CLEAN_VERSION_V200}: browser storage cleared`, reason || '');
+}
+
+function isAppSessionActiveV200() {
+  try {
+    const appVisible = !$('appView')?.classList?.contains('hidden');
+    return Boolean(state?.session?.user || state?.profile || appVisible);
+  } catch (_) {
+    return Boolean(state?.session?.user || state?.profile);
+  }
+}
+
+function redirectToLoginV200(reason='') {
+  try { if (typeof exitApp === 'function') exitApp(); else if (typeof showLoginPanel === 'function') showLoginPanel(); } catch (_) {}
+  try { $('authView')?.classList?.remove('hidden'); } catch (_) {}
+  try { $('appView')?.classList?.add('hidden'); } catch (_) {}
+  try { history.replaceState(null, '', appBaseUrl()); } catch (_) {}
+  try { showToast(reason === 'idle-timeout' ? 'ไม่ได้ใช้งานเกิน 30 นาที ระบบออกจากระบบและล้าง Session แล้ว กรุณาเข้าสู่ระบบใหม่' : 'ล้าง Session ใน Browser แล้ว กรุณาเข้าสู่ระบบใหม่', { tone:'error' }); } catch (_) {}
+  // Full reload after storage cleanup prevents old in-memory Supabase/App state from staying alive in the tab.
+  setTimeout(() => { try { window.location.replace(appBaseUrl()); } catch (_) {} }, 350);
+}
+
+async function forceBrowserLogoutV200(reason='manual-force-clear') {
+  if (cnmiForceRedirectingV200) return;
+  cnmiForceRedirectingV200 = true;
+  try { if (typeof setBusy === 'function') setBusy(true, 'กำลังล้าง Session'); } catch (_) {}
+  try { await sb?.auth?.signOut?.({ scope:'local' }); } catch (_) {}
+  clearBrowserAuthSessionV200(reason);
+  try { if ($('loginEmail')) $('loginEmail').value = ''; } catch (_) {}
+  try { if ($('loginPassword')) $('loginPassword').value = ''; } catch (_) {}
+  redirectToLoginV200(reason);
+  try { if (typeof setBusy === 'function') setBusy(false); } catch (_) {}
+  setTimeout(() => { cnmiForceRedirectingV200 = false; }, 1200);
+}
+window.forceBrowserLogoutV200 = forceBrowserLogoutV200;
+window.clearBrowserAuthSessionV200 = clearBrowserAuthSessionV200;
+
+function resetIdleTimerV200() {
+  try { if (cnmiIdleTimerV200) clearTimeout(cnmiIdleTimerV200); } catch (_) {}
+  cnmiIdleTimerV200 = setTimeout(async () => {
+    if (currentUrlHasActiveAuthLinkV199() || isPasswordRecoveryUrl() || isPasswordSetupForced()) return resetIdleTimerV200();
+    if (!isAppSessionActiveV200()) return resetIdleTimerV200();
+    await forceBrowserLogoutV200('idle-timeout');
+  }, CNMI_IDLE_TIMEOUT_MS_V200);
+}
+
+function installIdleTimeoutV200() {
+  if (cnmiIdleInstalledV200) return;
+  cnmiIdleInstalledV200 = true;
+  const onActivity = () => resetIdleTimerV200();
+  CNMI_IDLE_EVENTS_V200.forEach(evt => {
+    try { document.addEventListener(evt, onActivity, { passive:true, capture:true }); } catch (_) {}
+  });
+  resetIdleTimerV200();
+}
+
+function ensureForceLogoutButtonV200() {
+  try {
+    const form = $('loginForm');
+    if (!form || document.getElementById('forceClearSessionBtnV200')) return;
+    const helper = form.querySelector('.login-helper-text') || form.querySelector('.hint');
+    const wrap = document.createElement('div');
+    wrap.className = 'force-logout-box-v200';
+    wrap.innerHTML = `
+      <button id="forceClearSessionBtnV200" class="danger-ghost full-btn" type="button" data-force-logout-v200>
+        ล้าง Session ค้าง / Force Logout
+      </button>
+      <p class="hint">ถ้า Login ไม่ผ่านหรือค้าง ให้กดปุ่มนี้ 1 ครั้ง แล้วเข้าสู่ระบบใหม่</p>
+    `;
+    if (helper) helper.insertAdjacentElement('afterend', wrap);
+    else form.appendChild(wrap);
+  } catch (err) {
+    console.warn(`${CNMI_SESSION_CLEAN_VERSION_V200}: cannot inject force logout button`, err);
+  }
+}
+
+document.addEventListener('click', async e => {
+  const btn = e.target?.closest?.('[data-force-logout-v200], #forceClearSessionBtnV200');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+  await forceBrowserLogoutV200('manual-force-button');
+}, true);
+
 async function checkAndCleanBeforeLoginV199() {
   if (!sb?.auth || currentUrlHasActiveAuthLinkV199()) return { cleaned:false, reason:'auth-link' };
   try {
@@ -788,6 +898,8 @@ function isPasswordRecoveryUrl() {
 
 async function init() {
   bindGlobalEvents();
+  installIdleTimeoutV200();
+  ensureForceLogoutButtonV200();
   renderAuthTabs();
   if (!configReady()) {
     $('setupWarning').classList.remove('hidden');
@@ -904,12 +1016,8 @@ function bindGlobalEvents() {
   });
   $('reloadBtn').addEventListener('click', async () => { await loadAllData(); renderPage(); });
   $('logoutBtn').addEventListener('click', async () => {
-    if (sb) {
-      await logAuth('LOGOUT');
-      sessionStorage.removeItem('cnmi_login_audit_' + (state.session?.user?.id || ''));
-      clearCachedAppSession();
-      await sb.auth.signOut();
-    }
+    if (sb) { try { await logAuth('LOGOUT'); } catch (_) {} }
+    await forceBrowserLogoutV200('normal-logout-button');
   });
 
   $('loginForm').addEventListener('submit', async e => {
@@ -4522,12 +4630,8 @@ function bindGlobalEvents() {
   });
   $('reloadBtn').addEventListener('click', async () => { await loadAllData(); renderPage(); });
   $('logoutBtn').addEventListener('click', async () => {
-    if (sb) {
-      await logAuth('LOGOUT');
-      sessionStorage.removeItem('cnmi_login_audit_' + (state.session?.user?.id || ''));
-      clearCachedAppSession();
-      await sb.auth.signOut();
-    }
+    if (sb) { try { await logAuth('LOGOUT'); } catch (_) {} }
+    await forceBrowserLogoutV200('normal-logout-button');
   });
 
   $('loginForm').addEventListener('submit', async e => {
@@ -5046,7 +5150,10 @@ function bindGlobalEvents() {
       }
     });
     $('reloadBtn').addEventListener('click', async () => { await loadAllData(); renderPage(); });
-    $('logoutBtn').addEventListener('click', async () => { if (sb) { await logAuth('LOGOUT'); clearCachedAppSession(); await sb.auth.signOut(); } });
+    $('logoutBtn').addEventListener('click', async () => {
+      if (sb) { try { await logAuth('LOGOUT'); } catch (_) {} }
+      await forceBrowserLogoutV200('normal-logout-button');
+    });
 
     $('loginForm').addEventListener('submit', async e => {
       e.preventDefault();
