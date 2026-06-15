@@ -3274,3 +3274,50 @@ thead .v179-sticky-first-col {
 @media (max-width: 820px) {
   .v205-pending-summary table { min-width: 980px; }
 }
+
+/* V206 My Duty Today / Month checklist */
+.my-duty-today-card .section-title { align-items: flex-start; }
+.my-duty-detail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.my-duty-detail > div {
+  border: 1px solid var(--border, #dfe8f3);
+  background: #f8fbff;
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.my-duty-detail b { font-size: 1.02rem; }
+.my-duty-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border: 1px dashed var(--border, #dfe8f3);
+  border-radius: 14px;
+  background: #f8fbff;
+  margin: 10px 0;
+}
+.my-duty-month-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+.my-duty-month-filter input { min-width: 150px; }
+.my-duty-month-table td { vertical-align: top; }
+.my-duty-month-cards { display: none; }
+.v206-schedule-page .toolbar { gap: 10px; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .my-duty-detail { grid-template-columns: 1fr; }
+  .my-duty-month-table { display: none; }
+  .my-duty-month-cards { display: grid; }
+  .my-duty-month-section .section-title { align-items: stretch; }
+  .my-duty-month-filter { width: 100%; justify-content: space-between; }
+  .my-duty-month-filter input { width: 160px; }
+}

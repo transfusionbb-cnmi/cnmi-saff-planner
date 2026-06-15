@@ -12227,3 +12227,346 @@ function bindGlobalEvents() {
   };
   console.info(`[${VERSION_V205}] loaded`);
 })();
+
+/* V206 Staff My Duty Today + My Month OT Guide
+   - Staff sees today's roster duty directly on OT page.
+   - Staff sees only their own monthly duty checklist with confirmation/LIS status.
+   - ช4 / ช3A / ช3B are manual-time duties and must NOT auto-create 8h OT from check-in.
+   - Schedule page gets a "ดูเฉพาะเวรของฉัน" toggle.
+*/
+(function(){
+  const VERSION_V206 = 'V206_MY_DUTY_TODAY_MONTH_OT_GUIDE';
+  const previousRenderOtPageV206 = window.renderOtPage || (typeof renderOtPage === 'function' ? renderOtPage : null);
+  const previousCheckInV206 = window.checkIn || (typeof checkIn === 'function' ? checkIn : null);
+  const previousCalcOtHoursV206 = window.calcOtHours || (typeof calcOtHours === 'function' ? calcOtHours : null);
+  const previousRenderMonthlySchedulePageV206 = window.renderMonthlySchedulePage || (typeof renderMonthlySchedulePage === 'function' ? renderMonthlySchedulePage : null);
+
+  function esc206(v){
+    try { return escapeHtml(v); }
+    catch (_) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+  }
+  function norm206(v){
+    try { return normalizeDateKey(v); }
+    catch (_) { return String(v || '').slice(0,10); }
+  }
+  function today206(){
+    try { return todayStr(); }
+    catch (_) { return new Date().toISOString().slice(0,10); }
+  }
+  function month206(d=today206()){
+    try { return monthKey(new Date(`${d}T00:00:00`)); }
+    catch (_) { return String(d || today206()).slice(0,7); }
+  }
+  function label206(code){
+    return (typeof DUTY_LABEL !== 'undefined' && DUTY_LABEL?.[code]) || code || '-';
+  }
+  function dutyCode206(a){ return String(a?.duty_code || '').trim(); }
+  function isManualTimeDuty206(code){
+    const c = String(code || '').trim();
+    return c === 'ช4' || c === 'ช4A' || c === 'ช4B' || c === 'ช3A' || c === 'ช3B';
+  }
+  function isAutoCheckInDuty206(code){
+    const c = String(code || '').trim();
+    return !!c && !isManualTimeDuty206(c);
+  }
+  function isAttendanceReason206(row){
+    return String(row?.reason || '').includes('ยืนยันอยู่เวร');
+  }
+  function currentSid206(){
+    try { return currentStaffId(); }
+    catch (_) { return state?.profile?.id || ''; }
+  }
+  function myDutiesOn206(staffId, date){
+    const d = norm206(date);
+    return (state.rosterAssignments || [])
+      .filter(a => String(a?.staff_id || '') === String(staffId || '') && norm206(a?.duty_date) === d)
+      .sort((a,b) => {
+        try { return dutySortIndex(a?.duty_code) - dutySortIndex(b?.duty_code); }
+        catch (_) { return String(a?.duty_code || '').localeCompare(String(b?.duty_code || ''), 'th'); }
+      });
+  }
+  function hasAttendance206(staffId, date){
+    const d = norm206(date);
+    return (state.attendance || []).some(a => String(a?.staff_id || '') === String(staffId || '') && norm206(a?.duty_date) === d);
+  }
+  function attendanceOtRows206(staffId, date){
+    const d = norm206(date);
+    return (state.otRequests || []).filter(r => String(r?.staff_id || '') === String(staffId || '') && norm206(r?.work_date) === d && isAttendanceReason206(r));
+  }
+  function extraOtRows206(staffId, date){
+    const d = norm206(date);
+    return (state.otRequests || []).filter(r => String(r?.staff_id || '') === String(staffId || '') && norm206(r?.work_date) === d && !isAttendanceReason206(r));
+  }
+  function firstLatest206(rows){
+    return (rows || []).slice().sort((a,b) => String(b?.created_at || '').localeCompare(String(a?.created_at || '')))[0] || null;
+  }
+  function statusClass206(text){
+    if (/อนุมัติแล้ว|ยืนยันแล้ว/.test(text)) return 'green';
+    if (/ไม่อนุมัติ|ตีกลับ|ส่งกลับ/.test(text)) return 'red';
+    if (/รอ|ต้องบันทึก/.test(text)) return 'orange';
+    return 'black';
+  }
+  function badge206(text, cls){
+    try { return badge(text, cls || statusClass206(text)); }
+    catch (_) { return `<span class="badge ${cls || statusClass206(text)}">${esc206(text)}</span>`; }
+  }
+  function attendanceStatusText206(staffId, date){
+    const ot = firstLatest206(attendanceOtRows206(staffId, date));
+    if (ot) {
+      const s = String(ot.status || '').trim();
+      if (s === 'อนุมัติ') return 'อนุมัติแล้ว';
+      if (s === 'ไม่อนุมัติ') return 'ไม่อนุมัติ';
+      if (s === 'ส่งกลับแก้ไข') return 'ส่งกลับแก้ไข';
+      return 'ยืนยันแล้ว / รออนุมัติ';
+    }
+    if (hasAttendance206(staffId, date)) return 'ยืนยันแล้ว';
+    return 'ยังไม่ได้ยืนยัน';
+  }
+  function manualStatusText206(staffId, date){
+    const ot = firstLatest206(extraOtRows206(staffId, date));
+    if (!ot) return 'ต้องบันทึกเวลาจริง';
+    const s = String(ot.status || '').trim();
+    if (s === 'อนุมัติ') return 'อนุมัติแล้ว';
+    if (s === 'ไม่อนุมัติ') return 'ไม่อนุมัติ';
+    if (s === 'ส่งกลับแก้ไข') return 'ส่งกลับแก้ไข';
+    return 'รอ Admin เทียบ LIS';
+  }
+  function timeOfExtraOt206(staffId, date){
+    const ot = firstLatest206(extraOtRows206(staffId, date));
+    const start = String(ot?.start_time || '').trim() || `${pad(otStartHourForDate(norm206(date)))}:00`;
+    const end = String(ot?.end_time || '').trim() || 'เวลาจริงที่บันทึก';
+    return `${esc206(start)} - ${esc206(end)}`;
+  }
+  function dutyTimeText206(a){
+    const code = dutyCode206(a);
+    if (isManualTimeDuty206(code)) return timeOfExtraOt206(a.staff_id, a.duty_date);
+    if (code === 'ชบด1' || code === 'ชบด2' || code === 'ชบด3') return '08:00 - 08:00';
+    let h = 0;
+    try { h = Number(dutyMetrics(a)?.hours || 0); } catch (_) {}
+    return h ? `ตามตารางเวร (${h.toFixed(0)} ชม.)` : 'ตามตารางเวร';
+  }
+  function rowStatusForDuty206(a){
+    const code = dutyCode206(a);
+    return isManualTimeDuty206(code) ? manualStatusText206(a.staff_id, a.duty_date) : attendanceStatusText206(a.staff_id, a.duty_date);
+  }
+  function statusHintForDuty206(a){
+    const code = dutyCode206(a);
+    if (isManualTimeDuty206(code)) return 'ช4 / ช3A / ช3B ต้องบันทึกเวลาจริงก่อน แล้วรอ Admin เทียบ LIS';
+    return 'เวรหลัก กดปุ่มยืนยันอยู่เวรเมื่อมาปฏิบัติงานจริง';
+  }
+  function explicitHours206(row){
+    const raw = `${row?.note || ''} ${row?.reason || ''}`;
+    const patterns = [
+      /HR_HOURS\s*=\s*(\d+(?:\.\d+)?)/i,
+      /จำนวนเวลา\s*OT\s*[:=]?\s*(\d+(?:\.\d+)?)\s*ชั่วโมง/i,
+      /จำนวนเวลา\s*(\d+(?:\.\d+)?)\s*ชั่วโมง/i,
+      /ชั่วโมงที่ต้องการเบิก\s*[:=]?\s*(\d+(?:\.\d+)?)/i
+    ];
+    for (const p of patterns) {
+      const m = raw.match(p);
+      if (m) {
+        const n = Number(m[1]);
+        if (Number.isFinite(n) && n >= 0) return n;
+      }
+    }
+    const fields = [row?.manual_hours, row?.requested_hours, row?.hours];
+    for (const f of fields) {
+      const n = Number(f);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+  }
+  function renderTodayDutyCard206(){
+    const sid = currentSid206();
+    const today = today206();
+    const duties = myDutiesOn206(sid, today);
+    const proxyOptions = (typeof selfPaidDutyProxyOptions === 'function' ? selfPaidDutyProxyOptions(today) : []) || [];
+    const autoDuties = duties.filter(a => isAutoCheckInDuty206(a?.duty_code));
+    const manualDuties = duties.filter(a => isManualTimeDuty206(a?.duty_code));
+    const statusText = autoDuties.length ? attendanceStatusText206(sid, today) : (manualDuties.length ? 'ต้องบันทึกเวลาจริง' : 'ไม่มีเวรที่ต้องยืนยัน');
+    const already = /ยืนยันแล้ว|อนุมัติแล้ว|รออนุมัติ/.test(statusText);
+    const canCheckIn = autoDuties.length > 0 && !already;
+    const labels = duties.map(a => label206(a?.duty_code));
+    const proxyBox = proxyOptions.length ? `<div class="notice soft-notice compact"><b>วันนี้มีรายการขายเวรแบบกำหนดจำนวนเงินเองที่คุณเป็นคนมาทำแทน</b><br>${proxyOptions.map(x => `ลงชื่อแทนเวรของ ${staffPill(x.assignment.staff_id)} • ${esc206(label206(x.assignment.duty_code))}`).join('<br>')}</div>` : '';
+    const manualNotice = manualDuties.length ? `<div class="notice soft-notice compact"><b>หมายเหตุ:</b> ${esc206(manualDuties.map(a => label206(a.duty_code)).join(', '))} จะไม่คิด OT อัตโนมัติ ให้กรอกเวลาจริงในฟอร์ม “ขอ OT เพิ่ม / เวรปั่นเลือด” แล้วรอ Admin เทียบ LIS</div>` : '';
+    const emptyMessage = !duties.length && !proxyOptions.length ? `<div class="my-duty-empty"><b>วันนี้คุณไม่มีเวรที่ต้องยืนยัน</b><span class="muted">ถ้ามีการอยู่ต่อ/ปั่นเลือดจริง ให้ใช้ฟอร์มขอ OT เพิ่มด้านขวา</span></div>` : '';
+    const dutyDetail = duties.length ? `<div class="my-duty-detail">
+      <div><span class="muted">วันนี้คุณมีเวร</span><b>${esc206(labels.join(' / '))}</b></div>
+      <div><span class="muted">เวลา</span><b>${esc206(autoDuties.length ? dutyTimeText206(autoDuties[0]) : dutyTimeText206(duties[0]))}</b></div>
+      <div><span class="muted">สถานะ</span>${badge206(statusText, statusClass206(statusText))}</div>
+    </div>` : '';
+    return `<div class="card ot-card my-duty-today-card">
+      <div class="section-title"><div><h3>ส่วนที่ 1 เวรของฉันวันนี้</h3><p class="hint">เปิดหน้านี้แล้วรู้ทันทีว่าวันนี้ต้องแตะยืนยันไหม</p></div></div>
+      ${emptyMessage}${dutyDetail}${manualNotice}${proxyBox}
+      <button class="primary-btn" data-check-in ${canCheckIn ? '' : 'disabled'}>${already ? 'ลงชื่ออยู่เวรวันนี้แล้ว' : (manualDuties.length && !autoDuties.length ? 'ใช้ฟอร์มขอ OT เพิ่มด้านขวา' : 'ยืนยันอยู่เวร')}</button>
+      <p class="hint gps-help compact">ระบบยกเลิกการตรวจตำแหน่งแล้ว บันทึกได้ทันที</p>
+    </div>`;
+  }
+  function renderMyMonthDuties206(){
+    const sid = currentSid206();
+    const key = state.myDutyMonthFilter || state.monthKey || month206();
+    const assignments = (state.rosterAssignments || [])
+      .filter(a => String(a?.staff_id || '') === String(sid || '') && norm206(a?.duty_date).startsWith(key))
+      .sort((a,b) => norm206(a?.duty_date).localeCompare(norm206(b?.duty_date)) || String(a?.duty_code || '').localeCompare(String(b?.duty_code || ''), 'th'));
+    const rows = assignments.map(a => {
+      const st = rowStatusForDuty206(a);
+      return `<tr><td>${formatThaiDate(norm206(a.duty_date))}</td><td><b>${esc206(label206(a.duty_code))}</b></td><td>${esc206(dutyTimeText206(a))}</td><td>${badge206(st, statusClass206(st))}<br><span class="muted">${esc206(statusHintForDuty206(a))}</span></td></tr>`;
+    }).join('');
+    const cards = assignments.map(a => {
+      const st = rowStatusForDuty206(a);
+      return `<div class="mobile-card my-duty-month-card"><div class="mobile-day-head"><b>${formatThaiDate(norm206(a.duty_date))}</b>${badge206(st, statusClass206(st))}</div><div><b>เวร:</b> ${esc206(label206(a.duty_code))}</div><div><b>เวลา:</b> ${esc206(dutyTimeText206(a))}</div><span class="muted">${esc206(statusHintForDuty206(a))}</span></div>`;
+    }).join('');
+    return `<div class="card wide-card my-duty-month-section" style="grid-column:1/-1;">
+      <div class="section-title"><div><h3>เวรของฉันเดือนนี้</h3><p class="hint">แสดงเฉพาะเวรของเจ้าของบัญชี ไม่ต้องไล่หาในตารางใหญ่</p></div><label class="no-print my-duty-month-filter">เดือน <input type="month" id="myDutyMonthFilter" value="${esc206(key)}"></label></div>
+      ${assignments.length ? `<div class="table-wrap my-duty-month-table"><table><thead><tr><th>วันที่</th><th>เวร</th><th>เวลา</th><th>สถานะ</th></tr></thead><tbody>${rows}</tbody></table></div><div class="mobile-cards my-duty-month-cards">${cards}</div>` : empty('ยังไม่มีเวรของฉันในเดือนนี้')}
+    </div>`;
+  }
+
+  window.calcOtHours = calcOtHours = function calcOtHoursV206(row){
+    try {
+      if (isAttendanceReason206(row)) {
+        const explicit = explicitHours206(row);
+        if (explicit !== null) return Math.round(Number(explicit) * 100) / 100;
+        const workDate = norm206(row?.work_date);
+        if (String(currentInchargeForMonth(workDate.slice(0,7))) === String(row?.staff_id)) return 8;
+        const duties = myDutiesOn206(row?.staff_id, workDate).filter(a => isAutoCheckInDuty206(a?.duty_code));
+        if (duties.length) {
+          const total = duties.reduce((sum, a) => {
+            try { return sum + Number(dutyMetrics(a)?.hours || 0); }
+            catch (_) { return sum; }
+          }, 0);
+          return Math.round(total * 100) / 100;
+        }
+        const onlyManual = myDutiesOn206(row?.staff_id, workDate).some(a => isManualTimeDuty206(a?.duty_code));
+        if (onlyManual) return 0;
+      }
+    } catch (err) { console.warn(`${VERSION_V206} calcOtHours guarded fallback`, err); }
+    return previousCalcOtHoursV206 ? previousCalcOtHoursV206(row) : 0;
+  };
+
+  window.renderOtPage = renderOtPage = function renderOtPageV206(){
+    if (typeof isAdmin === 'function' && isAdmin()) {
+      return previousRenderOtPageV206 ? previousRenderOtPageV206.apply(this, arguments) : '';
+    }
+    const today = today206();
+    const mine = (state.otRequests || []).filter(x => String(x?.staff_id || '') === String(currentSid206() || ''));
+    return `<div class="grid grid-2 ot-page v206-ot-page">
+      ${renderTodayDutyCard206()}
+      <div class="card ot-card">
+        <h3>ส่วนที่ 2 ขอ OT เพิ่ม / เวรปั่นเลือด</h3>
+        <p class="hint compact">ช4 และชั่วโมงเพิ่มของ ช3A/ช3B จะยังไม่คิดอัตโนมัติ ให้บันทึกเวลาจริง แล้ว Admin เทียบ LIS ก่อนอนุมัติ</p>
+        <form id="otForm" class="form-grid">
+          <label>วันที่ <input name="work_date" type="date" value="${esc206(today)}" required></label>
+          <label>ตั้งแต่เวลา (Start time) <input name="start_time" type="time" value="${pad(otStartHourForDate(today))}:00" required></label>
+          <label>ถึงเวลา (End time) <input name="end_time" type="time" required></label>
+          <label>เหตุผล <select name="reason">${(OT_REASONS || []).map(r => `<option value="${esc206(r)}">${esc206(r)}</option>`).join('')}</select></label>
+          <label class="wide">รายละเอียด <input name="note" placeholder="เช่น ปั่นเลือดถึง 18:20 / รอเทียบ LIS"></label>
+          <button class="primary-btn wide" type="submit">ยืนยันขอ OT เพิ่ม</button>
+        </form>
+      </div>
+      ${renderMyMonthDuties206()}
+      <div class="card wide-card" style="grid-column:1/-1;">
+        <div class="section-title"><h3>รายการ OT ของฉัน</h3></div>
+        ${renderOtTable(mine)}
+      </div>
+      <div class="card" style="grid-column:1/-1;">
+        <h3>ส่วนที่ 4 สรุป OT รายเดือน</h3><p class="hint">สรุปเฉพาะรายการที่อนุมัติแล้วและยังไม่เบิก</p>${renderOtSummary()}
+      </div>
+    </div>`;
+  };
+
+  window.checkIn = checkIn = async function checkInV206(){
+    const today = today206();
+    const sid = currentSid206();
+    const duties = myDutiesOn206(sid, today);
+    const autoDuties = duties.filter(a => isAutoCheckInDuty206(a?.duty_code));
+    const manualDuties = duties.filter(a => isManualTimeDuty206(a?.duty_code));
+    const proxyOptions = (typeof selfPaidDutyProxyOptions === 'function' ? selfPaidDutyProxyOptions(today) : []) || [];
+    const autoProxyOptions = proxyOptions.filter(x => isAutoCheckInDuty206(x?.assignment?.duty_code));
+    if (!autoDuties.length && !autoProxyOptions.length) {
+      if (manualDuties.length) return showToast('วันนี้มีเฉพาะ ช4 / ช3A / ช3B ให้บันทึกเวลาจริงในฟอร์มขอ OT เพิ่ม แล้วรอ Admin เทียบ LIS');
+      return showToast('วันนี้คุณไม่มีเวรที่ต้องยืนยัน');
+    }
+    if (hasAttendance206(sid, today) || attendanceOtRows206(sid, today).length) return showToast('ลงชื่ออยู่เวรวันนี้แล้ว');
+    const pos = await getGps();
+    if (!pos.ok) return showGpsHelp(pos.message);
+    if (!isInsideGeofence(pos) && CFG.GEOFENCE?.enabled) return showGpsHelp('ไม่ได้อยู่ในพื้นที่โรงพยาบาล');
+    let staffIdToLog = sid;
+    let proxyText = '';
+    if (!autoDuties.length && autoProxyOptions.length) {
+      const pick = autoProxyOptions[0];
+      staffIdToLog = pick.assignment.staff_id;
+      proxyText = ` | ลงชื่อแทนโดย ${staffNick(sid)} จากรายการขายเวรแบบกำหนดจำนวนเงินเอง request:${pick.request.id}`;
+    }
+    const device = (navigator.userAgent + proxyText + ` | ${VERSION_V206}`).slice(0, 250);
+    const { error } = await sb.from('attendance_logs').insert({ staff_id: staffIdToLog, duty_date: today, check_in_at: new Date().toISOString(), lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device });
+    if (error) return showToast(error.message, { tone:'error' });
+    const alreadyRequested = (state.otRequests || []).some(r => String(r.staff_id) === String(staffIdToLog) && norm206(r.work_date) === today && isAttendanceReason206(r));
+    if (!alreadyRequested) {
+      const isIncharge = String(currentInchargeForMonth(today.slice(0,7))) === String(staffIdToLog);
+      const dutyLabels = autoDuties.length ? autoDuties.map(a => label206(a.duty_code)).join(', ') : 'เวรแทน';
+      const note = isIncharge ? 'ระบบคิด OT อินชาร์จประจำเดือน 8 ชั่วโมงอัตโนมัติ' : `สร้างจากส่วนที่ 1 ยืนยันอยู่เวร | เวรที่คิดอัตโนมัติ: ${dutyLabels}`;
+      const otRow = { staff_id: staffIdToLog, work_date: today, end_time: '', reason: 'ยืนยันอยู่เวรตามตาราง', note, status: 'รออนุมัติ', lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, device };
+      const ot = await sb.from('ot_requests').insert(otRow);
+      if (ot.error) showToast(`ลงชื่อสำเร็จ แต่สร้างรายการ OT ไม่สำเร็จ: ${ot.error.message}`, { tone:'error' });
+    }
+    await loadAllData(); renderPage();
+    showToast(proxyText ? 'ยืนยันวันอยู่เวรแทนเจ้าของเวรเดิมและส่งรายการ OT แล้ว' : 'ยืนยันวันอยู่เวรและส่งรายการ OT แล้ว');
+  };
+
+  window.renderMonthlySchedulePage = renderMonthlySchedulePage = function renderMonthlySchedulePageV206(){
+    try {
+      const key = state.monthKey;
+      const onlyMine = !!state.scheduleOnlyMine;
+      let staffList = scheduleStaffList();
+      let assignments = scheduleAssignmentsForMonth(key);
+      if (onlyMine) {
+        const sid = currentSid206();
+        staffList = staffList.filter(s => String(s.id) === String(sid));
+        assignments = assignments.filter(a => String(a.staff_id) === String(sid));
+        if (!state.schedulePersonFilter || String(state.schedulePersonFilter) !== String(sid)) state.schedulePersonFilter = sid;
+      }
+      const active = ['day','person','balance','table'].includes(state.scheduleMobileView) ? state.scheduleMobileView : 'day';
+      state.scheduleMobileView = active;
+      const content = staffList.length
+        ? (active === 'day' ? renderCalendarCardView(staffList, assignments, key)
+          : active === 'person' ? renderPersonView(staffList, assignments, key)
+          : active === 'balance' ? renderBalanceDashboard(staffList, assignments, key)
+          : renderGridView(staffList, assignments, key))
+        : empty('ไม่มีรายชื่อเจ้าหน้าที่ที่เปิดใช้งาน');
+      return `<div class="card schedule-page-card clean-schedule-page v206-schedule-page">
+        <div class="toolbar no-print">
+          <label>เดือน <input type="month" id="scheduleMonthInput" value="${esc206(key)}"></label>
+          <button class="${onlyMine ? 'primary-btn' : 'ghost-btn'}" type="button" data-only-my-schedule>${onlyMine ? 'แสดงทุกคน' : 'ดูเฉพาะเวรของฉัน'}</button>
+          <button class="ghost-btn" data-export-schedule-excel>Export Excel</button>
+          <button class="ghost-btn" data-print-page>Export PDF / พิมพ์</button>
+        </div>
+        ${renderScheduleTabs(active)}
+        <h3 class="print-only">ตารางเวรประจำเดือน ${esc206(key)}</h3>
+        <div class="clean-schedule-content">${content}</div>
+        ${onlyMine ? '' : renderDutyTradePanel(assignments)}
+      </div>`;
+    } catch (err) {
+      console.warn(`${VERSION_V206} schedule fallback`, err);
+      return previousRenderMonthlySchedulePageV206 ? previousRenderMonthlySchedulePageV206.apply(this, arguments) : empty('แสดงตารางเวรไม่สำเร็จ');
+    }
+  };
+
+  document.addEventListener('change', function(e){
+    if (e.target?.id === 'myDutyMonthFilter') {
+      state.myDutyMonthFilter = e.target.value || month206();
+      renderPage();
+    }
+  }, true);
+  document.addEventListener('click', function(e){
+    const btn = e.target?.closest?.('[data-only-my-schedule]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    state.scheduleOnlyMine = !state.scheduleOnlyMine;
+    renderPage();
+  }, true);
+
+  window.v206MyDutyTools = { isManualTimeDuty206, isAutoCheckInDuty206, myDutiesOn206, attendanceStatusText206, manualStatusText206 };
+  console.info(`[${VERSION_V206}] loaded`);
+})();
