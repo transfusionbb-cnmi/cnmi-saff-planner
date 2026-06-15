@@ -3321,3 +3321,51 @@ thead .v179-sticky-first-col {
   .my-duty-month-filter { width: 100%; justify-content: space-between; }
   .my-duty-month-filter input { width: 160px; }
 }
+
+/* V209: ช4 / งานปั่นเลือด confirmation flow */
+.ch4-duty-today-box {
+  margin-top: 12px;
+}
+.ch4-duty-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.ch4-duty-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(23, 53, 77, .10);
+  border-radius: 14px;
+  background: rgba(255,255,255,.72);
+}
+.ch4-duty-item .actions,
+.ch4-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.v209-admin-ch4-card table td,
+.v209-admin-ch4-card table th {
+  white-space: nowrap;
+}
+.v209-ch4-cover-modal textarea {
+  width: 100%;
+  resize: vertical;
+}
+@media (max-width: 768px) {
+  .ch4-duty-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .ch4-duty-item .actions,
+  .ch4-actions {
+    justify-content: stretch;
+  }
+  .ch4-actions button {
+    flex: 1 1 140px;
+  }
+}
