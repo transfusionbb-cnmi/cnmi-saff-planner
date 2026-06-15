@@ -13469,3 +13469,92 @@ function bindGlobalEvents() {
   window.v209Ch4Tools = { isCh4209, ch4StatusText209, confirmationFor209, saveCh4Confirmation209 };
   console.info(`[${VERSION_V209}] loaded`);
 })();
+
+/* =========================
+   V211 Scheduler Sidebar Hard Navigation Fix
+   - Runs from app.js before external V197/V204 patch files.
+   - Handles the “จัดตารางเวร” sidebar click at window-capture level before older patches can stop the event.
+   - Navigates first, then refreshes duty eligibility in the background so a slow Supabase query cannot make the UI look frozen.
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V211 = 'V211_SCHEDULER_SIDEBAR_HARD_NAV_FIX';
+  if (window.__CNMI_V211_SCHEDULER_HARD_NAV__) return;
+  window.__CNMI_V211_SCHEDULER_HARD_NAV__ = true;
+
+  function safeToast211(message, tone){
+    try {
+      if (typeof showToast === 'function') showToast(message, tone ? { tone } : undefined);
+      else console.info(message);
+    } catch (_) {
+      console.info(message);
+    }
+  }
+
+  function closeSidebar211(){
+    try {
+      const sidebar = typeof $ === 'function' ? $('sidebar') : document.getElementById('sidebar');
+      if (sidebar) sidebar.classList.remove('open');
+      document.body.classList.remove('sidebar-open');
+    } catch (_) {}
+  }
+
+  function renderSchedulerNow211(){
+    try {
+      if (!window.__CNMI_V211_SCHEDULER_LAST_CLICK__ || Date.now() - window.__CNMI_V211_SCHEDULER_LAST_CLICK__ > 250) {
+        window.__CNMI_V211_SCHEDULER_LAST_CLICK__ = Date.now();
+      }
+      state.page = 'scheduler';
+      closeSidebar211();
+      if (typeof renderPage === 'function') renderPage();
+      console.info(`${VERSION_V211}: scheduler page rendered`);
+      return true;
+    } catch (err) {
+      console.error(`${VERSION_V211}: cannot render scheduler page`, err);
+      safeToast211('เปิดหน้าจัดตารางเวรไม่สำเร็จ กรุณาดู Error สีแดงใน Console', 'error');
+      return false;
+    }
+  }
+
+  function refreshDutyEligibilityInBackground211(){
+    window.setTimeout(async function(){
+      const refreshFn = window.refreshDutyEligibilityFromDbV197;
+      if (typeof refreshFn !== 'function') {
+        console.warn(`${VERSION_V211}: refreshDutyEligibilityFromDbV197 not ready; skipped background refresh`);
+        return;
+      }
+      let timer = null;
+      try {
+        const result = await Promise.race([
+          refreshFn({ clearDraft:true, toast:false }),
+          new Promise(resolve => { timer = window.setTimeout(() => resolve('__timeout__'), 3500); })
+        ]);
+        if (timer) window.clearTimeout(timer);
+        if (result === '__timeout__') {
+          console.warn(`${VERSION_V211}: duty eligibility refresh timeout; scheduler still usable with cached data`);
+          safeToast211('เปิดหน้าจัดตารางเวรแล้ว แต่โหลดสิทธิ์เวรล่าสุดช้า ระบบใช้ข้อมูลเดิมก่อน');
+          return;
+        }
+        if (state.page === 'scheduler' && typeof renderPage === 'function') renderPage();
+        console.info(`${VERSION_V211}: duty eligibility refreshed after scheduler open`);
+      } catch (err) {
+        if (timer) window.clearTimeout(timer);
+        console.warn(`${VERSION_V211}: duty eligibility refresh failed`, err);
+        safeToast211('เปิดหน้าจัดตารางเวรแล้ว แต่โหลดสิทธิ์เวรล่าสุดไม่สำเร็จ ระบบใช้ข้อมูลเดิมก่อน', 'error');
+      }
+    }, 0);
+  }
+
+  function onSchedulerNavClick211(e){
+    const nav = e.target && e.target.closest && e.target.closest('[data-page="scheduler"]');
+    if (!nav) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    if (renderSchedulerNow211()) refreshDutyEligibilityInBackground211();
+  }
+
+  // Register in app.js before the older external V197 listener is loaded.
+  window.addEventListener('click', onSchedulerNavClick211, true);
+  console.info(`${VERSION_V211} loaded`);
+})();
