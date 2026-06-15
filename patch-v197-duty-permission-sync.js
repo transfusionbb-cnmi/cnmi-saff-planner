@@ -424,24 +424,62 @@
     };
   }
 
+  // V210: Do not block sidebar navigation while waiting for Supabase.
+  // Previous behavior awaited daily_position_eligibility before changing page, so a slow/RLS-blocked
+  // query made the "จัดตารางเวร" menu look like it did nothing.
+  async function refreshDutyEligibilityWithTimeoutV210(options={}, timeoutMs=3500) {
+    let timer = null;
+    try {
+      return await Promise.race([
+        refreshDutyEligibilityFromDb(options),
+        new Promise(resolve => { timer = window.setTimeout(() => resolve('__timeout__'), timeoutMs); })
+      ]);
+    } finally {
+      if (timer) window.clearTimeout(timer);
+    }
+  }
+
   async function openSchedulerFresh() {
-    await refreshDutyEligibilityFromDb({ clearDraft:true, toast:false });
+    // Navigate first so the UI responds immediately even if Supabase/API is slow.
     state.page = 'scheduler';
+    try { renderPage(); } catch (err) { console.error('V210 scheduler first render failed', err); }
+
+    try { if (typeof setBusy === 'function') setBusy(true, 'กำลังโหลดสิทธิ์เวรล่าสุด'); } catch(_) {}
+    const result = await refreshDutyEligibilityWithTimeoutV210({ clearDraft:true, toast:false }, 3500);
+    try { if (typeof setBusy === 'function') setBusy(false); } catch(_) {}
+
+    if (result === '__timeout__') {
+      console.warn('V210 scheduler open: daily_position_eligibility refresh timed out; using cached state.');
+      toast('เปิดหน้าจัดตารางเวรแล้ว แต่โหลดสิทธิ์เวรล่าสุดช้า ระบบใช้ข้อมูลที่โหลดไว้ก่อน');
+      return;
+    }
+    if (result === false) {
+      toast('เปิดหน้าจัดตารางเวรแล้ว แต่โหลดสิทธิ์เวรล่าสุดไม่สำเร็จ ระบบใช้ข้อมูลที่มีในหน้าจอก่อน', 'error');
+      return;
+    }
     renderPage();
     toast('โหลดสิทธิ์เวรล่าสุดแล้ว');
   }
 
   async function generateRosterFresh() {
-    await refreshDutyEligibilityFromDb({ clearDraft:false, toast:false });
+    try { if (typeof setBusy === 'function') setBusy(true, 'กำลังสร้างตารางเปล่า'); } catch(_) {}
+    const result = await refreshDutyEligibilityWithTimeoutV210({ clearDraft:false, toast:false }, 3500);
+    try { if (typeof setBusy === 'function') setBusy(false); } catch(_) {}
     state.rosterDraft = { monthKey: state.monthKey, assignments: generateEmptyAssignments(state.monthKey) };
     renderPage();
+    if (result === '__timeout__') return toast('สร้างตารางเปล่าแล้ว แต่โหลดสิทธิ์เวรล่าสุดช้า ระบบใช้ข้อมูลเดิมก่อน');
+    if (result === false) return toast('สร้างตารางเปล่าแล้ว แต่โหลดสิทธิ์เวรล่าสุดไม่สำเร็จ ระบบใช้ข้อมูลเดิมก่อน', 'error');
     toast('สร้างตารางเปล่าจากสิทธิ์เวรล่าสุดแล้ว');
   }
 
   async function autoAssignFresh() {
-    await refreshDutyEligibilityFromDb({ clearDraft:false, toast:false });
+    try { if (typeof setBusy === 'function') setBusy(true, 'กำลัง Auto Assign'); } catch(_) {}
+    const result = await refreshDutyEligibilityWithTimeoutV210({ clearDraft:false, toast:false }, 3500);
+    try { if (typeof setBusy === 'function') setBusy(false); } catch(_) {}
     autoAssignRoster();
     renderPage();
+    if (result === '__timeout__') toast('Auto Assign แล้ว แต่โหลดสิทธิ์เวรล่าสุดช้า ระบบใช้ข้อมูลเดิมก่อน');
+    else if (result === false) toast('Auto Assign แล้ว แต่โหลดสิทธิ์เวรล่าสุดไม่สำเร็จ ระบบใช้ข้อมูลเดิมก่อน', 'error');
   }
 
   window.addEventListener('click', async function(e){
