@@ -12570,3 +12570,94 @@ function bindGlobalEvents() {
   window.v206MyDutyTools = { isManualTimeDuty206, isAutoCheckInDuty206, myDutiesOn206, attendanceStatusText206, manualStatusText206 };
   console.info(`[${VERSION_V206}] loaded`);
 })();
+
+/* V207 Daily Position de-duplicate blank slots + clearer duplicate slot labels
+   - Removes empty duplicate rows in the daily position view (same position/zone/break/rule/job with no staff).
+   - Keeps multiple filled rows when the same position really has more than one responsible staff.
+   - Adds a small slot label when a position appears more than once, so it does not look like a UI overlap.
+*/
+(function(){
+  const VERSION_V207 = 'V207_DAILY_POSITION_DEDUP_VIEW';
+
+  function safeArr207(v){ return Array.isArray(v) ? v : []; }
+  function baseCode207(row, date){
+    try { return positionBaseCode(row?.position_code || row?.code || ''); }
+    catch (_) { return String(row?.position_code || row?.code || '').replace(/\s+#\d+$/, '').trim(); }
+  }
+  function template207(row, date){
+    const base = baseCode207(row, date);
+    try { return positionTemplateByCode(base, date) || row || {}; }
+    catch (_) { return row || {}; }
+  }
+  function key207(row, date){
+    const base = template207(row, date);
+    const code = base.code || row?.position_code || row?.code || '';
+    return [
+      String(code || '').trim(),
+      String(row?.zone || base.zone || '').trim(),
+      String(row?.break_time || base.break_time || '').trim(),
+      String(row?.main_rule || base.main_rule || '').trim(),
+      String(row?.job_desc || base.job_desc || '').trim()
+    ].join('||');
+  }
+  function normalizeRows207(rows, date){
+    const groups = new Map();
+    safeArr207(rows).forEach((row) => {
+      const k = key207(row, date);
+      if (!groups.has(k)) groups.set(k, { filled: [], blank: null });
+      const g = groups.get(k);
+      if (row?.staff_id) g.filled.push(row);
+      else if (!g.blank) g.blank = row;
+    });
+    const out = [];
+    groups.forEach(g => {
+      if (g.filled.length) out.push(...g.filled);
+      else if (g.blank) out.push(g.blank);
+    });
+    try { return sortPositionRows(out); }
+    catch (_) { return out; }
+  }
+  function slotInfo207(rows, row, date, index){
+    const k = key207(row, date);
+    const same = rows.filter(x => key207(x, date) === k);
+    if (same.length <= 1) return '';
+    const n = same.indexOf(row) + 1;
+    return `<br><small class="muted">ช่องที่ ${n}</small>`;
+  }
+  function esc207(v){
+    try { return escapeHtml(v); }
+    catch (_) { return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  }
+
+  window.normalizeDailyPositionRows = normalizeRows207;
+
+  window.renderDailyPositionList = renderDailyPositionList = function renderDailyPositionListV207(rows, date, canManage) {
+    const cleanRows = normalizeRows207(rows, date);
+    const table = `<div class="table-wrap daily-position-table desktop-table"><table><thead><tr><th>โซน</th><th>ตำแหน่ง</th><th>เวลาพัก</th><th>ผู้รับผิดชอบ</th><th>ผู้ปฏิบัติหลัก</th><th>หน้าที่โดยย่อ</th></tr></thead><tbody>
+      ${cleanRows.map((r,idx) => {
+        const baseCode = baseCode207(r, date);
+        const base = template207(r, date);
+        const code = base.code || r.position_code;
+        const label = positionLabelForCell(r.position_code || base.code || '');
+        const slot = slotInfo207(cleanRows, r, date, idx);
+        const select = canManage
+          ? `<select data-position-row="${idx}" data-position-code="${esc207(code)}" data-position-zone="${esc207(r.zone || base.zone || '')}" data-position-break="${esc207(r.break_time || base.break_time || '')}" data-position-rule="${esc207(r.main_rule || base.main_rule || '')}" data-position-job="${esc207(r.job_desc || base.job_desc || '')}"><option value="">-</option>${staffOptionList(r.staff_id, s => baseCode207(r, date)==='รอตรวจสอบ' || positionCandidateOk(s, { ...base, code, position_code: code, main_rule: r.main_rule || base.main_rule }, date))}</select>`
+          : `${staffPill(r.staff_id)}`;
+        return `<tr><td>${esc207(r.zone || base.zone || '')}</td><td><b>${esc207(label)}</b>${slot}</td><td>${esc207(r.break_time || base.break_time || '')}</td><td>${select}</td><td>${esc207(r.main_rule || base.main_rule || '')}</td><td>${esc207(r.job_desc || base.job_desc || '')}</td></tr>`;
+      }).join('')}
+    </tbody></table></div>`;
+    const cards = `<div class="mobile-position-list">${cleanRows.map((r,idx) => {
+      const base = template207(r, date);
+      const code = base.code || r.position_code;
+      const label = positionLabelForCell(r.position_code || base.code || '');
+      const slot = slotInfo207(cleanRows, r, date, idx).replace('<br>', ' ');
+      const select = canManage
+        ? `<select data-position-row="${idx}" data-position-code="${esc207(code)}" data-position-zone="${esc207(r.zone || base.zone || '')}" data-position-break="${esc207(r.break_time || base.break_time || '')}" data-position-rule="${esc207(r.main_rule || base.main_rule || '')}" data-position-job="${esc207(r.job_desc || base.job_desc || '')}"><option value="">-</option>${staffOptionList(r.staff_id, s => baseCode207(r, date)==='รอตรวจสอบ' || positionCandidateOk(s, { ...base, code, position_code: code, main_rule: r.main_rule || base.main_rule }, date))}</select>`
+        : `${staffPill(r.staff_id)}`;
+      return `<div class="position-mobile-card"><div class="section-title"><h3>${esc207(label)}${slot}</h3>${badge(r.zone || base.zone || '-', r.zone === 'ออกหน่วย' ? 'red' : 'blue')}</div><div class="muted">พัก ${esc207(r.break_time || base.break_time || '-')} • ${esc207(r.main_rule || base.main_rule || '')}</div><label>ผู้รับผิดชอบ ${select}</label><p>${esc207(r.job_desc || base.job_desc || '')}</p></div>`;
+    }).join('')}</div>`;
+    return `${table}${cards}`;
+  };
+
+  console.info(`[${VERSION_V207}] loaded`);
+})();
