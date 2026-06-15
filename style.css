@@ -3263,3 +3263,14 @@ thead .v179-sticky-first-col {
     padding: 2px 3px !important;
   }
 }
+
+/* V205 OT Summary + Partial Trade */
+.v205-pending-summary table { min-width: 1080px; }
+.v205-pending-summary th:nth-child(4),
+.v205-pending-summary td:nth-child(4),
+.v205-pending-summary th:nth-child(5),
+.v205-pending-summary td:nth-child(5) { white-space: nowrap; }
+#tradeEstimateV205 { line-height: 1.7; }
+@media (max-width: 820px) {
+  .v205-pending-summary table { min-width: 980px; }
+}
