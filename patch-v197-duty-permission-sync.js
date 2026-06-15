@@ -483,13 +483,10 @@
   }
 
   window.addEventListener('click', async function(e){
-    const t = e.target && e.target.closest && e.target.closest('[data-page="scheduler"],[data-generate-roster],[data-auto-assign],[data-save-roster],[data-publish-roster],[data-lock-roster],[data-save-duty-eligibility-v137]');
+    const t = e.target && e.target.closest && e.target.closest('[data-generate-roster],[data-auto-assign],[data-save-roster],[data-publish-roster],[data-lock-roster],[data-save-duty-eligibility-v137]');
     if (!t) return;
-    if (t.dataset?.page === 'scheduler') {
-      e.preventDefault(); e.stopImmediatePropagation();
-      await openSchedulerFresh();
-      return;
-    }
+    // V212: scheduler sidebar navigation is handled by app.js V211/V212 hard-nav.
+    // Do not intercept [data-page="scheduler"] here; otherwise a slow Supabase refresh can make navigation feel frozen.
     if (t.hasAttribute('data-generate-roster')) {
       e.preventDefault(); e.stopImmediatePropagation();
       await generateRosterFresh();

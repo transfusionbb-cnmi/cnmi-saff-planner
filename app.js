@@ -13558,3 +13558,234 @@ function bindGlobalEvents() {
   window.addEventListener('click', onSchedulerNavClick211, true);
   console.info(`${VERSION_V211} loaded`);
 })();
+
+/* =========================
+   V212 Position Management Save + Fast Navigation Diagnostics
+   - Exposes the real Supabase client for Console checks: window.supabaseClient / window.sbClient / cnmiSupabaseHealth()
+   - Opens Admin > จัดการตำแหน่ง immediately, then refreshes position masters in the background.
+   - Saves position master form from window-capture before older submit handlers can swallow the event.
+   - Shows/logs Supabase errors instead of appearing as “กดแล้วเงียบ”.
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V212 = 'V212_POSITION_SAVE_FAST_NAV_DIAGNOSTICS';
+  if (window.__CNMI_V212_POSITION_SAVE_FAST_NAV__) return;
+  window.__CNMI_V212_POSITION_SAVE_FAST_NAV__ = true;
+
+  const esc212 = (v) => {
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  };
+  const toast212 = (msg, tone) => {
+    try { if (typeof showToast === 'function') showToast(msg, tone ? { tone } : undefined); else console.info(msg); }
+    catch (_) { console.info(msg); }
+  };
+  const friendly212 = (err) => {
+    try { return friendlyDbError(err); }
+    catch (_) { return err?.message || err?.details || err?.hint || String(err || 'เกิดข้อผิดพลาด'); }
+  };
+  const closeSidebar212 = () => {
+    try { const sidebar = typeof $ === 'function' ? $('sidebar') : document.getElementById('sidebar'); if (sidebar) sidebar.classList.remove('open'); } catch (_) {}
+    try { document.body.classList.remove('sidebar-open'); } catch (_) {}
+  };
+  const withTimeout212 = (promise, ms, label='operation') => new Promise((resolve, reject) => {
+    let done = false;
+    const timer = window.setTimeout(() => {
+      if (done) return;
+      done = true;
+      reject(new Error(`${label} timed out after ${ms} ms`));
+    }, ms);
+    Promise.resolve(promise).then(v => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timer);
+      resolve(v);
+    }, err => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timer);
+      reject(err);
+    });
+  });
+
+  function exposeClient212(){
+    try {
+      if (typeof sb !== 'undefined' && sb) {
+        window.supabaseClient = sb;
+        window.sbClient = sb;
+        // Intentionally do not overwrite window.supabase because that is the Supabase SDK namespace.
+      }
+    } catch (_) {}
+  }
+
+  window.cnmiSupabaseHealth = async function cnmiSupabaseHealth(){
+    exposeClient212();
+    const client = window.supabaseClient || (typeof sb !== 'undefined' ? sb : null);
+    if (!client) {
+      console.error(`${VERSION_V212}: Supabase client is not ready. Check config.js and @supabase/supabase-js loading.`);
+      return { ok:false, reason:'supabase client not ready' };
+    }
+    const started = performance.now();
+    const out = { ok:true, checks:{}, ms:0 };
+    try {
+      const session = await client.auth.getSession();
+      out.checks.session = { ok:!session.error, hasUser:!!session.data?.session?.user, email:session.data?.session?.user?.email || '' };
+      const staff = await withTimeout212(client.from('staff_profiles').select('id,role,email').limit(1), 8000, 'staff_profiles health check');
+      out.checks.staff_profiles = { ok:!staff.error, status:staff.status || null, rows:(staff.data || []).length, error:staff.error || null };
+      const masters = await withTimeout212(client.from('daily_position_masters').select('id', { count:'exact', head:true }), 8000, 'daily_position_masters health check');
+      out.checks.daily_position_masters = { ok:!masters.error, status:masters.status || null, count:masters.count, error:masters.error || null };
+      const elig = await withTimeout212(client.from('daily_position_eligibility').select('id', { count:'exact', head:true }), 8000, 'daily_position_eligibility health check');
+      out.checks.daily_position_eligibility = { ok:!elig.error, status:elig.status || null, count:elig.count, error:elig.error || null };
+    } catch (err) {
+      out.ok = false;
+      out.error = err?.message || String(err);
+      console.error(`${VERSION_V212}: health check failed`, err);
+    }
+    out.ms = Math.round(performance.now() - started);
+    console.table(out.checks || {});
+    console.info(`${VERSION_V212}: cnmiSupabaseHealth`, out);
+    return out;
+  };
+
+  window.setInterval(exposeClient212, 1500);
+  document.addEventListener('DOMContentLoaded', () => window.setTimeout(exposeClient212, 0));
+
+  async function refreshPositionMastersFast212({ renderAfter=false, silent=true }={}){
+    exposeClient212();
+    const client = window.supabaseClient || (typeof sb !== 'undefined' ? sb : null);
+    if (!client || !state?.profile) return false;
+    try {
+      const q = await withTimeout212(
+        client.from('daily_position_masters').select('*').order('sort_order', { ascending:true }).order('zone', { ascending:true }).order('code', { ascending:true }),
+        6000,
+        'daily_position_masters refresh'
+      );
+      if (q.error) throw q.error;
+      state.positionMasters = q.data || [];
+      state.positionMastersLoaded = true;
+      state.positionMasterLoadError = '';
+      console.info(`${VERSION_V212}: daily_position_masters refreshed`, state.positionMasters.length);
+      if (renderAfter && state.page === 'positionManagement' && typeof renderPage === 'function') renderPage();
+      return true;
+    } catch (err) {
+      state.positionMastersLoaded = false;
+      state.positionMasterLoadError = err?.message || String(err || 'โหลดตำแหน่งไม่สำเร็จ');
+      console.warn(`${VERSION_V212}: daily_position_masters refresh failed`, err);
+      if (!silent) toast212('โหลดรายการตำแหน่งจาก Supabase ไม่สำเร็จ: ' + friendly212(err), 'error');
+      return false;
+    }
+  }
+
+  window.addEventListener('click', function(e){
+    const nav = e.target && e.target.closest && e.target.closest('[data-page="positionManagement"]');
+    if (!nav) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    try {
+      state.page = 'positionManagement';
+      closeSidebar212();
+      if (typeof renderPage === 'function') renderPage();
+      console.info(`${VERSION_V212}: positionManagement opened immediately`);
+      window.setTimeout(() => refreshPositionMastersFast212({ renderAfter:true, silent:true }), 0);
+    } catch (err) {
+      console.error(`${VERSION_V212}: cannot open positionManagement`, err);
+      toast212('เปิดหน้าจัดการตำแหน่งไม่สำเร็จ กรุณาดู Error สีแดงใน Console', 'error');
+    }
+  }, true);
+
+  function nextSortOrder212(zone, isOuting){
+    const target = isOuting || String(zone || '').trim() === 'ออกหน่วย' ? 'ออกหน่วย' : (String(zone || '').trim() || 'Blood Bank');
+    const rows = (state.positionMasters || []);
+    const max = rows.reduce((m, r) => {
+      const rz = (r.is_outing === true || String(r.zone || '').trim() === 'ออกหน่วย') ? 'ออกหน่วย' : (String(r.zone || '').trim() || 'Blood Bank');
+      if (rz !== target) return m;
+      const n = Number(r.sort_order || 0);
+      return Number.isFinite(n) ? Math.max(m, n) : m;
+    }, 0);
+    return max + 10;
+  }
+
+  async function ensurePositionSaveReady212(){
+    exposeClient212();
+    const client = window.supabaseClient || (typeof sb !== 'undefined' ? sb : null);
+    if (!client) throw new Error('ไม่พบ Supabase client: config.js หรือ CDN Supabase อาจยังไม่พร้อม');
+    const session = await withTimeout212(client.auth.getSession(), 8000, 'auth session check');
+    if (session.error) throw session.error;
+    if (!session.data?.session?.user) throw new Error('Session หมดอายุ กรุณา Login ใหม่');
+    state.session = session.data.session;
+    if (!state.profile && typeof loadProfile === 'function') await loadProfile();
+    if (typeof isAdmin === 'function' && !isAdmin()) throw new Error('บัญชีนี้ไม่ใช่ Admin จึงบันทึกจัดการตำแหน่งไม่ได้');
+    return client;
+  }
+
+  async function savePositionMasterForm212(form){
+    const started = performance.now();
+    console.info(`${VERSION_V212}: positionMasterForm submit captured`);
+    let client = null;
+    try {
+      client = await ensurePositionSaveReady212();
+      if (state.positionMastersLoaded !== true) {
+        const ok = await refreshPositionMastersFast212({ renderAfter:false, silent:true });
+        if (!ok) throw new Error('ยังโหลดตาราง daily_position_masters ไม่สำเร็จ จึงยังบันทึกไม่ได้');
+      }
+      const fd = new FormData(form);
+      const id = String(fd.get('id') || '').trim();
+      if (id && id.startsWith('seed:')) throw new Error('รายการนี้ยังเป็น fallback seed ไม่ใช่ข้อมูลจาก Supabase กรุณารัน supabase_v182_position_management.sql ก่อน');
+      const code = String(fd.get('code') || '').trim();
+      const zone = String(fd.get('zone') || '').trim() || 'Blood Bank';
+      const isOuting = String(fd.get('is_outing')) === 'true' || zone === 'ออกหน่วย';
+      const finalZone = isOuting ? 'ออกหน่วย' : zone;
+      const isActive = String(fd.get('is_active')) !== 'false';
+      if (!code) throw new Error('กรุณากรอกรหัสตำแหน่ง / Code');
+      const sortInput = Number(fd.get('sort_order'));
+      const payload = {
+        code,
+        zone: finalZone,
+        is_outing: isOuting,
+        break_time: String(fd.get('break_time') || '').trim() || '-',
+        main_rule: String(fd.get('main_rule') || '').trim() || null,
+        job_desc: String(fd.get('job_desc') || '').trim() || null,
+        sort_order: id && Number.isFinite(sortInput) ? sortInput : nextSortOrder212(finalZone, isOuting),
+        is_active: isActive,
+        deleted_at: isActive ? null : new Date().toISOString(),
+        updated_by: (typeof currentStaffId === 'function' ? currentStaffId() : state.profile?.id || null)
+      };
+      const elig = String(fd.get('eligibility_code') || '').trim();
+      payload.eligibility_code = elig || (isOuting ? `OUTING:${code}` : null);
+      if (!id) payload.created_by = (typeof currentStaffId === 'function' ? currentStaffId() : state.profile?.id || null);
+
+      try { if (typeof setBusy === 'function') setBusy(true, id ? 'กำลังบันทึกการแก้ไขตำแหน่ง' : 'กำลังเพิ่มตำแหน่งใหม่'); } catch (_) {}
+      const query = id
+        ? client.from('daily_position_masters').update(payload).eq('id', id).select('id,code').maybeSingle()
+        : client.from('daily_position_masters').insert(payload).select('id,code').maybeSingle();
+      const res = await withTimeout212(query, 12000, id ? 'daily_position_masters update' : 'daily_position_masters insert');
+      if (res.error) throw res.error;
+      if (!res.data?.id) throw new Error('Supabase ตอบกลับมาแต่ไม่พบ id ที่บันทึก อาจติด RLS หรือ id ไม่ตรงรายการ');
+
+      await refreshPositionMastersFast212({ renderAfter:false, silent:true });
+      state.page = 'positionManagement';
+      state.editingPositionMasterId = null;
+      state.showPositionMasterForm = false;
+      if (typeof renderPage === 'function') renderPage();
+      toast212(id ? 'บันทึกการแก้ไขตำแหน่งแล้ว' : 'เพิ่มตำแหน่งใหม่แล้ว');
+      console.info(`${VERSION_V212}: position master saved`, { id:res.data.id, code:res.data.code, ms:Math.round(performance.now() - started) });
+    } catch (err) {
+      console.error(`${VERSION_V212}: position master save failed`, err);
+      toast212('บันทึกตำแหน่งไม่สำเร็จ: ' + friendly212(err), 'error');
+    } finally {
+      try { if (typeof setBusy === 'function') setBusy(false); } catch (_) {}
+    }
+  }
+
+  window.addEventListener('submit', function(e){
+    if (e.target?.id !== 'positionMasterForm') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    savePositionMasterForm212(e.target);
+  }, true);
+
+  window.cnmiV212RefreshPositionMasters = refreshPositionMastersFast212;
+  console.info(`${VERSION_V212} loaded`);
+})();
