@@ -205,21 +205,45 @@
     }
     try { return cloneTemplates231(window.cnmiPositionCatalogV182?.normalPositions182?.() || []); } catch (_) { return []; }
   }
-  function outingTemplates231(){
+  function outingTemplates231(count){
+    const bucket = slotBucket231(count || getBaseSlotCount231());
+    const mark = (list, forceOuting=false) => cloneTemplates231(list).map(p => {
+      const z = forceOuting ? 'ออกหน่วย' : normalizeZone231(p.zone || 'ออกหน่วย');
+      return { ...p, zone:z, is_outing:(z === 'ออกหน่วย') || p.is_outing === true };
+    });
+    try {
+      const fromV232 = window.cnmiDayPositionSlotsV218?.outingSlotsV232?.(bucket);
+      if (Array.isArray(fromV232) && fromV232.length) return mark(fromV232, false);
+    } catch (_) {}
     try {
       const outingFromV224 = window.cnmiDayPositionSlotsV218?.outingSlotsV224?.();
-      if (Array.isArray(outingFromV224) && outingFromV224.length) return cloneTemplates231(outingFromV224).map(p => ({ ...p, zone:'ออกหน่วย', is_outing:true }));
+      if (Array.isArray(outingFromV224) && outingFromV224.length) return mark(outingFromV224, false);
     } catch (_) {}
     try {
       const fromCatalog = window.cnmiPositionCatalogV182?.outingPositions182?.();
-      if (Array.isArray(fromCatalog) && fromCatalog.length) return cloneTemplates231(fromCatalog).map(p => ({ ...p, zone:'ออกหน่วย', is_outing:true }));
+      if (Array.isArray(fromCatalog) && fromCatalog.length) return mark(fromCatalog, true);
     } catch (_) {}
-    try { return cloneTemplates231(OUTING_POSITIONS || []).map(p => ({ ...p, zone:'ออกหน่วย', is_outing:true })); } catch (_) { return []; }
+    try { return mark(OUTING_POSITIONS || [], true); } catch (_) { return []; }
+  }
+  function splitOutingTemplates231(date){
+    const bucket = weekSlotCount231(date);
+    const list = outingTemplates231(bucket);
+    const hasRoomSlots = list.some(p => normalizeZone231(p.zone) !== 'ออกหน่วย');
+    if (hasRoomSlots) {
+      return {
+        roomSlots:list.filter(p => normalizeZone231(p.zone) !== 'ออกหน่วย'),
+        outingSlots:list.filter(p => normalizeZone231(p.zone) === 'ออกหน่วย'),
+        full:list
+      };
+    }
+    const roomSlots = daySlotsForCount231(bucket).filter(p => normalizeZone231(p.zone) === 'Blood Bank');
+    return { roomSlots, outingSlots:list, full:[...roomSlots, ...list] };
   }
   function positionTemplateByCode231(code, date){
     const base = String(typeof positionBaseCode === 'function' ? positionBaseCode(code) : code || '').trim();
     if (!base) return null;
-    const list = [...daySlotsForCount231(14), ...allDaySlots231(), ...outingTemplates231()];
+    const outingCount = date && hasOuting(normDate231(date)) ? weekSlotCount231(normDate231(date)) : 14;
+    const list = [...daySlotsForCount231(14), ...allDaySlots231(), ...outingTemplates231(outingCount), ...outingTemplates231(13), ...outingTemplates231(14)];
     const found = list.find(p => p.code === base || p.eligibility_code === base);
     if (found) return normalizeTemplate231(found);
     try { return normalizeTemplate231(positionTemplateByCode(code, date)); } catch (_) { return null; }
@@ -320,8 +344,7 @@
     if (!d || isNoPositionDay(d)) return [];
     const weekSlotCount = weekSlotCount231(d);
     if (hasOuting(d)) {
-      const roomSlots = daySlotsForCount231(weekSlotCount).filter(p => normalizeZone231(p.zone) === 'Blood Bank');
-      return [...roomSlots, ...outingTemplates231()];
+      return splitOutingTemplates231(d).full;
     }
     return daySlotsForCount231(weekSlotCount);
   }
@@ -416,12 +439,12 @@
     const participantIds = new Set((typeof outingParticipants === 'function' ? outingParticipants(date) : []).map(String));
     const outingPool = weekStaff.filter(st => participantIds.has(String(st.id)));
     const roomPool = weekStaff.filter(st => !participantIds.has(String(st.id)));
-    outingTemplates231().forEach(p => {
+    const split = splitOutingTemplates231(date);
+    split.outingSlots.forEach(p => {
       const st = chooseForPosition231(p, date, outingPool, used, counts, rows);
       if (st) { used.add(String(st.id)); addPlannedRow231(rows, counts, serialMap, st, date, p); }
     });
-    const roomSlots = daySlotsForCount231(weekSlotCount231(date)).filter(p => normalizeZone231(p.zone) === 'Blood Bank');
-    roomSlots.forEach(p => {
+    split.roomSlots.forEach(p => {
       const st = chooseForPosition231(p, date, roomPool, used, counts, rows);
       if (st) { used.add(String(st.id)); addPlannedRow231(rows, counts, serialMap, st, date, p); }
     });
