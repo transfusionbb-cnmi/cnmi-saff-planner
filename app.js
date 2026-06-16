@@ -14275,3 +14275,469 @@ function bindGlobalEvents() {
   window.cnmiDayPositionSlotsV218 = { DAY_POSITION_SLOT_SETS_218, daySlotsForDate218, daySlotBucketForDate218, buildBlankMonthlyPositionDraft218 };
   console.info(`${VERSION_V218} loaded`);
 })();
+
+/* =========================
+   V219 OT approval visibility + compact daily position UX
+   - Repairs the case where attendance was saved but the pending OT row was not created.
+   - Makes staff/admin OT status text clearer.
+   - Shortens daily position descriptions and moves long job descriptions into a popup.
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V219 = 'V219_OT_REPAIR_COMPACT_POSITION_UX';
+  if (window.__CNMI_V219_OT_REPAIR_COMPACT_POSITION_UX__) return;
+  window.__CNMI_V219_OT_REPAIR_COMPACT_POSITION_UX__ = true;
+
+  function esc219(v){
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function normDate219(v){
+    try { return normalizeDateKey(v); }
+    catch (_) { return String(v || '').slice(0, 10); }
+  }
+  function today219(){
+    try { return todayStr(); }
+    catch (_) { return new Date().toISOString().slice(0, 10); }
+  }
+  function currentSid219(){
+    try { return currentStaffId(); }
+    catch (_) { return state?.profile?.id || ''; }
+  }
+  function toast219(msg, tone){
+    try { showToast(msg, tone ? { tone } : undefined); }
+    catch (_) { console.info(msg); }
+  }
+  function friendly219(err){
+    try { return friendlyDbError(err); }
+    catch (_) { return err?.message || err?.details || err?.hint || String(err || 'เกิดข้อผิดพลาด'); }
+  }
+  function badge219(text, cls){
+    try { return badge(text, cls || 'black'); }
+    catch (_) { return `<span class="badge ${esc219(cls || 'black')}">${esc219(text)}</span>`; }
+  }
+  function labelDuty219(code){
+    try { return (DUTY_LABEL && DUTY_LABEL[code]) || code || '-'; }
+    catch (_) { return code || '-'; }
+  }
+  function isManualDuty219(code){
+    try {
+      const tools = window.v206MyDutyTools || {};
+      if (typeof tools.isManualTimeDuty206 === 'function') return tools.isManualTimeDuty206(code);
+    } catch (_) {}
+    const c = String(code || '').trim();
+    return c === 'ช4' || c === 'ช4A' || c === 'ช4B' || c === 'ช3A' || c === 'ช3B';
+  }
+  function isAutoDuty219(code){
+    const c = String(code || '').trim();
+    return !!c && !isManualDuty219(c);
+  }
+  function attendanceRows219(staffId, date){
+    const d = normDate219(date);
+    return (state.attendance || []).filter(a => String(a?.staff_id || '') === String(staffId || '') && normDate219(a?.duty_date) === d);
+  }
+  function dutiesOn219(staffId, date){
+    const d = normDate219(date);
+    return (state.rosterAssignments || [])
+      .filter(a => String(a?.staff_id || '') === String(staffId || '') && normDate219(a?.duty_date) === d)
+      .sort((a,b) => {
+        try { return dutySortIndex(a?.duty_code) - dutySortIndex(b?.duty_code); }
+        catch (_) { return String(a?.duty_code || '').localeCompare(String(b?.duty_code || ''), 'th'); }
+      });
+  }
+  function attendanceOtRows219(staffId, date){
+    const d = normDate219(date);
+    return (state.otRequests || []).filter(r => String(r?.staff_id || '') === String(staffId || '') && normDate219(r?.work_date) === d && /ยืนยันอยู่เวร/.test(String(r?.reason || '')));
+  }
+  function latest219(rows){
+    return (rows || []).slice().sort((a,b) => String(b?.created_at || '').localeCompare(String(a?.created_at || '')))[0] || null;
+  }
+  function statusText219(row){
+    const raw = String(row?.status || '').trim();
+    if (!raw || raw === 'รออนุมัติ' || raw.toLowerCase() === 'pending') return 'รอ Admin อนุมัติ';
+    if (raw === 'อนุมัติ' || raw.toLowerCase() === 'approved') return 'อนุมัติแล้ว';
+    if (raw === 'ไม่อนุมัติ' || raw.toLowerCase() === 'rejected') return 'ไม่อนุมัติ';
+    if (raw === 'ส่งกลับแก้ไข' || /return|edit/i.test(raw)) return 'ส่งกลับแก้ไข';
+    return raw;
+  }
+  function statusClass219(text){
+    const t = String(text || '');
+    if (/อนุมัติแล้ว/.test(t)) return 'green';
+    if (/ไม่อนุมัติ|ส่งกลับ|แก้ไข/.test(t)) return 'orange';
+    if (/รอ Admin|รออนุมัติ|ยืนยันแล้ว/.test(t)) return 'orange';
+    return 'black';
+  }
+  function autoDutyNote219(staffId, date){
+    const auto = dutiesOn219(staffId, date).filter(a => isAutoDuty219(a?.duty_code));
+    const labels = auto.map(a => labelDuty219(a.duty_code)).filter(Boolean).join(', ');
+    return labels ? `สร้างจากส่วนที่ 1 ยืนยันอยู่เวร | เวรที่คิดอัตโนมัติ: ${labels}` : 'สร้างจากส่วนที่ 1 ยืนยันอยู่เวร';
+  }
+  async function insertAttendanceOt219(staffId, date, extraNote){
+    const d = normDate219(date);
+    if (!staffId || !d) throw new Error('ข้อมูลเจ้าหน้าที่หรือวันที่ไม่ครบ');
+    const already = attendanceOtRows219(staffId, d);
+    if (already.length) return already[0];
+    const isIncharge = (() => { try { return String(currentInchargeForMonth(d.slice(0,7))) === String(staffId); } catch (_) { return false; } })();
+    const payload = {
+      staff_id: staffId,
+      work_date: d,
+      end_time: '',
+      reason: 'ยืนยันอยู่เวรตามตาราง',
+      note: [isIncharge ? 'ระบบคิด OT อินชาร์จประจำเดือน 8 ชั่วโมงอัตโนมัติ' : autoDutyNote219(staffId, d), extraNote || ''].filter(Boolean).join(' | '),
+      status: 'รออนุมัติ',
+      lat: null,
+      lng: null,
+      accuracy: null,
+      device: `${navigator.userAgent || 'browser'} | ${VERSION_V219}`.slice(0, 250)
+    };
+    const attempts = [
+      { ...payload },
+      (() => { const p = { ...payload }; delete p.lat; delete p.lng; delete p.accuracy; return p; })()
+    ];
+    let lastError = null;
+    for (const p of attempts) {
+      const res = await sb.from('ot_requests').insert(p).select('*').maybeSingle();
+      if (!res.error) return res.data || p;
+      lastError = res.error;
+      if (!/column|schema|cache/i.test(String(res.error?.message || ''))) break;
+    }
+    throw lastError || new Error('สร้างรายการ OT ไม่สำเร็จ');
+  }
+  async function repairMyAttendanceOt219(){
+    const staffId = currentSid219();
+    const d = today219();
+    try { setBusy(true, 'กำลังสร้างรายการรออนุมัติ'); } catch (_) {}
+    try {
+      await insertAttendanceOt219(staffId, d, 'ซ่อมรายการจากปุ่ม V219');
+      await loadAllData();
+      renderPage();
+      toast219('สร้างรายการ OT รอ Admin อนุมัติแล้ว');
+    } catch (err) {
+      console.error(`${VERSION_V219}: repair my OT failed`, err);
+      toast219('สร้างรายการ OT ไม่สำเร็จ: ' + friendly219(err), 'error');
+    } finally { try { setBusy(false); } catch (_) {} }
+  }
+  async function repairAttendanceOtForDate219(date){
+    const d = normDate219(date || today219());
+    if (!d) return toast219('ไม่พบวันที่สำหรับซ่อมรายการ', 'error');
+    const targets = [];
+    (state.attendance || []).forEach(a => {
+      const staffId = a?.staff_id;
+      if (!staffId || normDate219(a?.duty_date) !== d) return;
+      const hasOt = attendanceOtRows219(staffId, d).length > 0;
+      const hasAutoDuty = dutiesOn219(staffId, d).some(x => isAutoDuty219(x?.duty_code));
+      if (!hasOt && hasAutoDuty) targets.push(staffId);
+    });
+    const unique = Array.from(new Set(targets.map(String)));
+    if (!unique.length) return toast219('ไม่พบรายการที่ต้องซ่อมในวันนี้');
+    try { setBusy(true, 'กำลังซ่อมรายการ OT จาก Attendance'); } catch (_) {}
+    let ok = 0; let fail = 0;
+    try {
+      for (const staffId of unique) {
+        try { await insertAttendanceOt219(staffId, d, 'Admin ซ่อมรายการจาก Attendance'); ok += 1; }
+        catch (err) { console.warn(`${VERSION_V219}: repair failed for ${staffId}`, err); fail += 1; }
+      }
+      await loadAllData();
+      renderPage();
+      toast219(fail ? `ซ่อมสำเร็จ ${ok} รายการ / ไม่สำเร็จ ${fail} รายการ` : `ซ่อมรายการ OT แล้ว ${ok} รายการ`, fail ? 'error' : undefined);
+    } finally { try { setBusy(false); } catch (_) {} }
+  }
+
+  const previousCheckInV219 = window.checkIn || (typeof checkIn === 'function' ? checkIn : null);
+  window.checkIn = checkIn = async function checkInV219(){
+    const staffId = currentSid219();
+    const d = today219();
+    const duties = dutiesOn219(staffId, d);
+    const autoDuties = duties.filter(a => isAutoDuty219(a?.duty_code));
+    const manualDuties = duties.filter(a => isManualDuty219(a?.duty_code));
+    const att = attendanceRows219(staffId, d);
+    const ot = attendanceOtRows219(staffId, d);
+
+    if (!autoDuties.length) {
+      if (manualDuties.length) return toast219('วันนี้เป็น ช4/ช3A/ช3B ให้กรอกเวลาจริงในส่วนที่ 2 แล้วรอ Admin เทียบ LIS', 'error');
+      return toast219('วันนี้คุณไม่มีเวรหลักที่ต้องยืนยัน', 'error');
+    }
+
+    if (att.length || ot.length) {
+      if (!ot.length) return repairMyAttendanceOt219();
+      return toast219(statusText219(latest219(ot)) === 'รอ Admin อนุมัติ' ? 'รายการนี้รอ Admin อนุมัติอยู่แล้ว' : 'ลงชื่ออยู่เวรวันนี้แล้ว');
+    }
+
+    try { setBusy(true, 'กำลังบันทึกลงชื่ออยู่เวร'); } catch (_) {}
+    try {
+      const pos = await getGps();
+      if (pos && pos.ok === false) return showGpsHelp(pos.message);
+      const attendancePayload = {
+        staff_id: staffId,
+        duty_date: d,
+        check_in_at: new Date().toISOString(),
+        lat: pos?.lat ?? null,
+        lng: pos?.lng ?? null,
+        accuracy: pos?.accuracy ?? null,
+        device: `${navigator.userAgent || 'browser'} | ${VERSION_V219}`.slice(0,250)
+      };
+      const attendanceRes = await sb.from('attendance_logs').insert(attendancePayload);
+      if (attendanceRes.error && !/duplicate|unique/i.test(String(attendanceRes.error.message || ''))) throw attendanceRes.error;
+      await insertAttendanceOt219(staffId, d, 'สร้างพร้อมการลงชื่อ V219');
+      await loadAllData();
+      renderPage();
+      toast219('ลงชื่ออยู่เวรแล้ว และสร้างรายการรอ Admin อนุมัติแล้ว');
+    } catch (err) {
+      console.error(`${VERSION_V219}: checkIn failed`, err);
+      if (previousCheckInV219 && !attendanceRows219(staffId, d).length) {
+        try { return await previousCheckInV219.apply(this, arguments); } catch (_) {}
+      }
+      toast219('ลงชื่อไม่สำเร็จ: ' + friendly219(err), 'error');
+    } finally { try { setBusy(false); } catch (_) {} }
+  };
+
+  const previousFilteredOtRowsV219 = window.filteredOtRows || (typeof filteredOtRows === 'function' ? filteredOtRows : null);
+  if (previousFilteredOtRowsV219) {
+    window.filteredOtRows = filteredOtRows = function filteredOtRowsV219(rows){
+      const original = Array.isArray(rows) ? rows : [];
+      const status = String(state.otApprovalStatusFilter || 'รออนุมัติ');
+      if (!['รออนุมัติ','อนุมัติ','ไม่อนุมัติ','ส่งกลับแก้ไข'].includes(status)) return previousFilteredOtRowsV219(original);
+      const mapped = original.map(r => {
+        const s = String(r?.status || '').trim().toLowerCase();
+        if (s === 'pending') return { ...r, status:'รออนุมัติ' };
+        if (s === 'approved') return { ...r, status:'อนุมัติ' };
+        if (s === 'rejected') return { ...r, status:'ไม่อนุมัติ' };
+        return r;
+      });
+      return previousFilteredOtRowsV219(mapped);
+    };
+  }
+
+  function renderMyDutyTodayCard219(){
+    const staffId = currentSid219();
+    const d = today219();
+    const duties = dutiesOn219(staffId, d);
+    const autoDuties = duties.filter(a => isAutoDuty219(a?.duty_code));
+    const manualDuties = duties.filter(a => isManualDuty219(a?.duty_code));
+    const att = attendanceRows219(staffId, d);
+    const otRows = attendanceOtRows219(staffId, d);
+    const latestOt = latest219(otRows);
+    let status = 'ยังไม่ได้ยืนยัน';
+    if (latestOt) status = statusText219(latestOt);
+    else if (att.length) status = 'ยืนยันแล้ว แต่ยังไม่มีรายการ OT';
+    else if (!autoDuties.length && manualDuties.length) status = 'ต้องกรอกเวลาจริง';
+    else if (!duties.length) status = 'ไม่มีเวรที่ต้องยืนยัน';
+    const dutyNames = duties.length ? duties.map(a => labelDuty219(a.duty_code)).join(' / ') : '-';
+    const timeText = autoDuties.length ? '08:00 - 08:00' : (manualDuties.length ? 'กรอกเวลาจริงในส่วนที่ 2' : '-');
+    const missingOt = att.length && !otRows.length && autoDuties.length;
+    const canCheck = autoDuties.length && !att.length && !otRows.length;
+    return `<div class="card ot-card my-duty-today-card v219-ot-card">
+      <div class="section-title"><div><h3>ส่วนที่ 1 เวรของฉันวันนี้</h3><p class="hint">เวรหลักกดยืนยัน 1 ครั้ง แล้วระบบส่งรายการไปให้ Admin อนุมัติ</p></div></div>
+      <div class="my-duty-detail v219-duty-detail">
+        <div><span class="muted">เวร</span><b>${esc219(dutyNames)}</b></div>
+        <div><span class="muted">เวลา</span><b>${esc219(timeText)}</b></div>
+        <div><span class="muted">สถานะ</span>${badge219(status, statusClass219(status))}</div>
+      </div>
+      ${missingOt ? '<div class="notice error-notice compact"><b>พบรายการค้าง</b><br>ลงชื่อแล้ว แต่ยังไม่เห็นรายการ OT รออนุมัติ กดปุ่มด้านล่างเพื่อสร้างรายการให้ใหม่</div>' : ''}
+      ${manualDuties.length ? '<div class="notice soft-notice compact">ช4/ช3A/ช3B ไม่สร้าง 8 ชม. อัตโนมัติ ให้กรอกเวลาเริ่ม-สิ้นสุดจริงในส่วนที่ 2</div>' : ''}
+      ${!duties.length ? '<div class="my-duty-empty"><b>วันนี้คุณไม่มีเวรที่ต้องยืนยัน</b><span class="muted">ถ้าอยู่ต่อจริง ใช้ส่วนที่ 2 เพื่อขอ OT เพิ่ม</span></div>' : ''}
+      <div class="actions v219-ot-actions">
+        ${missingOt ? '<button class="primary-btn" type="button" data-repair-my-ot-v219>สร้างรายการรออนุมัติใหม่</button>' : `<button class="primary-btn" type="button" data-check-in ${canCheck ? '' : 'disabled'}>${latestOt ? 'รอ/บันทึกแล้ว' : (canCheck ? 'ยืนยันอยู่เวร' : 'ไม่ต้องยืนยันเวรหลัก')}</button>`}
+      </div>
+    </div>`;
+  }
+  function renderMyMonthDuties219(){
+    const staffId = currentSid219();
+    const key = state.myDutyMonthFilter || state.monthKey || today219().slice(0,7);
+    const rows = (state.rosterAssignments || [])
+      .filter(a => String(a?.staff_id || '') === String(staffId || '') && normDate219(a?.duty_date).startsWith(key))
+      .sort((a,b) => normDate219(a?.duty_date).localeCompare(normDate219(b?.duty_date)) || String(a?.duty_code || '').localeCompare(String(b?.duty_code || ''), 'th'));
+    const body = rows.map(a => {
+      const d = normDate219(a.duty_date);
+      const auto = isAutoDuty219(a.duty_code);
+      const ot = latest219(attendanceOtRows219(staffId, d));
+      const att = attendanceRows219(staffId, d).length;
+      const st = ot ? statusText219(ot) : (att && auto ? 'ยืนยันแล้ว แต่ยังไม่มีรายการ OT' : (auto ? 'ยังไม่ได้ยืนยัน' : 'บันทึกเวลาจริงถ้าจะเบิก'));
+      const hint = auto ? 'เวรหลัก: ต้องมีรายการรอ Admin อนุมัติ' : 'ช4/ช3A/ช3B: ไม่คิด 8 ชม. อัตโนมัติ';
+      return `<tr><td>${formatThaiDate(d)}</td><td><b>${esc219(labelDuty219(a.duty_code))}</b></td><td>${esc219(auto ? '08:00 - 08:00' : 'เวลาจริง')}</td><td>${badge219(st, statusClass219(st))}<br><span class="muted">${esc219(hint)}</span></td></tr>`;
+    }).join('');
+    return `<div class="card wide-card v219-my-month-card" style="grid-column:1/-1;">
+      <div class="section-title"><div><h3>เวรของฉันเดือนนี้</h3><p class="hint">สถานะเวรหลักจะแยกจาก OT เพิ่ม/เวรปั่นเลือด</p></div><label>เดือน <input id="myDutyMonthFilter" type="month" value="${esc219(key)}"></label></div>
+      <div class="table-wrap"><table><thead><tr><th>วันที่</th><th>เวร</th><th>เวลา</th><th>สถานะ</th></tr></thead><tbody>${body || '<tr><td colspan="4">ยังไม่มีเวรเดือนนี้</td></tr>'}</tbody></table></div>
+    </div>`;
+  }
+  function renderOtRepairPanel219(){
+    const d = today219();
+    const missing = [];
+    (state.attendance || []).forEach(a => {
+      const staffId = a?.staff_id;
+      if (!staffId || normDate219(a?.duty_date) !== d) return;
+      const hasOt = attendanceOtRows219(staffId, d).length > 0;
+      const hasAutoDuty = dutiesOn219(staffId, d).some(x => isAutoDuty219(x?.duty_code));
+      if (!hasOt && hasAutoDuty) missing.push(staffId);
+    });
+    if (!missing.length) return '';
+    const names = Array.from(new Set(missing.map(String))).map(id => staffNick(id)).join(', ');
+    return `<div class="notice error-notice compact v219-ot-repair-panel" style="grid-column:1/-1;">
+      <b>พบคนลงชื่ออยู่เวรแล้ว แต่ยังไม่มีรายการ OT รออนุมัติ</b><br>
+      ${esc219(names)}
+      <div class="actions"><button class="primary-btn" type="button" data-repair-ot-date-v219="${esc219(d)}">ซ่อมรายการ OT ของวันนี้</button></div>
+    </div>`;
+  }
+
+  const previousRenderOtPageV219 = window.renderOtPage || (typeof renderOtPage === 'function' ? renderOtPage : null);
+  window.renderOtPage = renderOtPage = function renderOtPageV219(){
+    if (typeof isAdmin === 'function' && isAdmin()) {
+      const base = previousRenderOtPageV219 ? String(previousRenderOtPageV219.apply(this, arguments) || '') : '';
+      const panel = renderOtRepairPanel219();
+      if (!panel) return base;
+      return base.replace(/(<div class="card wide-card" style="grid-column:1\/-1;">\s*<div class="section-title"><h3>ส่วนที่ 3 อนุมัติ OT)/, panel + '$1') || (base + panel);
+    }
+    const today = today219();
+    const mine = (state.otRequests || []).filter(x => String(x?.staff_id || '') === String(currentSid219() || ''));
+    return `<div class="grid grid-2 ot-page v219-ot-page">
+      ${renderMyDutyTodayCard219()}
+      <div class="card ot-card v219-ot-card">
+        <h3>ส่วนที่ 2 ขอ OT เพิ่ม / เวรปั่นเลือด</h3>
+        <p class="hint compact">ใช้เมื่ออยู่ต่อจริง/ปั่นเลือดจริง กรอกเวลาเริ่ม-สิ้นสุด แล้วรอ Admin เทียบ LIS</p>
+        <form id="otForm" class="form-grid">
+          <label>วันที่ <input name="work_date" type="date" value="${esc219(today)}" required></label>
+          <label>เริ่มเวลา <input name="start_time" type="time" value="16:00" required></label>
+          <label>ถึงเวลา <input name="end_time" type="time" required></label>
+          <label>เหตุผล <select name="reason">${(window.OT_REASONS || (typeof OT_REASONS !== 'undefined' ? OT_REASONS : ['เวรปั่นเลือดหลังเวลา (รอเทียบ LIS)','อื่นๆ'])).map(r => `<option value="${esc219(r)}">${esc219(r)}</option>`).join('')}</select></label>
+          <label class="wide">รายละเอียด <input name="note" placeholder="เช่น ปั่นเลือดถึง 18:20 / อยู่แทน ช4 ของ..."></label>
+          <button class="primary-btn wide" type="submit">ส่งให้ Admin อนุมัติ</button>
+        </form>
+      </div>
+      ${renderMyMonthDuties219()}
+      <div class="card wide-card" style="grid-column:1/-1;">
+        <div class="section-title"><h3>รายการ OT ของฉัน</h3></div>
+        ${typeof renderOtTable === 'function' ? renderOtTable(mine) : ''}
+      </div>
+      <div class="card" style="grid-column:1/-1;">
+        <h3>ส่วนที่ 4 สรุป OT รายเดือน</h3><p class="hint">สรุปเฉพาะรายการที่อนุมัติแล้วและยังไม่เบิก</p>${typeof renderOtSummary === 'function' ? renderOtSummary() : ''}
+      </div>
+    </div>`;
+  };
+
+  function staffOptionsForPosition219(selectedId, predicate){
+    let staff = [];
+    try { staff = orderedStaff((state.staff || []).filter(s => !predicate || predicate(s))); }
+    catch (_) { staff = state.staff || []; }
+    const selected = selectedId ? (state.staff || []).find(s => String(s.id) === String(selectedId)) : null;
+    if (selected && !staff.some(s => String(s.id) === String(selected.id))) staff = [selected, ...staff];
+    return staff.map(s => `<option value="${esc219(s.id)}" ${String(s.id)===String(selectedId || '')?'selected':''}>${esc219(s.nickname || s.full_name || s.email || '-')}</option>`).join('');
+  }
+  function shortJob219(text){
+    const raw = String(text || '').trim();
+    if (!raw) return '-';
+    return raw.length > 42 ? raw.slice(0, 42) + '…' : raw;
+  }
+  function renderDailySelect219(row, idx, date, layout){
+    const baseCode = (() => { try { return positionBaseCode(row.position_code || row.code); } catch (_) { return row.position_code || row.code || ''; } })();
+    const base = (typeof positionTemplateByCode === 'function' ? positionTemplateByCode(baseCode, date) : null) || row;
+    const code = base.code || row.position_code || row.code || 'รอตรวจสอบ';
+    const zone = row.zone || base.zone || '';
+    const breakTime = row.break_time || base.break_time || '';
+    const rule = row.main_rule || base.main_rule || '';
+    const job = row.job_desc || base.job_desc || '';
+    const positionForCheck = { ...base, code, position_code: code, main_rule: rule, eligibility_code: base.eligibility_code || code };
+    const opts = staffOptionsForPosition219(row.staff_id, s => baseCode === 'รอตรวจสอบ' || positionCandidateOk(s, positionForCheck, date));
+    return `<select class="v219-position-select" data-position-row="${esc219(idx)}" data-position-code="${esc219(code)}" data-position-zone="${esc219(zone)}" data-position-break="${esc219(breakTime)}" data-position-rule="${esc219(rule)}" data-position-job="${esc219(job)}" data-position-layout-item="${esc219(layout)}"><option value="">เลือกคน</option>${opts}</select>`;
+  }
+  function buildDailyPositionRows219(date){
+    const existingRows = (() => { try { return sortPositionRows((state.positions || []).filter(x => normDate219(x.work_date) === date)); } catch (_) { return (state.positions || []).filter(x => normDate219(x.work_date) === date); } })();
+    const template = (() => { try { return positionTemplateForDate(date) || []; } catch (_) { return []; } })();
+    const rows = existingRows.length ? existingRows.map(r => {
+      const base = (typeof positionTemplateByCode === 'function' ? positionTemplateByCode(r.position_code, date) : null) || {};
+      return { ...base, ...r, code: r.position_code, position_code: r.position_code || base.code };
+    }) : template.map(p => ({ ...p, position_code:p.code, staff_id:null }));
+    try {
+      if (typeof window.cnmiDailyPositionDedupV208?.normalizeDailyRows208 === 'function') return window.cnmiDailyPositionDedupV208.normalizeDailyRows208(rows, date);
+    } catch (_) {}
+    return rows;
+  }
+
+  window.renderPositionsPage = renderPositionsPage = function renderPositionsPageV219(){
+    try {
+      const date = state.positionDate || today219();
+      const rows = buildDailyPositionRows219(date);
+      const canManage = canManagePositions(date);
+      const key = date.slice(0,7);
+      const incharge = currentInchargeForMonth(key);
+      const dayStatus = (state.positionDayStatus || []).find(x => normDate219(x.work_date) === date);
+      const isPublished = dayStatus?.status === 'published';
+      const noPosition = isNoPositionDay(date);
+      const workingCount = (() => { try { return dailyWorkingStaff(date).length; } catch (_) { return 0; } })();
+      const slotCount = rows.length;
+      const rowHtml = rows.map((r, idx) => {
+        const baseCode = (() => { try { return positionBaseCode(r.position_code || r.code); } catch (_) { return r.position_code || r.code || ''; } })();
+        const base = (typeof positionTemplateByCode === 'function' ? positionTemplateByCode(baseCode, date) : null) || r;
+        const code = base.code || r.position_code || r.code || 'รอตรวจสอบ';
+        const label = (() => { try { return positionLabelForCell(r.position_code || base.code); } catch (_) { return r.position_code || base.code || '-'; } })();
+        const zone = r.zone || base.zone || '';
+        const breakTime = r.break_time || base.break_time || '';
+        const rule = r.main_rule || base.main_rule || '';
+        const job = r.job_desc || base.job_desc || '';
+        const select = canManage ? renderDailySelect219({ ...r, position_code:code, zone, break_time:breakTime, main_rule:rule, job_desc:job }, idx, date, 'desktop') : staffPill(r.staff_id);
+        return `<tr><td>${esc219(zone)}</td><td><b>${esc219(label)}</b></td><td>${esc219(breakTime || '-')}</td><td>${select}</td><td>${esc219(rule || '-')}</td><td><button class="tiny-btn" type="button" data-position-detail-v219="${esc219(idx)}">ดู</button><span class="muted v219-job-short">${esc219(shortJob219(job))}</span></td></tr>`;
+      }).join('');
+      const cardHtml = rows.map((r, idx) => {
+        const baseCode = (() => { try { return positionBaseCode(r.position_code || r.code); } catch (_) { return r.position_code || r.code || ''; } })();
+        const base = (typeof positionTemplateByCode === 'function' ? positionTemplateByCode(baseCode, date) : null) || r;
+        const code = base.code || r.position_code || r.code || 'รอตรวจสอบ';
+        const label = (() => { try { return positionLabelForCell(r.position_code || base.code); } catch (_) { return r.position_code || base.code || '-'; } })();
+        const zone = r.zone || base.zone || '';
+        const breakTime = r.break_time || base.break_time || '';
+        const rule = r.main_rule || base.main_rule || '';
+        const job = r.job_desc || base.job_desc || '';
+        const select = canManage ? renderDailySelect219({ ...r, position_code:code, zone, break_time:breakTime, main_rule:rule, job_desc:job }, idx, date, 'mobile') : staffPill(r.staff_id);
+        return `<div class="position-mobile-card v219-position-card"><div class="section-title"><h3>${esc219(label)}</h3>${badge219(zone || '-', zone === 'ออกหน่วย' ? 'red' : 'blue')}</div><div class="muted">พัก ${esc219(breakTime || '-')} • ${esc219(rule || '-')}</div><label>ผู้รับผิดชอบ ${select}</label><div class="actions"><button class="tiny-btn" type="button" data-position-detail-v219="${esc219(idx)}">ดูรายละเอียดหน้าที่</button></div></div>`;
+      }).join('');
+      window.__CNMI_V219_POSITION_DETAIL_ROWS__ = rows.map(r => {
+        const base = (typeof positionTemplateByCode === 'function' ? positionTemplateByCode(r.position_code || r.code, date) : null) || r;
+        return { title: (() => { try { return positionLabelForCell(r.position_code || base.code); } catch (_) { return r.position_code || base.code || '-'; } })(), zone: r.zone || base.zone || '', rule: r.main_rule || base.main_rule || '', job: r.job_desc || base.job_desc || '', breakTime: r.break_time || base.break_time || '' };
+      });
+      const table = `<div class="table-wrap daily-position-table desktop-table v219-daily-position-table" data-position-layout="desktop"><table><thead><tr><th>โซน</th><th>ตำแหน่ง</th><th>พัก</th><th>ผู้รับผิดชอบ</th><th>เงื่อนไข</th><th>รายละเอียด</th></tr></thead><tbody>${rowHtml}</tbody></table></div><div class="mobile-position-list v219-mobile-position-list" data-position-layout="mobile">${cardHtml}</div>`;
+      return `<div class="card v219-positions-page">
+        <div class="toolbar v219-position-toolbar">
+          <label>วันที่ <input type="date" id="positionDateInput" value="${esc219(date)}"></label>
+          ${isAdmin() ? `<label>อินชาร์จ <select id="inchargeSelect"><option value="">ไม่ระบุ</option>${staffOptions(incharge)}</select></label><button class="soft-btn" type="button" data-save-incharge>บันทึกอินชาร์จ</button>` : `<span>${badge219('อินชาร์จ: ' + staffNick(incharge), 'blue')}</span>`}
+          ${canManage && !noPosition ? '<button class="primary-btn" type="button" data-save-positions>บันทึกตำแหน่งวันนี้</button><button class="soft-btn" type="button" data-publish-positions>ประกาศให้ Staff เห็น</button>' : ''}
+          ${isPublished ? '<span class="badge green">ประกาศแล้ว</span>' : '<span class="badge orange">ร่าง</span>'}
+          ${!noPosition ? `<span class="badge blue">คนทำงาน ${esc219(workingCount)} / ช่อง ${esc219(slotCount)}</span>` : ''}
+        </div>
+        <div class="notice soft-notice compact v219-position-note"><b>วิธีใช้:</b> เลือกคนในแต่ละตำแหน่ง → กด “บันทึกตำแหน่งวันนี้” → ถ้าต้องการให้ Staff เห็นชัด ให้กด “ประกาศให้ Staff เห็น”</div>
+        ${noPosition ? `<div class="notice">วันนี้เป็น${isHolidayDate(date) ? 'วันหยุดราชการ' : 'วันเสาร์-อาทิตย์'} จึงไม่ต้องจัดตำแหน่งรายวัน</div>` : ''}
+        ${!noPosition && hasOuting(date) ? '<div class="notice compact">วันนี้มีออกหน่วย ระบบแยกตำแหน่งออกหน่วยกับห้อง Blood Bank/Manual ให้แล้ว</div>' : ''}
+        ${noPosition ? empty('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : table}
+      </div>`;
+    } catch (err) {
+      console.error(`${VERSION_V219}: renderPositionsPage failed`, err);
+      return `<div class="notice error-notice">โหลดตารางตำแหน่งรายวันไม่สำเร็จ: ${esc219(err?.message || err)}</div>`;
+    }
+  };
+
+  document.addEventListener('click', function(e){
+    const repairMine = e.target?.closest?.('[data-repair-my-ot-v219]');
+    if (repairMine) {
+      e.preventDefault(); e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      repairMyAttendanceOt219();
+      return;
+    }
+    const repairDate = e.target?.closest?.('[data-repair-ot-date-v219]');
+    if (repairDate) {
+      e.preventDefault(); e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      repairAttendanceOtForDate219(repairDate.getAttribute('data-repair-ot-date-v219') || today219());
+      return;
+    }
+    const detailBtn = e.target?.closest?.('[data-position-detail-v219]');
+    if (detailBtn) {
+      e.preventDefault(); e.stopPropagation();
+      const idx = Number(detailBtn.getAttribute('data-position-detail-v219'));
+      const row = (window.__CNMI_V219_POSITION_DETAIL_ROWS__ || [])[idx];
+      if (!row) return toast219('ไม่พบรายละเอียดตำแหน่งนี้', 'error');
+      showModal(`<h2>${esc219(row.title)}</h2><div class="compact-detail-table"><table><tbody><tr><th>โซน</th><td>${esc219(row.zone || '-')}</td></tr><tr><th>เวลาพัก</th><td>${esc219(row.breakTime || '-')}</td></tr><tr><th>เงื่อนไข</th><td>${esc219(row.rule || '-')}</td></tr><tr><th>หน้าที่</th><td>${esc219(row.job || '-')}</td></tr></tbody></table></div>`, { small:false });
+    }
+  }, true);
+
+  window.cnmiV219OtRepair = { repairMyAttendanceOt219, repairAttendanceOtForDate219, insertAttendanceOt219 };
+  console.info(`${VERSION_V219} loaded`);
+})();

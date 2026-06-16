@@ -3407,3 +3407,26 @@ thead .v179-sticky-first-col {
     width: 100%;
   }
 }
+
+/* V219 OT repair + compact daily position UX */
+.v219-ot-page .v219-ot-card .hint,
+.v219-positions-page .hint { line-height: 1.35; }
+.v219-duty-detail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 10px 0 12px; }
+.v219-duty-detail > div { border: 1px solid var(--line, #e5edf5); background: #f8fbff; border-radius: 12px; padding: 10px 12px; min-height: 58px; }
+.v219-duty-detail span { display:block; font-size: 12px; margin-bottom: 4px; }
+.v219-duty-detail b { display:block; font-size: 14px; }
+.v219-ot-actions { margin-top: 10px; }
+.v219-ot-repair-panel .actions { margin-top: 8px; }
+.v219-position-toolbar { align-items: end; gap: 8px; }
+.v219-position-note { margin: 10px 0; }
+.v219-daily-position-table th:nth-child(6),
+.v219-daily-position-table td:nth-child(6) { min-width: 170px; }
+.v219-daily-position-table td { vertical-align: middle; }
+.v219-position-select { min-width: 160px; width: 100%; max-width: 240px; }
+.v219-job-short { display:block; margin-top: 4px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v219-position-card .actions { margin-top: 8px; }
+@media (max-width: 760px) {
+  .v219-duty-detail { grid-template-columns: 1fr; }
+  .v219-position-select { max-width: none; }
+  .v219-position-toolbar { align-items: stretch; }
+}
