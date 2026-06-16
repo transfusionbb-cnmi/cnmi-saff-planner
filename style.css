@@ -3587,3 +3587,22 @@ thead .v179-sticky-first-col {
   .v236-note-line { font-size: .9rem; }
   .v236-ch4-month-table { max-height: 360px; }
 }
+
+/* V241 OT single-menu sub tabs */
+.v241-ot-page { display:block; }
+.v241-ot-menu-card { margin-bottom:16px; }
+.v241-ot-tabs { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.v241-ot-tab { border:1px solid #d7e7f7; background:#fff; color:#2d4b68; border-radius:999px; padding:10px 14px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(31,82,126,.06); }
+.v241-ot-tab.active { background:#75c3f7; color:#12334b; border-color:#75c3f7; }
+.v241-ot-content > .v241-export-history, .v241-ot-content > .v241-export-batch { grid-column:1/-1; }
+.v241-ot-summary .section-title { align-items:flex-start; }
+.v241-logic-notice { border:1px solid #b8dcff; background:#eef7ff; color:#17446b; }
+.v241-summary-block { margin-top:14px; }
+.v241-separator { border:0; border-top:1px dashed #d7e7f7; margin:18px 0; }
+.v241-month-filter, .v241-hr-filter { margin:10px 0 12px; }
+.v241-export-history { display:grid; grid-template-columns:1fr; gap:14px; width:100%; }
+.v241-export-batch { width:100%; }
+@media (max-width: 720px) {
+  .v241-ot-tabs { gap:8px; }
+  .v241-ot-tab { width:100%; text-align:left; border-radius:16px; }
+}
