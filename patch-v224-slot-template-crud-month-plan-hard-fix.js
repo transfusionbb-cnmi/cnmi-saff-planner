@@ -1,7 +1,7 @@
 /* =========================
    V224 Slot Template CRUD + Monthly Position Hard Fix
    - Manage daytime slot templates from Web App only.
-   - Supports normal 10-14 staff sets and outing-date slots.
+   - Supports normal 8-14 staff sets and outing-date slots.
    - Stores template config in daily_position_masters system rows, so no new SQL is required.
    - Hard intercepts “สร้างแผนทั้งเดือน” to prevent fallback blank-table logic.
    ========================= */
@@ -13,8 +13,8 @@
 
   const CFG_PREFIX = '__CNMI_SLOT_TEMPLATE_V224__';
   const LS_KEY = 'cnmi_slot_template_v224_cache';
-  const DAY_SETS = [10,11,12,13,14];
-  const ZONES = ['Blood Bank','Manual','Donor Room','ออกหน่วย'];
+  const DAY_SETS = [8,9,10,11,12,13,14];
+  const ZONES = ['Blood Bank','Manual','Donor','Donor Room','ออกหน่วย'];
 
   const esc = (v) => {
     try { return escapeHtml(v == null ? '' : String(v)); }
@@ -34,7 +34,7 @@
   function isConfigRow(row){ return String(row?.code || '').startsWith(`${CFG_PREFIX}:`); }
   function safeJsonParse(v){ try { return JSON.parse(String(v || '')); } catch (_) { return null; } }
   function getState(){
-    if (!state.slotTemplateV224) state.slotTemplateV224 = { kind:'day', setNo:10, configs:null, loaded:false, loading:false };
+    if (!state.slotTemplateV224) state.slotTemplateV224 = { kind:'day', setNo:14, configs:null, loaded:false, loading:false };
     return state.slotTemplateV224;
   }
   function readLocal(){
@@ -75,15 +75,16 @@
     return (Array.isArray(rows) ? rows : []).map((r, i) => {
       const code = String(r?.code || r?.position_code || '').trim();
       if (!code) return null;
-      const isOut = outing || r?.is_outing === true || String(r?.zone || '') === 'ออกหน่วย' || String(r?.eligibility_code || '').startsWith('OUTING:');
+      const rawZone = String(r?.zone || '').trim();
+      const isOut = outing || r?.is_outing === true || rawZone === 'ออกหน่วย' || String(r?.eligibility_code || '').startsWith('OUTING:');
       return {
         code,
-        zone:isOut ? 'ออกหน่วย' : (String(r?.zone || '').trim() || 'Blood Bank'),
-        break_time:String(r?.break_time || '').trim() || (isOut ? 'ออกหน่วย' : '-'),
+        zone: rawZone || (isOut ? 'ออกหน่วย' : 'Blood Bank'),
+        break_time:String(r?.break_time || '').trim() || (rawZone === 'ออกหน่วย' ? 'ออกหน่วย' : '-'),
         main_rule:String(r?.main_rule || '').trim() || '',
         job_desc:String(r?.job_desc || r?.detail || '').trim() || '',
         sort_order:Number(r?.sort_order || r?.order || (i + 1)) || (i + 1),
-        eligibility_code:String(r?.eligibility_code || '').trim() || (isOut ? `OUTING:${code}` : code),
+        eligibility_code:String(r?.eligibility_code || '').trim() || (rawZone === 'ออกหน่วย' ? `OUTING:${code}` : code),
         is_outing:isOut,
         is_active:r?.is_active === false ? false : true
       };
@@ -384,7 +385,7 @@
     });
     try { return orderedStaff(rows); } catch (_) { return rows.sort((a,b) => String(a.nickname || a.full_name || '').localeCompare(String(b.nickname || b.full_name || ''), 'th')); }
   }
-  function bucketForCount(count){ return Math.max(10, Math.min(14, Number(count) || 10)); }
+  function bucketForCount(count){ return Math.max(8, Math.min(14, Number(count) || 14)); }
   function configuredDaySlotsForDate(date){
     const working = activePositionStaff(date).length;
     const n = bucketForCount(working);

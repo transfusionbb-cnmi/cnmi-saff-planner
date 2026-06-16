@@ -297,7 +297,7 @@
     const h3 = slot.querySelector('h3');
     if (h3) h3.textContent = 'Template Slot ตามจำนวนคน (ต้นทางเดียว)';
     const hint = slot.querySelector('.section-title .hint');
-    if (hint) hint.textContent = 'แก้รายละเอียด Slot จากส่วนนี้ แล้วกดอัปเดตฐานข้อมูลจากชุด 10-14 ทั้งหมด ตารางรายวัน/รายเดือนจะใช้ข้อมูลชุดเดียวกัน';
+    if (hint) hint.textContent = 'แก้รายละเอียด Slot จากส่วนนี้ แล้วกดอัปเดตฐานข้อมูลจากชุด 8-14 ทั้งหมด ตารางรายวัน/รายเดือนจะใช้ข้อมูลชุดเดียวกัน';
     const page = slot.parentElement || root;
     Array.from(page.children).forEach(ch => {
       if (ch === slot) return;

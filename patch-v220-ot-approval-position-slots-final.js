@@ -321,7 +321,7 @@
   }
   function allUniqueSlotRows(){
     const map = new Map();
-    [10,11,12,13,14].forEach(n => (slotSets()[n] || []).forEach(p => {
+    [8,9,10,11,12,13,14].forEach(n => (slotSets()[n] || []).forEach(p => {
       if (!map.has(p.code)) map.set(p.code, { ...p });
     }));
     return Array.from(map.values()).sort((a,b) => Number(a.sort_order || 999) - Number(b.sort_order || 999) || String(a.code).localeCompare(String(b.code), 'th'));
@@ -330,10 +330,10 @@
     const sets = slotSets();
     const selected = Number(state.daySlotPreviewSet220 || 10);
     const rows = sets[selected] || sets[10] || [];
-    const buttons = [10,11,12,13,14].map(n => `<button type="button" class="${selected===n?'primary-btn':'ghost-btn'}" data-slot-set-preview-v220="${n}">${n} คน</button>`).join('');
+    const buttons = [8,9,10,11,12,13,14].map(n => `<button type="button" class="${selected===n?'primary-btn':'ghost-btn'}" data-slot-set-preview-v220="${n}">${n} คน</button>`).join('');
     const tableRows = rows.map((p, idx) => `<tr><td>${idx + 1}</td><td>${esc(p.zone || '-')}</td><td><b>${esc(p.code)}</b></td><td>${esc(p.main_rule || '-')}</td><td>${esc(p.break_time || '-')}</td><td>${esc(p.job_desc || '-')}</td></tr>`).join('');
     return `<div class="card wide-card v220-slot-manager-card">
-      <div class="section-title"><div><h3>ชุด Slot ตำแหน่งกลางวัน 10-14 คน</h3><p class="hint">เลือกดูชุดตามจำนวนคนทำงานจริง รายละเอียดนี้ใช้เป็น Template ของตารางตำแหน่งรายวัน/รายเดือน</p></div><div class="actions"><button type="button" class="soft-btn" data-seed-all-slots-v220>อัปเดตฐานข้อมูลจากชุด 10-14 ทั้งหมด</button></div></div>
+      <div class="section-title"><div><h3>ชุด Slot ตำแหน่งกลางวัน 8-14 คน</h3><p class="hint">เลือกดูชุดตามจำนวนคนทำงานจริง รายละเอียดนี้ใช้เป็น Template ของตารางตำแหน่งรายวัน/รายเดือน</p></div><div class="actions"><button type="button" class="soft-btn" data-seed-all-slots-v220>อัปเดตฐานข้อมูลจากชุด 8-14 ทั้งหมด</button></div></div>
       <div class="v220-slot-tabs">${buttons}</div>
       <div class="notice soft-notice compact"><b>ชุดที่เลือก:</b> ${selected} คน / ${rows.length} ตำแหน่ง — ระบบรายวันจะเลือกชุดตามจำนวนเจ้าหน้าที่ที่มาทำงานจริงอัตโนมัติ</div>
       <div class="table-wrap compact-table v220-slot-detail-table"><table><thead><tr><th>#</th><th>โซน</th><th>ตำแหน่ง</th><th>ผู้ปฏิบัติหลัก</th><th>เวลาพัก</th><th>รายละเอียดหน้าที่ประจำตำแหน่ง</th></tr></thead><tbody>${tableRows}</tbody></table></div>
@@ -358,10 +358,10 @@
   async function seedAllSlotsToSupabase(){
     if (!isAdminSafe()) return toast('เฉพาะ Admin เท่านั้น', 'error');
     const ok = await (typeof confirmDialog === 'function'
-      ? confirmDialog('อัปเดต daily_position_masters ด้วยชุด Slot 10-14 ทั้งหมด และปิดใช้งานตำแหน่งปกติเก่าที่ไม่อยู่ในชุดนี้ใช่ไหม?', 'ยืนยันอัปเดต Slot กลางวัน')
-      : Promise.resolve(window.confirm('อัปเดตชุด Slot 10-14 ทั้งหมด?')));
+      ? confirmDialog('อัปเดต daily_position_masters ด้วยชุด Slot 8-14 ทั้งหมด และปิดใช้งานตำแหน่งปกติเก่าที่ไม่อยู่ในชุดนี้ใช่ไหม?', 'ยืนยันอัปเดต Slot กลางวัน')
+      : Promise.resolve(window.confirm('อัปเดตชุด Slot 8-14 ทั้งหมด?')));
     if (!ok) return;
-    try { setBusy(true, 'กำลังอัปเดตชุด Slot 10-14'); } catch (_) {}
+    try { setBusy(true, 'กำลังอัปเดตชุด Slot 8-14'); } catch (_) {}
     try {
       const desired = allUniqueSlotRows();
       const desiredCodes = new Set(desired.map(p => String(p.code || '').trim()).filter(Boolean));
@@ -399,7 +399,7 @@
       if (typeof window.cnmiV212RefreshPositionMasters === 'function') await window.cnmiV212RefreshPositionMasters({ renderAfter:false, silent:true });
       else if (typeof loadAllData === 'function') await loadAllData();
       renderPage();
-      toast('อัปเดตฐานข้อมูลชุด Slot 10-14 ทั้งหมดแล้ว');
+      toast('อัปเดตฐานข้อมูลชุด Slot 8-14 ทั้งหมดแล้ว');
     } catch (err) {
       console.error(`${VERSION}: seed slots failed`, err);
       toast('อัปเดต Slot ไม่สำเร็จ: ' + friendly(err), 'error');

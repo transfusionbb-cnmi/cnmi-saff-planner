@@ -13791,7 +13791,7 @@ function bindGlobalEvents() {
 })();
 
 /* =========================
-   V218 Daytime position slot templates 10-14 staff
+   V218 Daytime position slot templates 8-14 staff
    - Dynamic weekday slots by actual working headcount.
    - Adds blank monthly table button.
    - Optional one-click seed to Supabase daily_position_masters.
@@ -13918,14 +13918,14 @@ function bindGlobalEvents() {
   function maxDaySlots218(){ return cloneSlots218(DAY_POSITION_SLOT_SETS_218[14]); }
   function allDaySlotTemplates218(){
     const map = new Map();
-    [10,11,12,13,14].forEach(n => DAY_POSITION_SLOT_SETS_218[n].forEach(p => { if (!map.has(p.code)) map.set(p.code, { ...p }); }));
+    [8,9,10,11,12,13,14].forEach(n => (DAY_POSITION_SLOT_SETS_218[n] || []).forEach(p => { if (!map.has(p.code)) map.set(p.code, { ...p }); }));
     return Array.from(map.values()).sort((a,b) => (a.sort_order || 999) - (b.sort_order || 999) || String(a.code).localeCompare(String(b.code), 'th'));
   }
   function staffCountBucket218(count){
     const n = Number(count || 0);
-    if (n <= 10) return 10;
+    if (n <= 8) return 8;
     if (n >= 14) return 14;
-    return Math.max(10, Math.min(14, Math.round(n)));
+    return Math.max(8, Math.min(14, Math.round(n)));
   }
   function workingStaffForPositionDate218(date){
     const d = normDate218(date);
@@ -14118,7 +14118,7 @@ function bindGlobalEvents() {
     const leaveIndex = activeLeaveIndex218(dates);
     const heads = dates.map(date => { const d = parseDate(date); const cls = isHolidayDate(date) ? 'holiday-head' : isWeekend(date) ? 'weekend-head' : hasOuting(date) ? 'outing-head' : ''; return `<th class="date-head ${cls}"><b>${d.getDate()}</b><br><span>${d.toLocaleDateString('th-TH', { weekday:'short' })}</span></th>`; }).join('');
     const missing = dates.map(date => renderMissingCell218(date, assignedByDate)).join('');
-    return `<div class="monthly-matrix-wrap v218-position-matrix"><div class="matrix-legend"><span class="legend-box weekend"></span> WEEKEND/HOLIDAY = ไม่จัดตำแหน่ง <span class="legend-box outing"></span> ออกหน่วย <span class="legend-box leave"></span> ใช้ชุดสล็อตกลางวัน 10-14 คนตามจำนวนเจ้าหน้าที่ที่มาทำงานจริง ${canEdit ? '<span class="hint">Admin เลือกตำแหน่งในช่องได้ แล้วกดบันทึกแผนทั้งเดือน</span>' : ''}</div><div class="table-wrap month-position-matrix"><table><thead><tr><th class="sticky-col staff-col">เจ้าหน้าที่</th><th class="sticky-col summary-col">สรุป</th>${heads}</tr><tr class="missing-role-row"><th class="sticky-col staff-col missing-role-head">ยังขาด</th><th class="sticky-col summary-col missing-role-head">-</th>${missing}</tr></thead><tbody>${displayStaff.map(st => { const bg = staffColor(st); const fg = textColorFor(bg); return `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${esc218(bg)};color:${esc218(fg)}"><div class="matrix-staff-name"><b>${esc218(st.nickname || st.full_name || '-')}</b><small>${esc218(st.staff_type || '')}</small></div></td><td class="sticky-col summary-col summary-action-cell"><button class="tiny-btn staff-summary-trigger compact-staff-summary" data-month-position-stat="${esc218(st.id)}" type="button">ดูสรุป</button></td>${dates.map(date => renderMonthCell218(st, date, byCell[`${st.id}|${date}`] || [], canEdit, leaveIndex)).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
+    return `<div class="monthly-matrix-wrap v218-position-matrix"><div class="matrix-legend"><span class="legend-box weekend"></span> WEEKEND/HOLIDAY = ไม่จัดตำแหน่ง <span class="legend-box outing"></span> ออกหน่วย <span class="legend-box leave"></span> ใช้ชุดสล็อตกลางวัน 8-14 คนตามจำนวนเจ้าหน้าที่ที่มาทำงานจริง ${canEdit ? '<span class="hint">Admin เลือกตำแหน่งในช่องได้ แล้วกดบันทึกแผนทั้งเดือน</span>' : ''}</div><div class="table-wrap month-position-matrix"><table><thead><tr><th class="sticky-col staff-col">เจ้าหน้าที่</th><th class="sticky-col summary-col">สรุป</th>${heads}</tr><tr class="missing-role-row"><th class="sticky-col staff-col missing-role-head">ยังขาด</th><th class="sticky-col summary-col missing-role-head">-</th>${missing}</tr></thead><tbody>${displayStaff.map(st => { const bg = staffColor(st); const fg = textColorFor(bg); return `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${esc218(bg)};color:${esc218(fg)}"><div class="matrix-staff-name"><b>${esc218(st.nickname || st.full_name || '-')}</b><small>${esc218(st.staff_type || '')}</small></div></td><td class="sticky-col summary-col summary-action-cell"><button class="tiny-btn staff-summary-trigger compact-staff-summary" data-month-position-stat="${esc218(st.id)}" type="button">ดูสรุป</button></td>${dates.map(date => renderMonthCell218(st, date, byCell[`${st.id}|${date}`] || [], canEdit, leaveIndex)).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
   };
 
   window.buildMonthlyPositionDraft = buildMonthlyPositionDraft = function buildMonthlyPositionDraftV218(key){
@@ -14182,7 +14182,7 @@ function bindGlobalEvents() {
       if (!html.includes('data-create-blank-month-positions')) {
         html = html.replace('<button class="soft-btn" data-generate-month-positions>สร้างแผนทั้งเดือน</button>', '<button class="ghost-btn" data-create-blank-month-positions>สร้างตารางเปล่า</button><button class="soft-btn" data-generate-month-positions>สร้างแผนทั้งเดือน</button>');
       }
-      const hint = '<div class="notice soft-notice compact v218-slot-note"><b>ชุดสล็อตกลางวันอัตโนมัติ:</b> ระบบเลือกชุด 10, 11, 12, 13 หรือ 14 ตำแหน่งตามจำนวนเจ้าหน้าที่ที่มาทำงานจริงในแต่ละวัน เช่น คนลาออก/เข้าใหม่/ลางาน ระบบจะลดหรือเพิ่มช่องให้ตามชุดที่กำหนดไว้</div>';
+      const hint = '<div class="notice soft-notice compact v218-slot-note"><b>ชุดสล็อตกลางวันอัตโนมัติ:</b> ระบบเลือกชุด 8, 9, 10, 11, 12, 13 หรือ 14 ตำแหน่งตามจำนวนเจ้าหน้าที่ที่มาทำงานจริงในแต่ละวัน เช่น คนลาออก/เข้าใหม่/ลางาน ระบบจะลดหรือเพิ่มช่องให้ตามชุดที่กำหนดไว้</div>';
       if (!html.includes('v218-slot-note')) html = html.replace(/(<\/div>\s*<div class="monthly-matrix-wrap|<\/div>\s*<div class="empty-state)/, `${hint}$1`);
       return html;
     };
@@ -14194,7 +14194,7 @@ function bindGlobalEvents() {
     if (!root || root.querySelector('.v218-position-slot-tools')) return;
     const box = document.createElement('div');
     box.className = 'card wide-card v218-position-slot-tools';
-    box.innerHTML = `<div class="section-title"><div><h3>ชุดสล็อตกลางวัน 10-14 คน</h3><p class="hint">ใช้เป็น Template หลักของหน้า “ตารางตำแหน่งรายวัน/รายเดือน” โดยเลือกตามจำนวนคนที่มาทำงานจริงในวันนั้น</p></div><div class="actions"><button class="primary-btn" data-seed-day-slots-218>อัปเดตฐานข้อมูลเป็นชุดสล็อต 14 ช่อง</button></div></div><div class="position-slot-preview218">${[10,11,12,13,14].map(n => `<details><summary><b>${n} คน</b> <span class="badge blue">${DAY_POSITION_SLOT_SETS_218[n].length} ตำแหน่ง</span></summary><div>${DAY_POSITION_SLOT_SETS_218[n].map(p => `<span class="mini-status">${esc218(p.code)}</span>`).join(' ')}</div></details>`).join('')}</div><p class="hint">ปุ่มอัปเดตจะเพิ่ม/แก้ไขตำแหน่งชุด 14 ช่อง และปิดใช้งานตำแหน่งปกติเก่าที่ไม่อยู่ในชุดนี้ ส่วนตำแหน่งออกหน่วยจะไม่ถูกลบ</p>`;
+    box.innerHTML = `<div class="section-title"><div><h3>ชุดสล็อตกลางวัน 8-14 คน</h3><p class="hint">ใช้เป็น Template หลักของหน้า “ตารางตำแหน่งรายวัน/รายเดือน” โดยเลือกตามจำนวนคนที่มาทำงานจริงในวันนั้น</p></div><div class="actions"><button class="primary-btn" data-seed-day-slots-218>อัปเดตฐานข้อมูลเป็นชุดสล็อต 14 ช่อง</button></div></div><div class="position-slot-preview218">${[8,9,10,11,12,13,14].map(n => `<details><summary><b>${n} คน</b> <span class="badge blue">${DAY_POSITION_SLOT_SETS_218[n].length} ตำแหน่ง</span></summary><div>${DAY_POSITION_SLOT_SETS_218[n].map(p => `<span class="mini-status">${esc218(p.code)}</span>`).join(' ')}</div></details>`).join('')}</div><p class="hint">ปุ่มอัปเดตจะเพิ่ม/แก้ไขตำแหน่งชุด 14 ช่อง และปิดใช้งานตำแหน่งปกติเก่าที่ไม่อยู่ในชุดนี้ ส่วนตำแหน่งออกหน่วยจะไม่ถูกลบ</p>`;
     root.prepend(box);
   }
   const oldRenderPage218 = window.renderPage || (typeof renderPage === 'function' ? renderPage : null);
@@ -14249,7 +14249,7 @@ function bindGlobalEvents() {
       if (typeof window.cnmiV212RefreshPositionMasters === 'function') await window.cnmiV212RefreshPositionMasters({ renderAfter:false, silent:true });
       else if (typeof refreshPositionMasters182 === 'function') await refreshPositionMasters182({ silent:true });
       renderPage();
-      showToast('อัปเดตชุดสล็อตกลางวัน 14 ช่องแล้ว ระบบรายเดือนจะเลือก 10-14 ช่องตามจำนวนคนจริง');
+      showToast('อัปเดตชุดสล็อตกลางวัน 14 ช่องแล้ว ระบบรายเดือนจะเลือก 8-14 ช่องตามจำนวนคนจริง');
     } catch (err) {
       console.error(`${VERSION_V218}: seed failed`, err);
       showToast('อัปเดตชุดสล็อตไม่สำเร็จ: ' + (err?.message || String(err)));
@@ -14773,9 +14773,9 @@ function bindGlobalEvents() {
   function cloneTemplates228(list){ return (list || []).map(p => normalizeTemplate228({ ...p })).filter(Boolean); }
   function slotBucket228(count){
     const n = Number(count || 0);
-    if (n <= 10) return 10;
+    if (n <= 8) return 8;
     if (n >= 14) return 14;
-    return Math.max(10, Math.min(14, Math.round(n)));
+    return Math.max(8, Math.min(14, Math.round(n)));
   }
   function daySlotSets228(){ return window.cnmiDayPositionSlotsV218?.DAY_POSITION_SLOT_SETS_218 || null; }
   function daySlotsForCount228(count){
@@ -14791,7 +14791,7 @@ function bindGlobalEvents() {
     const sets = daySlotSets228();
     if (sets) {
       const map = new Map();
-      [10,11,12,13,14].forEach(n => (sets[n] || []).forEach(p => { if (p?.code && !map.has(p.code)) map.set(p.code, normalizeTemplate228(p)); }));
+      [8,9,10,11,12,13,14].forEach(n => (sets[n] || []).forEach(p => { if (p?.code && !map.has(p.code)) map.set(p.code, normalizeTemplate228(p)); }));
       return Array.from(map.values());
     }
     try { return cloneTemplates228(window.cnmiPositionCatalogV182?.normalPositions182?.() || []); } catch (_) { return []; }
@@ -15132,7 +15132,7 @@ function bindGlobalEvents() {
     window.renderPositionMonthPage = renderPositionMonthPage = function renderPositionMonthPageV228(){
       let html = String(oldRenderPositionMonthPage228.apply(this, arguments) || '');
       html = html.replace(/สร้างแผนทั้งเดือน/g, 'สร้างแผนรายสัปดาห์ทั้งเดือน');
-      html = html.replace(/ระบบเลือกชุด 10, 11, 12, 13 หรือ 14 ตำแหน่งตามจำนวนเจ้าหน้าที่ที่มาทำงานจริงในแต่ละวัน[^<]*/g, 'ระบบเลือกชุด 10-14 ตามจำนวนคนประจำสัปดาห์: ลาเฉพาะบางวันยังคงตำแหน่งเดิม แต่ถ้าลาทั้งสัปดาห์จะลด Slot ของสัปดาห์นั้น');
+      html = html.replace(/ระบบเลือกชุด 8, 9, 10, 11, 12, 13 หรือ 14 ตำแหน่งตามจำนวนเจ้าหน้าที่ที่มาทำงานจริงในแต่ละวัน[^<]*/g, 'ระบบเลือกชุด 8-14 ตามจำนวนคนประจำสัปดาห์: ลาเฉพาะบางวันยังคงตำแหน่งเดิม แต่ถ้าลาทั้งสัปดาห์จะลด Slot ของสัปดาห์นั้น');
       return html;
     };
   }

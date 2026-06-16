@@ -3524,3 +3524,66 @@ thead .v179-sticky-first-col {
   .v234-hr-filter label { width: 100%; }
   .v234-ch4-actions .tiny-btn { width: 100%; }
 }
+
+/* =========================
+   V236 OT / CH4 tracking readability fix
+   ========================= */
+.v236-note-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 240px;
+  max-width: 560px;
+  line-height: 1.35;
+}
+.v236-note-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid #e5edf7;
+  border-radius: 10px;
+  background: #fbfdff;
+  word-break: break-word;
+}
+.v236-note-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 700;
+  background: #e0f2fe;
+  color: #075985;
+}
+.v236-note-status.green { background: #dcfce7; color: #166534; }
+.v236-note-status.orange { background: #ffedd5; color: #9a3412; }
+.v236-note-status.red { background: #fee2e2; color: #991b1b; }
+.v236-note-status.black { background: #e5e7eb; color: #374151; }
+.v236-note-status.blue { background: #dbeafe; color: #1d4ed8; }
+.v236-ch4-month-table {
+  max-height: 430px;
+  overflow: auto;
+  border-radius: 14px;
+}
+.v234-admin-follow-card {
+  scroll-margin-top: 88px;
+}
+.v234-admin-follow-card .v234-statline .badge.blue:first-child {
+  margin-right: 4px;
+}
+.v234-follow-table th:nth-child(5),
+.v234-follow-table td:nth-child(5) {
+  min-width: 300px;
+}
+.v234-ch4-shared-card th:nth-child(6),
+.v234-ch4-shared-card td:nth-child(6) {
+  min-width: 280px;
+}
+@media (max-width: 720px) {
+  .v236-note-cell { min-width: 220px; max-width: none; }
+  .v236-note-line { font-size: .9rem; }
+  .v236-ch4-month-table { max-height: 360px; }
+}

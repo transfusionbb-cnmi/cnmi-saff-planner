@@ -29,9 +29,9 @@
   function cloneTemplates228(list){ return (list || []).map(p => normalizeTemplate228({ ...p })).filter(Boolean); }
   function slotBucket228(count){
     const n = Number(count || 0);
-    if (n <= 10) return 10;
+    if (n <= 8) return 8;
     if (n >= 14) return 14;
-    return Math.max(10, Math.min(14, Math.round(n)));
+    return Math.max(8, Math.min(14, Math.round(n)));
   }
   function daySlotSets228(){ return window.cnmiDayPositionSlotsV218?.DAY_POSITION_SLOT_SETS_218 || null; }
   function daySlotsForCount228(count){
@@ -47,7 +47,7 @@
     const sets = daySlotSets228();
     if (sets) {
       const map = new Map();
-      [10,11,12,13,14].forEach(n => (sets[n] || []).forEach(p => { if (p?.code && !map.has(p.code)) map.set(p.code, normalizeTemplate228(p)); }));
+      [8,9,10,11,12,13,14].forEach(n => (sets[n] || []).forEach(p => { if (p?.code && !map.has(p.code)) map.set(p.code, normalizeTemplate228(p)); }));
       return Array.from(map.values());
     }
     try { return cloneTemplates228(window.cnmiPositionCatalogV182?.normalPositions182?.() || []); } catch (_) { return []; }
@@ -388,7 +388,7 @@
     window.renderPositionMonthPage = renderPositionMonthPage = function renderPositionMonthPageV228(){
       let html = String(oldRenderPositionMonthPage228.apply(this, arguments) || '');
       html = html.replace(/สร้างแผนทั้งเดือน/g, 'สร้างแผนรายสัปดาห์ทั้งเดือน');
-      html = html.replace(/ระบบเลือกชุด 10, 11, 12, 13 หรือ 14 ตำแหน่งตามจำนวนเจ้าหน้าที่ที่มาทำงานจริงในแต่ละวัน[^<]*/g, 'ระบบเลือกชุด 10-14 ตามจำนวนคนประจำสัปดาห์: ลาเฉพาะบางวันยังคงตำแหน่งเดิม แต่ถ้าลาทั้งสัปดาห์จะลด Slot ของสัปดาห์นั้น');
+      html = html.replace(/ระบบเลือกชุด 8, 9, 10, 11, 12, 13 หรือ 14 ตำแหน่งตามจำนวนเจ้าหน้าที่ที่มาทำงานจริงในแต่ละวัน[^<]*/g, 'ระบบเลือกชุด 8-14 ตามจำนวนคนประจำสัปดาห์: ลาเฉพาะบางวันยังคงตำแหน่งเดิม แต่ถ้าลาทั้งสัปดาห์จะลด Slot ของสัปดาห์นั้น');
       return html;
     };
   }

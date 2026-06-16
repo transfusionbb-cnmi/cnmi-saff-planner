@@ -1,12 +1,12 @@
 /* =========================
-   V234 OT Admin Tracking + CH4 Status + HR Cycle Export
+   V236 OT Admin Tracking + CH4 Status + HR Cycle Export UX Fix
    - Admin can filter and follow duty confirmation / OT / CH4 status by staff and status.
    - CH4 supports: self, covered by other, no claim/no blood spinning.
    - HR Export separates all Pending from Ready-to-Export in selected 16-15 cycle.
    ========================= */
 (function(){
   'use strict';
-  const VERSION = 'V234_OT_ADMIN_CH4_HR_CYCLE';
+  const VERSION = 'V236_OT_ADMIN_CH4_HR_CYCLE_UX_FIX';
   if (window.__CNMI_V234_OT_ADMIN_CH4_HR_CYCLE__) return;
   window.__CNMI_V234_OT_ADMIN_CH4_HR_CYCLE__ = true;
 
@@ -202,6 +202,97 @@
     if (row) return 'รออนุมัติ';
     return '';
   }
+  function cleanReasonText(text){
+    return String(text || '')
+      .replace(/\s*\|\s*V\d+[A-Z0-9_\-]*/gi, '')
+      .replace(/\s*\|\s*/g, ' · ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  function shortText(text, max=120){
+    const t = cleanReasonText(text);
+    return t.length > max ? `${t.slice(0, Math.max(0, max - 1))}…` : t;
+  }
+  function requestHours(row){
+    if (!row) return 0;
+    try {
+      const n = normalizeHours(row);
+      if (n && Number.isFinite(Number(n.actualHours)) && Number(n.actualHours) > 0) return Number(n.actualHours);
+      if (n && Number.isFinite(Number(n.hrHours)) && Number(n.hrHours) > 0) return Number(n.hrHours);
+    } catch (_) {}
+    try {
+      const h = Number(calcOtHours(row) || 0);
+      if (Number.isFinite(h) && h > 0) return h;
+    } catch (_) {}
+    const raw = Number(row?.manual_hours || row?.requested_hours || row?.hours || 0);
+    return Number.isFinite(raw) ? raw : 0;
+  }
+  function otRowsRanked(staffId, date, mode='all'){
+    const score = r => {
+      const st = normalizeOtStatus(r);
+      if (st === 'อนุมัติแล้ว') return 5;
+      if (st === 'รออนุมัติ') return 4;
+      if (st === 'ส่งกลับแก้ไข') return 3;
+      if (st === 'ไม่อนุมัติ') return 2;
+      return 1;
+    };
+    return otRowsFor(staffId, date, mode).slice().sort((a,b) => score(b) - score(a) || String(b?.created_at || '').localeCompare(String(a?.created_at || '')));
+  }
+  function anyOtStatus(staffId, date){
+    const rows = otRowsRanked(staffId, date, 'all');
+    if (!rows.length) return { text:'', category:'', row:null };
+    const row = rows[0];
+    const st = normalizeOtStatus(row);
+    if (st === 'รออนุมัติ') return { text:'ยืนยันแล้ว / รออนุมัติ', category:'รออนุมัติ', row };
+    return { text:st || 'ยืนยันแล้ว', category:st || 'ยืนยันแล้ว', row };
+  }
+  function confirmationRowsCoveredBy(staffId, date){
+    const d = normDate(date);
+    return confirmationRows().filter(r => {
+      const st = String(r?.status || '').trim();
+      return st === 'covered_by_other' && String(r?.covered_by_staff_id || '') === String(staffId || '') && normDate(r?.work_date || r?.duty_date) === d;
+    }).sort((a,b) => staffName(a?.owner_staff_id || a?.staff_id).localeCompare(staffName(b?.owner_staff_id || b?.staff_id), 'th'));
+  }
+  function ownerAssignmentForConfirmation(rec){
+    const d = normDate(rec?.work_date || rec?.duty_date);
+    const owner = String(rec?.owner_staff_id || rec?.staff_id || '');
+    const aid = String(rec?.roster_assignment_id || '');
+    return (state.rosterAssignments || []).find(a => {
+      if (aid && String(a?.id || '') === aid) return true;
+      return normDate(a?.duty_date) === d && String(a?.staff_id || '') === owner && isCh4(a?.duty_code);
+    }) || null;
+  }
+  function formatOtLine(row, prefix='OT'){
+    if (!row) return '';
+    const st = normalizeOtStatus(row) || 'รออนุมัติ';
+    const h = requestHours(row);
+    const reason = shortText(row.reason || row.note || '-', 140);
+    const note = shortText(row.note || '', 100);
+    return `<div class="v236-note-line"><span class="v236-note-status ${esc(statusClass(st))}">${esc(st)}</span><span><b>${esc(prefix)}</b>${h ? ` ${esc(formatHours(h, 2))} ชม.` : ''}${reason ? ` · ${esc(reason)}` : ''}${note && note !== reason ? `<br><span class="muted">${esc(note)}</span>` : ''}</span></div>`;
+  }
+  function buildDutyNoteCell(a, info, staffIdForCovered=''){
+    const d = normDate(a?.duty_date || a?.work_date);
+    const owner = String(staffIdForCovered || a?.staff_id || '');
+    const lines = [];
+    const rec = info?.rec || confirmationFor(a);
+    if (rec) {
+      if (String(rec.status || '') === 'covered_by_other') {
+        lines.push(`<div class="v236-note-line"><span class="v236-note-status green">ช4</span><span>มีคนอยู่แทน: <b>${esc(staffName(rec.covered_by_staff_id))}</b>${rec.covered_note || rec.note ? ` · ${esc(shortText(rec.covered_note || rec.note, 120))}` : ''}</span></div>`);
+      } else if (rec.note || rec.covered_note) {
+        lines.push(`<div class="v236-note-line"><span class="v236-note-status blue">ช4</span><span>${esc(shortText(rec.note || rec.covered_note, 120))}</span></div>`);
+      }
+    }
+    confirmationRowsCoveredBy(owner, d).forEach(c => {
+      const fromId = c.owner_staff_id || c.staff_id;
+      const ot = latest(otRowsRanked(owner, d, 'extra')) || latest(otRowsRanked(owner, d, 'all'));
+      const h = ot ? requestHours(ot) : 0;
+      lines.push(`<div class="v236-note-line"><span class="v236-note-status green">แทน</span><span>รับ ช4 แทน <b>${esc(staffName(fromId))}</b>${h ? ` · เบิก ${esc(formatHours(h, 2))} ชม.` : ''}</span></div>`);
+    });
+    const rows = otRowsRanked(owner, d, 'all');
+    rows.slice(0, 3).forEach(r => lines.push(formatOtLine(r, isAttendanceReason(r) ? 'ยืนยันเวร' : 'OT')));
+    if (rows.length > 3) lines.push(`<div class="v236-note-line muted">มีรายการ OT เพิ่มอีก ${rows.length - 3} รายการ</div>`);
+    return `<div class="v236-note-cell">${lines.filter(Boolean).join('') || '<span class="muted">-</span>'}</div>`;
+  }
   function extraOtStatus(staffId, date){
     const rows = otRowsFor(staffId, date, 'extra');
     if (!rows.length) return { text:'', category:'', row:null };
@@ -216,27 +307,33 @@
     const st = String(rec?.status || '').trim();
     const date = normDate(a?.duty_date);
     const ownerExtra = extraOtStatus(a?.staff_id, date);
+    const ownerAny = anyOtStatus(a?.staff_id, date);
     if (st === 'covered_by_other') {
       const by = rec?.covered_by_staff_id;
-      const replOt = by ? extraOtStatus(by, date) : { text:'', category:'' };
+      const replOt = by ? (extraOtStatus(by, date).text ? extraOtStatus(by, date) : anyOtStatus(by, date)) : { text:'', category:'' };
       const otSuffix = replOt.text ? ` • ${replOt.text}` : '';
       return { text:`มีคนอยู่แทน: ${staffName(by)}${otSuffix}`, category:replOt.category || 'มีคนอยู่แทน', rec, extra:replOt };
     }
-    if (st === 'no_claim' || st === 'no_blood' || st === 'no_ot' || st === 'cancelled') return { text:'ไม่เบิก/ไม่มีปั่นเลือด', category:'ไม่เบิก', rec, extra:ownerExtra };
+    if (st === 'no_claim' || st === 'no_blood' || st === 'no_ot' || st === 'cancelled') return { text:'ไม่เบิก/ไม่มีปั่นเลือด', category:'ไม่เบิก', rec, extra:ownerAny.text ? ownerAny : ownerExtra };
     if (st === 'completed_self' || st === 'confirmed_self') {
-      const otSuffix = ownerExtra.text ? ` • ${ownerExtra.text}` : '';
-      return { text:`ทำ ช4 เอง${otSuffix}`, category:ownerExtra.category || 'ทำ ช4 เอง', rec, extra:ownerExtra };
+      const otInfo = ownerExtra.text ? ownerExtra : ownerAny;
+      const otSuffix = otInfo.text ? ` • ${otInfo.text}` : '';
+      return { text:`ทำ ช4 เอง${otSuffix}`, category:otInfo.category || 'ทำ ช4 เอง', rec, extra:otInfo };
     }
     if (ownerExtra.text) return { text:ownerExtra.text, category:ownerExtra.category, rec, extra:ownerExtra };
-    return { text:'ยังไม่ยืนยัน', category:'ยังไม่ยืนยัน', rec, extra:ownerExtra };
+    if (ownerAny.text) return { text:ownerAny.text, category:ownerAny.category, rec, extra:ownerAny };
+    return { text:'ยังไม่ยืนยัน', category:'ยังไม่ยืนยัน', rec, extra:ownerAny };
   }
   function dutyStatusInfo(a){
     const date = normDate(a?.duty_date);
     const code = String(a?.duty_code || '').trim();
     if (isCh4(code)) return ch4StatusInfo(a);
     if (['ช3A','ช3B'].includes(code)) {
+      const allOt = anyOtStatus(a?.staff_id, date);
+      if (allOt.text) return { text:allOt.text, category:allOt.category, rec:null, extra:{ row:allOt.row } };
       const extra = extraOtStatus(a?.staff_id, date);
       if (extra.text) return { text:extra.text, category:extra.category, rec:null, extra };
+      if (attendanceRows(a?.staff_id, date).length > 0) return { text:'ยืนยันแล้ว', category:'ยืนยันแล้ว', rec:null, extra:null };
       return { text:'ยังไม่ยืนยัน / ยังไม่บันทึกเวลาจริง', category:'ยังไม่ยืนยัน', rec:null, extra:null };
     }
     const ot = latest(otRowsFor(a?.staff_id, date, 'attendance'));
@@ -262,10 +359,11 @@
     const key = String(month || '').slice(0,7);
     return (state.rosterAssignments || []).filter(a => normDate(a?.duty_date).startsWith(key) && a?.staff_id).sort((a,b) => normDate(a?.duty_date).localeCompare(normDate(b?.duty_date)) || staffName(a?.staff_id).localeCompare(staffName(b?.staff_id), 'th'));
   }
-  function actionButtonsForCh4(a){
+  function actionButtonsForCh4(a, options={}){
     if (!isCh4(a?.duty_code)) return '-';
-    const canEdit = isAdminSafe() || String(a?.staff_id || '') === String(currentStaff() || '');
-    if (!canEdit) return '<span class="muted">ดูได้เท่านั้น</span>';
+    const readOnly = !!options.readOnly;
+    const canEdit = !readOnly && (isAdminSafe() || String(a?.staff_id || '') === String(currentStaff() || ''));
+    if (!canEdit) return '<span class="muted">ดูสถานะเท่านั้น</span>';
     const key = esc(assignmentKey(a));
     return `<div class="actions v234-ch4-actions"><button class="tiny-btn" type="button" data-v234-ch4-self="${key}">ทำ ช4 เอง</button><button class="tiny-btn" type="button" data-v234-ch4-cover="${key}">มีคนอยู่แทน</button><button class="tiny-btn danger" type="button" data-v234-ch4-no-claim="${key}">ไม่เบิก/ไม่มีปั่นเลือด</button></div>`;
   }
@@ -274,18 +372,29 @@
     const staffFilter = state.otAdminStaffFilterV234 || '';
     const statusFilter = state.otAdminDutyStatusFilterV234 || '';
     const all = assignmentRowsForMonth(month).map(a => ({ a, info:dutyStatusInfo(a) }));
-    const rows = all.filter(x => (!staffFilter || String(x.a.staff_id) === String(staffFilter)) && statusMatches(x.info, statusFilter));
+    const rows = all.filter(x => {
+      if (!staffFilter) return statusMatches(x.info, statusFilter);
+      const isOwner = String(x.a.staff_id) === String(staffFilter);
+      const rec = isCh4(x.a.duty_code) ? confirmationFor(x.a) : null;
+      const isCoverer = rec && String(rec.covered_by_staff_id || '') === String(staffFilter);
+      return (isOwner || isCoverer) && statusMatches(x.info, statusFilter);
+    });
     const counts = all.reduce((acc,x) => { const k = x.info.category || 'อื่น ๆ'; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
-    const selectedStaff = state.otAdminSelectedStaffV234 || staffFilter || '';
     const body = rows.map(({a,info}) => {
       const d = normDate(a.duty_date);
       const isCh4Row = isCh4(a.duty_code);
-      const note = info.rec?.covered_note || info.rec?.note || info.extra?.row?.note || '';
-      return `<tr data-v234-duty-row="${esc(a.staff_id)}"><td>${fmtDate(d)}</td><td><button class="link-btn v234-staff-link" type="button" data-v234-show-staff="${esc(a.staff_id)}">${staffPillSafe(a.staff_id)}</button></td><td><b>${esc(dutyLabel(a.duty_code))}</b>${isCh4Row ? '<br><span class="muted">งานปั่นเลือด / ไม่คิด 8 ชม. อัตโนมัติ</span>' : ''}</td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${esc(note || '-')}</td><td>${isCh4Row ? actionButtonsForCh4(a) : '<span class="muted">-</span>'}</td></tr>`;
+      const rec = isCh4Row ? confirmationFor(a) : null;
+      const isCoverForFilter = !!staffFilter && rec && String(rec.covered_by_staff_id || '') === String(staffFilter) && String(a.staff_id) !== String(staffFilter);
+      const focusStaffId = isCoverForFilter ? staffFilter : a.staff_id;
+      const nameCell = isCoverForFilter
+        ? `<button class="link-btn v234-staff-link" type="button" data-v234-show-staff="${esc(staffFilter)}">${staffPillSafe(staffFilter)}</button><br><span class="muted">รับแทน ${esc(staffName(a.staff_id))}</span>`
+        : `<button class="link-btn v234-staff-link" type="button" data-v234-show-staff="${esc(a.staff_id)}">${staffPillSafe(a.staff_id)}</button>`;
+      return `<tr data-v234-duty-row="${esc(focusStaffId)}"><td>${fmtDate(d)}</td><td>${nameCell}</td><td><b>${esc(dutyLabel(a.duty_code))}</b>${isCh4Row ? '<br><span class="muted">งานปั่นเลือด / ไม่คิด 8 ชม. อัตโนมัติ</span>' : ''}</td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${buildDutyNoteCell(a, info, focusStaffId)}</td><td>${isCh4Row ? actionButtonsForCh4(a) : '<span class="muted">-</span>'}</td></tr>`;
     }).join('');
     const stat = ['ยังไม่ยืนยัน','ยืนยันแล้ว','รออนุมัติ','อนุมัติแล้ว','มีคนอยู่แทน','ไม่เบิก'].map(k => `<span class="badge ${statusClass(k)}">${esc(k)} ${Number(counts[k] || 0)}</span>`).join(' ');
-    return `<div class="card wide-card v234-admin-follow-card" style="grid-column:1/-1;">
-      <div class="section-title"><div><h3>ติดตามการยืนยันเวร / ขอ OT / สถานะ ช4</h3><p class="hint">Admin ดูทุกคนได้ ใช้ตัวกรองเพื่อไล่คนที่ยังไม่กดหรือยังไม่ได้ขอ OT</p></div><div class="v234-statline">${stat}</div></div>
+    const activeHint = staffFilter ? `<span class="badge blue">กำลังดู: ${esc(staffName(staffFilter))}</span>` : '';
+    return `<div id="v234AdminFollowCard" class="card wide-card v234-admin-follow-card" style="grid-column:1/-1;">
+      <div class="section-title"><div><h3>ติดตามการยืนยันเวร / ขอ OT / สถานะ ช4</h3><p class="hint">Admin ดูทุกคนได้ ใช้ตัวกรองเพื่อไล่คนที่ยังไม่กดหรือยังไม่ได้ขอ OT</p></div><div class="v234-statline">${activeHint}${stat}</div></div>
       <div class="toolbar compact-filter v234-admin-filters">
         <label>เดือน <input id="otAdminMonthFilterV234" type="month" value="${esc(month)}"></label>
         <label>เจ้าหน้าที่ <select id="otAdminStaffFilterV234">${staffOptions(staffFilter, true)}</select></label>
@@ -293,21 +402,18 @@
         <button class="ghost-btn" type="button" data-v234-clear-follow-filter>ล้างตัวกรอง</button>
       </div>
       <div class="table-wrap v234-follow-table"><table><thead><tr><th>วันที่</th><th>ชื่อ</th><th>เวร</th><th>สถานะ</th><th>หมายเหตุ/OT</th><th>จัดการ ช4</th></tr></thead><tbody>${body || '<tr><td colspan="6">ไม่พบรายการตามตัวกรองนี้</td></tr>'}</tbody></table></div>
-      ${renderStaffDutyDetail(selectedStaff, month)}
     </div>`;
   }
   function renderStaffDutyDetail(staffId, month){
-    if (!staffId) return `<div id="v234StaffDutyDetail" class="notice soft-notice compact v234-staff-detail"><b>รายละเอียดรายคน</b><br>กดชื่อในตารางสรุป OT หรือในตารางติดตาม เพื่อดูเวรของคนนั้นทั้งเดือน</div>`;
+    if (!staffId) return '';
     const key = String(month || state.otAdminMonthFilterV234 || state.hrExportMonthV234 || state.monthKey || currentMonth()).slice(0,7);
     const rows = assignmentRowsForMonth(key).filter(a => String(a.staff_id) === String(staffId));
     const body = rows.map(a => {
       const d = normDate(a.duty_date);
       const info = dutyStatusInfo(a);
-      const allOt = otRowsFor(staffId, d, 'all');
-      const otText = allOt.length ? allOt.map(r => `${normalizeOtStatus(r)}: ${String(r.reason || '-').slice(0, 42)}`).join('<br>') : '-';
-      return `<tr><td>${fmtDate(d)}</td><td><b>${esc(dutyLabel(a.duty_code))}</b></td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${otText}</td><td>${isCh4(a.duty_code) ? actionButtonsForCh4(a) : '-'}</td></tr>`;
+      return `<tr><td>${fmtDate(d)}</td><td><b>${esc(dutyLabel(a.duty_code))}</b></td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${buildDutyNoteCell(a, info, staffId)}</td><td>${isCh4(a.duty_code) ? actionButtonsForCh4(a) : '-'}</td></tr>`;
     }).join('');
-    return `<div id="v234StaffDutyDetail" class="v234-staff-detail"><div class="section-title"><div><h3>รายละเอียดเวรของ ${esc(staffName(staffId))} เดือน ${esc(key)}</h3><p class="hint">แสดงเวรทั้งหมด พร้อมสถานะยืนยันและสถานะขอ OT</p></div><button class="ghost-btn" type="button" data-v234-close-staff-detail>ปิดรายละเอียด</button></div><div class="table-wrap"><table><thead><tr><th>วันที่</th><th>เวร</th><th>สถานะยืนยัน/ช4</th><th>สถานะ OT</th><th>จัดการ</th></tr></thead><tbody>${body || '<tr><td colspan="5">ไม่มีเวรในเดือนนี้</td></tr>'}</tbody></table></div></div>`;
+    return `<div id="v234StaffDutyDetail" class="v234-staff-detail"><div class="table-wrap"><table><thead><tr><th>วันที่</th><th>เวร</th><th>สถานะ</th><th>หมายเหตุ/OT</th><th>จัดการ</th></tr></thead><tbody>${body || '<tr><td colspan="5">ไม่มีเวรในเดือนนี้</td></tr>'}</tbody></table></div></div>`;
   }
 
   function renderCh4SharedCard(){
@@ -315,18 +421,18 @@
     if (!canViewCh4Month(staffId)) return '';
     const month = state.ch4MonthFilterV234 || state.myDutyMonthFilter || state.monthKey || currentMonth();
     const staffFilter = isAdminSafe() ? (state.ch4StaffFilterV234 || '') : '';
+    const readOnly = !isAdminSafe();
     const ch4Rows = assignmentRowsForMonth(month).filter(a => isCh4(a.duty_code) && (!staffFilter || String(a.staff_id) === String(staffFilter)));
     const body = ch4Rows.map(a => {
       const info = ch4StatusInfo(a);
       const rec = info.rec || {};
-      const note = rec.covered_note || rec.note || '';
-      return `<tr><td>${fmtDate(a.duty_date)}</td><td>${staffPillSafe(a.staff_id)}</td><td><b>${esc(dutyLabel(a.duty_code))}</b></td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${rec.covered_by_staff_id ? staffPillSafe(rec.covered_by_staff_id) : '-'}</td><td>${esc(note || '-')}</td><td>${actionButtonsForCh4(a)}</td></tr>`;
+      return `<tr><td>${fmtDate(a.duty_date)}</td><td>${staffPillSafe(a.staff_id)}</td><td><b>${esc(dutyLabel(a.duty_code))}</b></td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${rec.covered_by_staff_id ? staffPillSafe(rec.covered_by_staff_id) : '-'}</td><td>${buildDutyNoteCell(a, info, a.staff_id)}</td><td>${actionButtonsForCh4(a, { readOnly })}</td></tr>`;
     }).join('');
     return `<div class="card wide-card v234-ch4-shared-card" style="grid-column:1/-1;">
-      <div class="section-title"><div><h3>สถานะ ช4 / งานปั่นเลือด รายเดือน</h3><p class="hint">MT และแตงมองเห็นรายการ ช4 ได้ทั้งเดือน คนอื่นดูสถานะได้ แต่แก้แทนไม่ได้ ยกเว้น Admin</p></div></div>
+      <div class="section-title"><div><h3>สถานะ ช4 / งานปั่นเลือด รายเดือน</h3><p class="hint">${readOnly ? 'หน้านี้เป็นภาพรวมอ่านอย่างเดียว หากต้องบันทึก ช4 ให้ใช้การ์ดเวรของฉัน/รายการที่ระบบเปิดให้ดำเนินการโดยตรง' : 'Admin สามารถแก้สถานะ ช4 ได้จากหน้านี้'}</p></div></div>
       <div class="toolbar compact-filter"><label>เดือน <input id="ch4MonthFilterV234" type="month" value="${esc(month)}"></label>${isAdminSafe() ? `<label>เจ้าของ ช4 <select id="ch4StaffFilterV234">${staffOptions(staffFilter, true)}</select></label>` : ''}</div>
       ${state.shiftConfirmationReadyV209 === false ? '<div class="notice error-notice compact"><b>ยังไม่ได้เปิดตารางสถานะ ช4</b><br>ให้รัน SQL V209 และ V234 ใน Supabase ก่อนใช้ปุ่มบันทึกสถานะ</div>' : ''}
-      <div class="table-wrap"><table><thead><tr><th>วันที่</th><th>เจ้าของ ช4</th><th>เวร</th><th>สถานะ</th><th>คนอยู่แทน</th><th>หมายเหตุ</th><th>จัดการ</th></tr></thead><tbody>${body || '<tr><td colspan="7">ไม่มีรายการ ช4 ในเดือนนี้</td></tr>'}</tbody></table></div>
+      <div class="table-wrap v236-ch4-month-table"><table><thead><tr><th>วันที่</th><th>เจ้าของ ช4</th><th>เวร</th><th>สถานะ</th><th>คนอยู่แทน</th><th>หมายเหตุ/OT</th><th>${readOnly ? 'การใช้งาน' : 'จัดการ'}</th></tr></thead><tbody>${body || '<tr><td colspan="7">ไม่มีรายการ ช4 ในเดือนนี้</td></tr>'}</tbody></table></div>
     </div>`;
   }
 
@@ -664,11 +770,13 @@
     if (showStaff) {
       e.preventDefault(); e.stopPropagation();
       if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-      state.otAdminSelectedStaffV234 = showStaff.getAttribute('data-v234-show-staff') || '';
+      const staffId = showStaff.getAttribute('data-v234-show-staff') || '';
+      state.otAdminSelectedStaffV234 = '';
+      state.otAdminStaffFilterV234 = staffId;
       const m = state.hrExportMonthV234 || state.otAdminMonthFilterV234 || state.monthKey || currentMonth();
       state.otAdminMonthFilterV234 = m;
       renderPage();
-      setTimeout(() => { try { document.getElementById('v234StaffDutyDetail')?.scrollIntoView({ behavior:'smooth', block:'start' }); } catch (_) {} }, 60);
+      setTimeout(() => { try { document.getElementById('v234AdminFollowCard')?.scrollIntoView({ behavior:'smooth', block:'start' }); } catch (_) {} }, 60);
       return;
     }
     if (e.target?.closest?.('[data-v234-close-staff-detail]')) { e.preventDefault(); state.otAdminSelectedStaffV234 = ''; renderPage(); return; }
@@ -689,6 +797,6 @@
     saveCoverForm(e.target);
   }, true);
 
-  window.v234OtAdminCh4HrCycle = { hrCycleRange, readyExportRows, outOfCyclePendingRows, buildHrExport, exportHrV234, dutyStatusInfo, ch4StatusInfo };
+  window.v234OtAdminCh4HrCycle = { hrCycleRange, readyExportRows, outOfCyclePendingRows, buildHrExport, exportHrV234, dutyStatusInfo, ch4StatusInfo, anyOtStatus };
   console.info(`[${VERSION}] loaded`);
 })();

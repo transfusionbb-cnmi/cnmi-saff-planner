@@ -10,7 +10,7 @@
   if (window.__CNMI_V225_WEEKLY_ROTATION_POSITION_PLAN__) return;
   window.__CNMI_V225_WEEKLY_ROTATION_POSITION_PLAN__ = true;
 
-  const DAY_SETS = [10,11,12,13,14];
+  const DAY_SETS = [8,9,10,11,12,13,14];
   const ROOM_COLUMNS = ['Blood Bank','Donor Room','ออกหน่วย'];
   const FY_ROOM_COLUMNS = ['Blood Bank','Donor Room','ออกหน่วย'];
   const LS_DAILY_SLOT_KEY = 'cnmi_v225_daily_slot_set_by_date';
@@ -84,8 +84,8 @@
     })); }
   }
   function bucketForCount(n){
-    const x = Math.max(10, Math.min(14, Number(n) || 10));
-    return DAY_SETS.reduce((best, v) => Math.abs(v - x) < Math.abs(best - x) ? v : best, 10);
+    const x = Math.max(8, Math.min(14, Number(n) || 14));
+    return DAY_SETS.reduce((best, v) => Math.abs(v - x) < Math.abs(best - x) ? v : best, 14);
   }
   function configs(){
     try { return window.cnmiV224?.currentConfigs?.() || null; } catch (_) { return null; }
@@ -523,7 +523,7 @@
         <div><b>${slotCount}</b><span>Slot วันนี้</span></div>
         <div class="${diff<0?'warn':diff>0?'info':'ok'}"><b>${diff===0?'พอดี':(diff>0?`เกิน ${diff}`:`ขาด ${Math.abs(diff)}`)}</b><span>เทียบคนจริงกับ Slot</span></div>
       </div>
-      <div class="v225-daily-slot-toolbar"><label>ชุด Slot วันนี้ <select data-v225-daily-slot-set="${esc(d)}">${setOptions}</select></label><span class="hint">ระบบเลือกจากคนเหลือจริงให้อัตโนมัติ แต่ปรับเป็น 10-14 Slot ได้</span></div>
+      <div class="v225-daily-slot-toolbar"><label>ชุด Slot วันนี้ <select data-v225-daily-slot-set="${esc(d)}">${setOptions}</select></label><span class="hint">ระบบเลือกจากคนเหลือจริงให้อัตโนมัติ แต่ปรับเป็น 8-14 Slot ได้</span></div>
       ${missingStaff.length ? `<div class="notice compact warn-notice">คนในแผนตั้งต้นที่ไม่อยู่วันนี้: ${missingStaff.map(id => staffPillSafe(id)).join(' ')}</div>` : ''}
     </div>`;
   }

@@ -13,7 +13,7 @@
 
   const CFG_PREFIX = '__CNMI_SLOT_TEMPLATE_V224__';
   const LS_KEY = 'cnmi_slot_template_v224_cache';
-  const DAY_SETS = [10,11,12,13,14];
+  const DAY_SETS = [8,9,10,11,12,13,14];
   const ZONES = ['Blood Bank','Donor Room','ออกหน่วย'];
   const ROOM_COLUMNS = ['Blood Bank','Donor Room','ออกหน่วย'];
   const oldV224 = window.cnmiV224 ? { ...window.cnmiV224 } : {};
@@ -59,7 +59,7 @@
   function readLocal(){ try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}') || {}; } catch (_) { return {}; } }
   function writeLocal(configs){ try { localStorage.setItem(LS_KEY, JSON.stringify(configs || {})); } catch (_) {} }
   function clone(x){ try { return JSON.parse(JSON.stringify(x || null)); } catch (_) { return x; } }
-  function stateSlot(){ if (!state.slotTemplateV224) state.slotTemplateV224 = { kind:'day', setNo:10, configs:null, loaded:false, loading:false }; return state.slotTemplateV224; }
+  function stateSlot(){ if (!state.slotTemplateV224) state.slotTemplateV224 = { kind:'day', setNo:14, configs:null, loaded:false, loading:false }; return state.slotTemplateV224; }
   function displayZone(z, code=''){ const raw = String(z || '').trim(); const c = String(code || '').trim(); if (raw === 'ออกหน่วย') return 'ออกหน่วย'; if (raw === 'Manual' || /^BB-Manual/i.test(c) || /manual/i.test(c)) return 'Blood Bank'; if (raw === 'Donor Room' || /^DR-/i.test(c)) return 'Donor Room'; if (raw === 'Blood Bank' || /^BB-/i.test(c)) return 'Blood Bank'; return raw || 'Blood Bank'; }
 
   function fallbackOuting(){
@@ -199,7 +199,7 @@
   function slotManagerHtml226(){
     const kind = selectedKind();
     const rows = selectedRows();
-    const kindOptions = `<option value="day" ${kind==='day'?'selected':''}>วันทำงานปกติ 10-14 คน</option><option value="outing" ${kind==='outing'?'selected':''}>วันที่ออกหน่วย</option>`;
+    const kindOptions = `<option value="day" ${kind==='day'?'selected':''}>วันทำงานปกติ 8-14 คน</option><option value="outing" ${kind==='outing'?'selected':''}>วันที่ออกหน่วย</option>`;
     const setOptions = DAY_SETS.map(n => `<option value="${n}" ${selectedSet()===n?'selected':''}>${n} คน</option>`).join('');
     const tableRows = rows.map((r,i) => `<tr>
       <td>${i+1}</td><td><b>${esc(r.code)}</b><br><span class="muted">${esc(r.eligibility_code || '')}</span></td><td>${esc(r.zone || '')}</td><td>${esc(r.main_rule || '')}</td><td>${esc(r.break_time || '')}</td><td class="v224-desc-cell">${esc(r.job_desc || '')}</td>
@@ -323,7 +323,7 @@
     try { return dailyWorkingStaff(norm(date)) || []; }
     catch (_) { return orderStaff((state.staff || []).filter(st => { try { return isDailyPositionEnabled(st) && !isActiveLeaveOn(st.id, norm(date)); } catch (__){ return st?.id && st?.is_active !== false; } })); }
   }
-  function bucketForCount(n){ const x = Math.max(10, Math.min(14, Number(n) || 10)); return DAY_SETS.reduce((best, v) => Math.abs(v - x) < Math.abs(best - x) ? v : best, 10); }
+  function bucketForCount(n){ const x = Math.max(8, Math.min(14, Number(n) || 14)); return DAY_SETS.reduce((best, v) => Math.abs(v - x) < Math.abs(best - x) ? v : best, 14); }
   function daySlotsForCount(count){ const cfg = currentConfigs226(); const n = bucketForCount(count); return sanitizeRows(cfg.day[n] || cfg.day[String(n)] || [], 'day'); }
   function outingTemplateSlots(){ return sanitizeRows(currentConfigs226().outing || [], 'outing'); }
   function allSlotTemplates(){ const map = new Map(); DAY_SETS.forEach(n => daySlotsForCount(n).forEach(p => { if (!map.has(p.code)) map.set(p.code, p); })); outingTemplateSlots().forEach(p => { if (!map.has(`${p.code}|outing`)) map.set(`${p.code}|outing`, p); }); return Array.from(map.values()); }
@@ -507,7 +507,7 @@
   function renderDailySelect226(row, idx, date, layout){ const code = row.position_code || row.code || 'รอตรวจสอบ'; const zone = zoneOf(row); const breakTime = row.break_time || '-'; const rule = row.main_rule || ''; const job = row.job_desc || ''; return `<select class="v225-position-select" data-position-row="${esc(idx)}" data-position-code="${esc(code)}" data-position-zone="${esc(zone)}" data-position-break="${esc(breakTime)}" data-position-rule="${esc(rule)}" data-position-job="${esc(job)}" data-position-layout-item="${esc(layout || '')}"><option value="">เลือกคน/ว่าง</option>${staffOptionsDaily226({ ...row, code, position_code:code, zone, break_time:breakTime, main_rule:rule, job_desc:job }, row.staff_id, date)}</select>`; }
   function renderDailyComparePanel226(date, rows){
     const d = norm(date); const working = workingStaffToday(d); const planStaffIds = new Set((state.positions || []).filter(r => norm(r.work_date) === d && r.staff_id).map(r => safeStaffId(r.staff_id))); const planCount = planStaffIds.size; const slotCount = rows.filter(r => r._source !== 'extra-plan').length; const participants = outingIdSet(d); const compareCount = hasOutingSafe(d) ? participants.size : working.length; const diff = compareCount - slotCount; const missingStaff = Array.from(planStaffIds).filter(id => !working.some(st => safeStaffId(st.id) === id)); const setNo = dailySlotSet(d); const setOptions = DAY_SETS.map(n => `<option value="${n}" ${n===setNo?'selected':''}>${n} Slot</option>`).join('');
-    return `<div class="v225-daily-compare-panel v226-daily-compare-panel"><div class="v225-compare-cards"><div><b>${working.length}</b><span>คนเหลือจริงวันนี้</span></div><div><b>${hasOutingSafe(d)?participants.size:planCount}</b><span>${hasOutingSafe(d)?'คนเข้าร่วมออกหน่วย':'คนในแผนตั้งต้น'}</span></div><div><b>${slotCount}</b><span>${hasOutingSafe(d)?'Slot ชุดออกหน่วย':'Slot วันนี้'}</span></div><div class="${diff<0?'warn':diff>0?'info':'ok'}"><b>${diff===0?'พอดี':(diff>0?`เกิน ${diff}`:`ขาด ${Math.abs(diff)}`)}</b><span>${hasOutingSafe(d)?'เทียบคนเข้าร่วมกับ Slot':'เทียบคนจริงกับ Slot'}</span></div></div>${hasOutingSafe(d)?'<div class="notice soft-notice compact"><b>วันนี้เป็นวันออกหน่วย:</b> ใช้ชุด Slot วันที่ออกหน่วยเท่านั้น ไม่ใช้แผนหมุนรายสัปดาห์</div>':`<div class="v225-daily-slot-toolbar"><label>ชุด Slot วันนี้ <select data-v226-daily-slot-set="${esc(d)}">${setOptions}</select></label><span class="hint">ระบบเลือกจากคนเหลือจริงให้อัตโนมัติ แต่ปรับเป็น 10-14 Slot ได้</span></div>`}${missingStaff.length ? `<div class="notice compact warn-notice">คนในแผนตั้งต้นที่ไม่อยู่วันนี้: ${missingStaff.map(id => staffPillSafe(id)).join(' ')}</div>` : ''}</div>`;
+    return `<div class="v225-daily-compare-panel v226-daily-compare-panel"><div class="v225-compare-cards"><div><b>${working.length}</b><span>คนเหลือจริงวันนี้</span></div><div><b>${hasOutingSafe(d)?participants.size:planCount}</b><span>${hasOutingSafe(d)?'คนเข้าร่วมออกหน่วย':'คนในแผนตั้งต้น'}</span></div><div><b>${slotCount}</b><span>${hasOutingSafe(d)?'Slot ชุดออกหน่วย':'Slot วันนี้'}</span></div><div class="${diff<0?'warn':diff>0?'info':'ok'}"><b>${diff===0?'พอดี':(diff>0?`เกิน ${diff}`:`ขาด ${Math.abs(diff)}`)}</b><span>${hasOutingSafe(d)?'เทียบคนเข้าร่วมกับ Slot':'เทียบคนจริงกับ Slot'}</span></div></div>${hasOutingSafe(d)?'<div class="notice soft-notice compact"><b>วันนี้เป็นวันออกหน่วย:</b> ใช้ชุด Slot วันที่ออกหน่วยเท่านั้น ไม่ใช้แผนหมุนรายสัปดาห์</div>':`<div class="v225-daily-slot-toolbar"><label>ชุด Slot วันนี้ <select data-v226-daily-slot-set="${esc(d)}">${setOptions}</select></label><span class="hint">ระบบเลือกจากคนเหลือจริงให้อัตโนมัติ แต่ปรับเป็น 8-14 Slot ได้</span></div>`}${missingStaff.length ? `<div class="notice compact warn-notice">คนในแผนตั้งต้นที่ไม่อยู่วันนี้: ${missingStaff.map(id => staffPillSafe(id)).join(' ')}</div>` : ''}</div>`;
   }
   function renderPositionsPage226(){
     try {

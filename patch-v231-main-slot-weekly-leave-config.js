@@ -1,7 +1,7 @@
 /* =========================
    V231 Main Slot Count + weekly leave-aware monthly position plan
    - Rename scheduler menu/header wording where monthly position page was shown as จัดตารางเวร.
-   - Add Admin configuration for primary daytime slot count (10-14) on Position Management.
+   - Add Admin configuration for primary daytime slot count (8-14) on Position Management.
    - Monthly position auto plan uses: configured primary slot count - full-working-week leave count.
    - Single-day leave still keeps the weekly position, but shows the leave marker in the cell.
    ========================= */
@@ -13,7 +13,7 @@
 
   const LS_KEY = 'cnmi_slot_base_count_v231';
   const CFG_KEY = '__CNMI_SLOT_BASE_COUNT_V231__';
-  const SLOT_SET_LIST = [10, 11, 12, 13, 14];
+  const SLOT_SET_LIST = [8, 9, 10, 11, 12, 13, 14];
 
   function esc231(v){
     try { return escapeHtml(v == null ? '' : String(v)); }
@@ -38,7 +38,7 @@
   function clampSlot231(n){
     const x = Number(n || 0);
     if (!Number.isFinite(x)) return 14;
-    return Math.max(10, Math.min(14, Math.round(x)));
+    return Math.max(8, Math.min(14, Math.round(x)));
   }
   function readLocalBase231(){
     try { return clampSlot231(localStorage.getItem(LS_KEY) || '14'); }
@@ -50,7 +50,7 @@
   function getBaseSlotCount231(){
     if (!state) return readLocalBase231();
     const n = Number(state.baseSlotCountV231 || 0);
-    if (Number.isFinite(n) && n >= 10 && n <= 14) return clampSlot231(n);
+    if (Number.isFinite(n) && n >= 8 && n <= 14) return clampSlot231(n);
     const local = readLocalBase231();
     state.baseSlotCountV231 = local;
     return local;
@@ -66,11 +66,11 @@
     const text = String(raw || '').trim();
     if (!text) return null;
     const direct = Number(text);
-    if (Number.isFinite(direct) && direct >= 10 && direct <= 14) return clampSlot231(direct);
+    if (Number.isFinite(direct) && direct >= 8 && direct <= 14) return clampSlot231(direct);
     try {
       const obj = JSON.parse(text);
       const n = Number(obj?.base_slot_count ?? obj?.baseSlotCount ?? obj?.slot_count ?? obj?.count);
-      if (Number.isFinite(n) && n >= 10 && n <= 14) return clampSlot231(n);
+      if (Number.isFinite(n) && n >= 8 && n <= 14) return clampSlot231(n);
     } catch (_) {}
     return null;
   }
@@ -178,9 +178,9 @@
   function cloneTemplates231(list){ return (list || []).map(p => normalizeTemplate231({ ...p })).filter(Boolean); }
   function slotBucket231(count){
     const n = Number(count || 0);
-    if (n <= 10) return 10;
+    if (n <= 8) return 8;
     if (n >= 14) return 14;
-    return Math.max(10, Math.min(14, Math.round(n)));
+    return Math.max(8, Math.min(14, Math.round(n)));
   }
   function safeMonthNow231(){
     try { return monthKey(new Date()); }
@@ -243,7 +243,7 @@
     const base = String(typeof positionBaseCode === 'function' ? positionBaseCode(code) : code || '').trim();
     if (!base) return null;
     const outingCount = date && hasOuting(normDate231(date)) ? weekSlotCount231(normDate231(date)) : 14;
-    const list = [...daySlotsForCount231(14), ...allDaySlots231(), ...outingTemplates231(outingCount), ...outingTemplates231(13), ...outingTemplates231(14)];
+    const list = [...daySlotsForCount231(14), ...allDaySlots231(), ...outingTemplates231(outingCount), ...outingTemplates231(12), ...outingTemplates231(13), ...outingTemplates231(14)];
     const found = list.find(p => p.code === base || p.eligibility_code === base);
     if (found) return normalizeTemplate231(found);
     try { return normalizeTemplate231(positionTemplateByCode(code, date)); } catch (_) { return null; }
@@ -336,7 +336,7 @@
     const base = getBaseSlotCount231();
     const fullOut = fullWeekUnavailableCount231(date);
     const available = weeklyAvailableStaff231(date).length;
-    const desired = Math.max(10, base - fullOut);
+    const desired = Math.max(8, base - fullOut);
     return slotBucket231(Math.min(desired, available || desired));
   }
   function expectedTemplatesForDate231(date){
