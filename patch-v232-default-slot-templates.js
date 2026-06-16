@@ -964,7 +964,7 @@
       "break_time": "11:00",
       "job_desc": "รับผิดชอบการออกผลตรวจ Routine, ทำหน้าที่คล้องเลือด (Cross-match), พิมพ์รายงาน A4 สำหรับแจ้งผล, และทำ QC LDPRC (Post-storage) เพื่อความถูกต้องของผลแล็บ",
       "sort_order": 1,
-      "eligibility_code": "BB-Report 1",
+      "eligibility_code": "OUTING:BB-Report 1",
       "is_outing": true,
       "is_active": true
     },
@@ -976,7 +976,7 @@
       "break_time": "12:00",
       "job_desc": "รับผิดชอบการออกผลตรวจ Routine, ทำหน้าที่คล้องเลือด (Cross-match), พิมพ์รายงาน A4 สำหรับแจ้งผล, ตรวจสอบ QC LDPRC (Post-storage) เพื่อความถูกต้องของผลแล็บ",
       "sort_order": 2,
-      "eligibility_code": "BB-Report 2",
+      "eligibility_code": "OUTING:BB-Report 2",
       "is_outing": true,
       "is_active": true
     },
@@ -988,7 +988,7 @@
       "break_time": "12:00",
       "job_desc": "รับผิดชอบการอนุมัติผลในระบบ LIS, การรับเลือดเข้า Stock, การจ่ายเลือดทั้งกรณีปกติและเร่งด่วน (OR/ER), และการปลดเลือดตามขั้นตอน",
       "sort_order": 3,
-      "eligibility_code": "BB-Approve",
+      "eligibility_code": "OUTING:BB-Approve",
       "is_outing": true,
       "is_active": true
     },
@@ -1000,7 +1000,7 @@
       "break_time": "11:00",
       "job_desc": "รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, การแปะ Bag, ทำ Pool Plt",
       "sort_order": 4,
-      "eligibility_code": "BB-Manual 1",
+      "eligibility_code": "OUTING:BB-Manual 1",
       "is_outing": true,
       "is_active": true
     },
@@ -1012,7 +1012,7 @@
       "break_time": "11:00",
       "job_desc": "รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, วัดค่า pH & Adam",
       "sort_order": 5,
-      "eligibility_code": "BB-Manual 2",
+      "eligibility_code": "OUTING:BB-Manual 2",
       "is_outing": true,
       "is_active": true
     },
@@ -1024,7 +1024,7 @@
       "break_time": "12:00",
       "job_desc": "รับผิดชอบงานสนับสนุนที่ช่วยให้งานในห้อง BB ดำเนินไปอย่างต่อเนื่อง เช่น การรับแล็บ, การเดินส่งเลือด, การรับโทรศัพท์ประสานงาน, และการรับเลือดจากสภากาชาด, และบันทึกอุณหภูมิห้อง BB และ Manual (เช้า-เย็น)",
       "sort_order": 6,
-      "eligibility_code": "BB-Support",
+      "eligibility_code": "OUTING:BB-Support",
       "is_outing": true,
       "is_active": true
     },
@@ -1135,7 +1135,7 @@
         "break_time": "11:00",
         "job_desc": "รับผิดชอบการออกผลตรวจ Routine, ทำหน้าที่คล้องเลือด (Cross-match), พิมพ์รายงาน A4 สำหรับแจ้งผล, และทำ QC LDPRC (Post-storage) เพื่อความถูกต้องของผลแล็บ",
         "sort_order": 1,
-        "eligibility_code": "BB-Report",
+        "eligibility_code": "OUTING:BB-Report",
         "is_outing": true,
         "is_active": true
       },
@@ -1147,7 +1147,7 @@
         "break_time": "12:00",
         "job_desc": "รับผิดชอบการอนุมัติผลในระบบ LIS, การรับเลือดเข้า Stock, การจ่ายเลือดทั้งกรณีปกติและเร่งด่วน (OR/ER), และการปลดเลือดตามขั้นตอน",
         "sort_order": 2,
-        "eligibility_code": "BB-Approve",
+        "eligibility_code": "OUTING:BB-Approve",
         "is_outing": true,
         "is_active": true
       },
@@ -1159,7 +1159,7 @@
         "break_time": "11:00",
         "job_desc": "รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, การแปะ Bag, ทำ Pool Plt",
         "sort_order": 3,
-        "eligibility_code": "BB-Manual 1",
+        "eligibility_code": "OUTING:BB-Manual 1",
         "is_outing": true,
         "is_active": true
       },
@@ -1171,7 +1171,7 @@
         "break_time": "11:00",
         "job_desc": "รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, วัดค่า pH & Adam",
         "sort_order": 4,
-        "eligibility_code": "BB-Manual 2",
+        "eligibility_code": "OUTING:BB-Manual 2",
         "is_outing": true,
         "is_active": true
       },
@@ -1183,7 +1183,7 @@
         "break_time": "12:00",
         "job_desc": "รับผิดชอบงานสนับสนุนที่ช่วยให้งานในห้อง BB ดำเนินไปอย่างต่อเนื่อง เช่น การรับแล็บ, การเดินส่งเลือด, การรับโทรศัพท์ประสานงาน, และการรับเลือดจากสภากาชาด, และบันทึกอุณหภูมิห้อง BB และ Manual (เช้า-เย็น)",
         "sort_order": 5,
-        "eligibility_code": "BB-Support",
+        "eligibility_code": "OUTING:BB-Support",
         "is_outing": true,
         "is_active": true
       },
@@ -1281,7 +1281,7 @@
         "break_time": "11:00",
         "job_desc": "รับผิดชอบการออกผลตรวจ Routine, ทำหน้าที่คล้องเลือด (Cross-match), พิมพ์รายงาน A4 สำหรับแจ้งผล, และทำ QC LDPRC (Post-storage) เพื่อความถูกต้องของผลแล็บ",
         "sort_order": 1,
-        "eligibility_code": "BB-Report",
+        "eligibility_code": "OUTING:BB-Report",
         "is_outing": true,
         "is_active": true
       },
@@ -1293,7 +1293,7 @@
         "break_time": "12:00",
         "job_desc": "รับผิดชอบการอนุมัติผลในระบบ LIS, การรับเลือดเข้า Stock, การจ่ายเลือดทั้งกรณีปกติและเร่งด่วน (OR/ER), และการปลดเลือดตามขั้นตอน",
         "sort_order": 2,
-        "eligibility_code": "BB-Approve",
+        "eligibility_code": "OUTING:BB-Approve",
         "is_outing": true,
         "is_active": true
       },
@@ -1305,7 +1305,7 @@
         "break_time": "11:00",
         "job_desc": "รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, การแปะ Bag, ทำ Pool Plt",
         "sort_order": 3,
-        "eligibility_code": "BB-Manual 1",
+        "eligibility_code": "OUTING:BB-Manual 1",
         "is_outing": true,
         "is_active": true
       },
@@ -1317,7 +1317,7 @@
         "break_time": "11:00",
         "job_desc": "รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, วัดค่า pH & Adam",
         "sort_order": 4,
-        "eligibility_code": "BB-Manual 2",
+        "eligibility_code": "OUTING:BB-Manual 2",
         "is_outing": true,
         "is_active": true
       },
@@ -1329,7 +1329,7 @@
         "break_time": "12:00",
         "job_desc": "รับผิดชอบงานสนับสนุนที่ช่วยให้งานในห้อง BB ดำเนินไปอย่างต่อเนื่อง เช่น การรับแล็บ, การเดินส่งเลือด, การรับโทรศัพท์ประสานงาน, และการรับเลือดจากสภากาชาด, และบันทึกอุณหภูมิห้อง BB และ Manual (เช้า-เย็น)",
         "sort_order": 5,
-        "eligibility_code": "BB-Support",
+        "eligibility_code": "OUTING:BB-Support",
         "is_outing": true,
         "is_active": true
       },
@@ -1439,7 +1439,7 @@
         "break_time": "11:00",
         "job_desc": "รับผิดชอบการออกผลตรวจ Routine, ทำหน้าที่คล้องเลือด (Cross-match), พิมพ์รายงาน A4 สำหรับแจ้งผล, และทำ QC LDPRC (Post-storage) เพื่อความถูกต้องของผลแล็บ",
         "sort_order": 1,
-        "eligibility_code": "BB-Report 1",
+        "eligibility_code": "OUTING:BB-Report 1",
         "is_outing": true,
         "is_active": true
       },
@@ -1451,7 +1451,7 @@
         "break_time": "12:00",
         "job_desc": "รับผิดชอบการออกผลตรวจ Routine, ทำหน้าที่คล้องเลือด (Cross-match), พิมพ์รายงาน A4 สำหรับแจ้งผล, ตรวจสอบ QC LDPRC (Post-storage) เพื่อความถูกต้องของผลแล็บ",
         "sort_order": 2,
-        "eligibility_code": "BB-Report 2",
+        "eligibility_code": "OUTING:BB-Report 2",
         "is_outing": true,
         "is_active": true
       },
@@ -1463,7 +1463,7 @@
         "break_time": "12:00",
         "job_desc": "รับผิดชอบการอนุมัติผลในระบบ LIS, การรับเลือดเข้า Stock, การจ่ายเลือดทั้งกรณีปกติและเร่งด่วน (OR/ER), และการปลดเลือดตามขั้นตอน",
         "sort_order": 3,
-        "eligibility_code": "BB-Approve",
+        "eligibility_code": "OUTING:BB-Approve",
         "is_outing": true,
         "is_active": true
       },
@@ -1475,7 +1475,7 @@
         "break_time": "11:00",
         "job_desc": "รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, การแปะ Bag, ทำ Pool Plt",
         "sort_order": 4,
-        "eligibility_code": "BB-Manual 1",
+        "eligibility_code": "OUTING:BB-Manual 1",
         "is_outing": true,
         "is_active": true
       },
@@ -1487,7 +1487,7 @@
         "break_time": "11:00",
         "job_desc": "รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, วัดค่า pH & Adam",
         "sort_order": 5,
-        "eligibility_code": "BB-Manual 2",
+        "eligibility_code": "OUTING:BB-Manual 2",
         "is_outing": true,
         "is_active": true
       },
@@ -1499,7 +1499,7 @@
         "break_time": "12:00",
         "job_desc": "รับผิดชอบงานสนับสนุนที่ช่วยให้งานในห้อง BB ดำเนินไปอย่างต่อเนื่อง เช่น การรับแล็บ, การเดินส่งเลือด, การรับโทรศัพท์ประสานงาน, และการรับเลือดจากสภากาชาด, และบันทึกอุณหภูมิห้อง BB และ Manual (เช้า-เย็น)",
         "sort_order": 6,
-        "eligibility_code": "BB-Support",
+        "eligibility_code": "OUTING:BB-Support",
         "is_outing": true,
         "is_active": true
       },
