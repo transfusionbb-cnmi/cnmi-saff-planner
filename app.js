@@ -13789,3 +13789,489 @@ function bindGlobalEvents() {
   window.cnmiV212RefreshPositionMasters = refreshPositionMastersFast212;
   console.info(`${VERSION_V212} loaded`);
 })();
+
+/* =========================
+   V218 Daytime position slot templates 10-14 staff
+   - Dynamic weekday slots by actual working headcount.
+   - Adds blank monthly table button.
+   - Optional one-click seed to Supabase daily_position_masters.
+   ========================= */
+(function(){
+  'use strict';
+  const VERSION_V218 = 'V218_DAY_POSITION_SLOT_TEMPLATES_10_14';
+
+  function esc218(v){
+    try { return escapeHtml(v == null ? '' : String(v)); }
+    catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function normDate218(v){
+    try { return normalizeDateKey(v); }
+    catch (_) { return String(v || '').slice(0, 10); }
+  }
+  function bool218(v, fallback=false){
+    if (typeof v === 'boolean') return v;
+    if (v == null || v === '') return fallback;
+    return ['true','1','yes','y','ใช่','active','ใช้งาน'].includes(String(v).trim().toLowerCase());
+  }
+
+  const SLOT_DETAIL = {
+    report1: 'รับผิดชอบการออกผลตรวจ Routine, ทำหน้าที่คล้องเลือด (Cross-match), พิมพ์รายงาน A4 สำหรับแจ้งผล, และทำ QC LDPRC (Post-storage) เพื่อความถูกต้องของผลแล็บ',
+    report2: 'รับผิดชอบการออกผลตรวจ Routine, ทำหน้าที่คล้องเลือด (Cross-match), พิมพ์รายงาน A4 สำหรับแจ้งผล, ตรวจสอบ QC LDPRC (Post-storage) เพื่อความถูกต้องของผลแล็บ',
+    approve: 'รับผิดชอบการอนุมัติผลในระบบ LIS, การรับเลือดเข้า Stock, การจ่ายเลือดทั้งกรณีปกติและเร่งด่วน (OR/ER), และการปลดเลือดตามขั้นตอน',
+    manualAll: 'รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, วัดค่า pH & Adam, รูดสาย, การปั่นแยกส่วนประกอบโลหิต, ทำ Pool Plt, รูดสาย, QC ถุงเลือด',
+    manual1Wide: 'รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, วัดค่า pH & Adam, รูดสาย, การปั่นแยกส่วนประกอบโลหิต',
+    manual2Wide: 'รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, ทำ Pool Plt, รูดสาย, QC ถุงเลือด, การปั่นแยกส่วนประกอบโลหิต',
+    manual1: 'รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag',
+    manual2: 'รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag',
+    manual3: 'วัดค่า pH & Adam, การปั่นแยกส่วนประกอบโลหิต, การแปะ Bag, ทำ Pool Plt, รูดสาย, QC ถุงเลือด',
+    bbSupport: 'รับผิดชอบงานสนับสนุนที่ช่วยให้งานในห้อง BB ดำเนินไปอย่างต่อเนื่อง เช่น การรับแล็บ, การเดินส่งเลือด, การรับโทรศัพท์ประสานงาน, และการรับเลือดจากสภากาชาด, และบันทึกอุณหภูมิห้อง BB และ Manual (เช้า-เย็น)',
+    register: 'รับผิดชอบงานหน้าด่าน คือการลงทะเบียนผู้บริจาค, คัดกรอง Vital signs (ความดัน, ชีพจร, อุณหภูมิ), และบันทึกอุณหภูมิห้อง Donor (เช้า-เย็น)',
+    finger1: 'รับผิดชอบการซักประวัติผู้บริจาค (ประจำห้องสัมภาษณ์ 1) และการเจาะปลายนิ้วเพื่อคัดกรองเบื้องต้น',
+    finger2: 'รับผิดชอบการซักประวัติผู้บริจาค (ประจำห้องสัมภาษณ์ 2) และการเจาะปลายนิ้วเพื่อคัดกรองเบื้องต้น',
+    main: 'รับผิดชอบงานหลักคือการเจาะเลือดผู้บริจาคและการเก็บเคส Reaction ต่างๆ เพื่อให้เป็นไปตามเป้าหมายของหน่วยบริการ',
+    processingFull: 'นำส่งเลือดเข้าห้องปั่น, จัดการเลือดกลุ่ม Infectious, แจ้งตำแหน่ง Manual 3 ว่า ถุงไหน เจาะมาเพื่อ QC ถุงเลือด, รับผิดชอบงานเตรียม Set อุปกรณ์เจาะเลือด, การเติมน้ำดื่ม/ขนมสำหรับผู้บริจาค, และการดูแลความสะอาดเรียบร้อยของเตียงบริจาค',
+    processingShort: 'นำส่งเลือดเข้าห้องปั่น, จัดการเลือดกลุ่ม Infectious, แจ้งตำแหน่ง Manual 3 ว่า ถุงไหน เจาะมาเพื่อ QC ถุงเลือด',
+    preparing: 'รับผิดชอบงานเตรียม Set อุปกรณ์เจาะเลือด, การเติมน้ำดื่ม/ขนมสำหรับผู้บริจาค, และการดูแลความสะอาดเรียบร้อยของเตียงบริจาค'
+  };
+
+  function slot(code, zone, main_rule, break_time, job_desc, sort_order){
+    return { code, zone, main_rule, break_time, job_desc, sort_order, is_outing:false, is_active:true, eligibility_code:code };
+  }
+  const CLERK_TANG = 'Clerk หรือ แตง';
+  const MT_TANG = 'MT หรือ แตง';
+  const MT_ONLY = 'MT เท่านั้น';
+
+  const DAY_POSITION_SLOT_SETS_218 = {
+    10: [
+      slot('BB-Report 1', 'Blood Bank', MT_ONLY, '11:00', SLOT_DETAIL.report1, 1),
+      slot('BB-Report 2', 'Blood Bank', MT_ONLY, '11:00', SLOT_DETAIL.report2, 2),
+      slot('BB-Approve', 'Blood Bank', MT_ONLY, '12:00', SLOT_DETAIL.approve, 3),
+      slot('BB-Manual', 'Manual', MT_ONLY, '12:00', SLOT_DETAIL.manualAll, 4),
+      slot('BB-Support', 'Blood Bank', CLERK_TANG, '12:00', SLOT_DETAIL.bbSupport, 5),
+      slot('DR-Register', 'Donor Room', CLERK_TANG, '12:00', SLOT_DETAIL.register, 6),
+      slot('DR-Finger+Interview', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.finger1, 7),
+      slot('DR-Main 1', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.main, 8),
+      slot('DR-Main 2', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.main, 9),
+      slot('DR-Processing', 'Donor Room', MT_ONLY, '12:00', SLOT_DETAIL.processingFull, 10)
+    ],
+    11: [
+      slot('BB-Report 1', 'Blood Bank', MT_ONLY, '11:00', SLOT_DETAIL.report1, 1),
+      slot('BB-Report 2', 'Blood Bank', MT_ONLY, '11:00', SLOT_DETAIL.report2, 2),
+      slot('BB-Approve', 'Blood Bank', MT_ONLY, '12:00', SLOT_DETAIL.approve, 3),
+      slot('BB-Manual 1', 'Manual', MT_ONLY, '11:00', SLOT_DETAIL.manual1Wide, 4),
+      slot('BB-Manual 2', 'Manual', MT_ONLY, '11:00', SLOT_DETAIL.manual2Wide, 5),
+      slot('BB-Support', 'Blood Bank', CLERK_TANG, '12:00', SLOT_DETAIL.bbSupport, 6),
+      slot('DR-Register', 'Donor Room', CLERK_TANG, '12:00', SLOT_DETAIL.register, 7),
+      slot('DR-Finger+Interview', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.finger1, 8),
+      slot('DR-Main 1', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.main, 9),
+      slot('DR-Main 2', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.main, 10),
+      slot('DR-Processing', 'Donor Room', MT_ONLY, '12:00', SLOT_DETAIL.processingFull, 11)
+    ],
+    12: [
+      slot('BB-Report 1', 'Blood Bank', MT_ONLY, '11:00', SLOT_DETAIL.report1, 1),
+      slot('BB-Report 2', 'Blood Bank', MT_ONLY, '11:00', SLOT_DETAIL.report2, 2),
+      slot('BB-Approve', 'Blood Bank', MT_ONLY, '12:00', SLOT_DETAIL.approve, 3),
+      slot('BB-Manual 1', 'Manual', MT_ONLY, '11:00', SLOT_DETAIL.manual1Wide, 4),
+      slot('BB-Manual 2', 'Manual', MT_ONLY, '11:00', SLOT_DETAIL.manual2Wide, 5),
+      slot('BB-Support', 'Blood Bank', CLERK_TANG, '12:00', SLOT_DETAIL.bbSupport, 6),
+      slot('DR-Register', 'Donor Room', CLERK_TANG, '12:00', SLOT_DETAIL.register, 7),
+      slot('DR-Finger+Interview 1', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.finger1, 8),
+      slot('DR-Finger+Interview 2', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.finger2, 9),
+      slot('DR-Main 1', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.main, 10),
+      slot('DR-Main 2', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.main, 11),
+      slot('DR-Processing', 'Donor Room', MT_ONLY, '12:00', SLOT_DETAIL.processingFull, 12)
+    ],
+    13: [
+      slot('BB-Report 1', 'Blood Bank', MT_ONLY, '11:00', SLOT_DETAIL.report1, 1),
+      slot('BB-Report 2', 'Blood Bank', MT_ONLY, '11:00', SLOT_DETAIL.report2, 2),
+      slot('BB-Approve', 'Blood Bank', MT_ONLY, '12:00', SLOT_DETAIL.approve, 3),
+      slot('BB-Manual 1', 'Manual', MT_ONLY, '11:00', SLOT_DETAIL.manual1, 4),
+      slot('BB-Manual 2', 'Manual', MT_ONLY, '11:00', SLOT_DETAIL.manual2, 5),
+      slot('BB-Manual 3', 'Manual', MT_ONLY, '12:00', SLOT_DETAIL.manual3, 6),
+      slot('BB-Support', 'Blood Bank', CLERK_TANG, '12:00', SLOT_DETAIL.bbSupport, 7),
+      slot('DR-Register', 'Donor Room', CLERK_TANG, '12:00', SLOT_DETAIL.register, 8),
+      slot('DR-Finger+Interview 1', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.finger1, 9),
+      slot('DR-Finger+Interview 2', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.finger2, 10),
+      slot('DR-Main 1', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.main, 11),
+      slot('DR-Main 2', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.main, 12),
+      slot('DR-Processing', 'Donor Room', MT_ONLY, '12:00', SLOT_DETAIL.processingFull, 13)
+    ],
+    14: [
+      slot('BB-Report 1', 'Blood Bank', MT_ONLY, '11:00', SLOT_DETAIL.report1, 1),
+      slot('BB-Report 2', 'Blood Bank', MT_ONLY, '11:00', SLOT_DETAIL.report2, 2),
+      slot('BB-Approve', 'Blood Bank', MT_ONLY, '12:00', SLOT_DETAIL.approve, 3),
+      slot('BB-Manual 1', 'Manual', MT_ONLY, '11:00', SLOT_DETAIL.manual1, 4),
+      slot('BB-Manual 2', 'Manual', MT_ONLY, '11:00', SLOT_DETAIL.manual2, 5),
+      slot('BB-Manual 3', 'Manual', MT_ONLY, '12:00', SLOT_DETAIL.manual3, 6),
+      slot('BB-Support', 'Blood Bank', CLERK_TANG, '12:00', SLOT_DETAIL.bbSupport, 7),
+      slot('DR-Register', 'Donor Room', CLERK_TANG, '12:00', SLOT_DETAIL.register, 8),
+      slot('DR-Finger+Interview 1', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.finger1, 9),
+      slot('DR-Finger+Interview 2', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.finger2, 10),
+      slot('DR-Main 1', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.main, 11),
+      slot('DR-Main 2', 'Donor Room', MT_TANG, '12:00', SLOT_DETAIL.main, 12),
+      slot('DR-Processing', 'Donor Room', MT_ONLY, '12:00', SLOT_DETAIL.processingShort, 13),
+      slot('DR-Preparing', 'Donor Room', CLERK_TANG, '12:00', SLOT_DETAIL.preparing, 14)
+    ]
+  };
+
+  function cloneSlots218(list){ return (list || []).map(p => ({ ...p })); }
+  function maxDaySlots218(){ return cloneSlots218(DAY_POSITION_SLOT_SETS_218[14]); }
+  function allDaySlotTemplates218(){
+    const map = new Map();
+    [10,11,12,13,14].forEach(n => DAY_POSITION_SLOT_SETS_218[n].forEach(p => { if (!map.has(p.code)) map.set(p.code, { ...p }); }));
+    return Array.from(map.values()).sort((a,b) => (a.sort_order || 999) - (b.sort_order || 999) || String(a.code).localeCompare(String(b.code), 'th'));
+  }
+  function staffCountBucket218(count){
+    const n = Number(count || 0);
+    if (n <= 10) return 10;
+    if (n >= 14) return 14;
+    return Math.max(10, Math.min(14, Math.round(n)));
+  }
+  function workingStaffForPositionDate218(date){
+    const d = normDate218(date);
+    try { return dailyWorkingStaff(d); }
+    catch (_) {
+      return (state.staff || []).filter(s => {
+        try { return isDailyPositionEnabled(s) && !isActiveLeaveOn(s.id, d); }
+        catch (err) { return s?.is_active || s?.active; }
+      });
+    }
+  }
+  function daySlotBucketForDate218(date){ return staffCountBucket218(workingStaffForPositionDate218(date).length); }
+  function daySlotsForDate218(date){ return cloneSlots218(DAY_POSITION_SLOT_SETS_218[daySlotBucketForDate218(date)] || DAY_POSITION_SLOT_SETS_218[10]); }
+  function findDaySlotByCode218(code){
+    const base = String(code || '').trim();
+    if (!base) return null;
+    return allDaySlotTemplates218().find(p => p.code === base) || null;
+  }
+  function isDaySlotCode218(code){ return !!findDaySlotByCode218(code); }
+  function isOutingPosition218(p){ return p?.is_outing === true || String(p?.zone || '') === 'ออกหน่วย' || String(p?.eligibility_code || '').startsWith('OUTING:'); }
+  function outingTemplates218(){
+    try {
+      if (window.cnmiPositionCatalogV182?.outingPositions182) return window.cnmiPositionCatalogV182.outingPositions182();
+    } catch (_) {}
+    return cloneSlots218(typeof OUTING_POSITIONS !== 'undefined' ? OUTING_POSITIONS : []).map((p, i) => ({ ...p, is_outing:true, sort_order:100 + i }));
+  }
+
+  const oldPositionRuleOk218 = window.positionRuleOk || (typeof positionRuleOk === 'function' ? positionRuleOk : null);
+  window.positionRuleOk = positionRuleOk = function positionRuleOkV218(staff, rule){
+    if (!staff) return false;
+    const text = String(rule || '');
+    const nick = String(staff.nickname || '').trim();
+    const type = String(staff.staff_type || '').trim();
+    const isClerk = ['เคิก','Clerk','clerk','เจ้าหน้าที่ธุรการ'].includes(type) || text.toLowerCase().includes('clerk');
+    if ((text.toLowerCase().includes('clerk') || text.includes('เคิก')) && text.includes('แตง') && !text.includes('MT')) {
+      return isClerk || nick === 'แตง';
+    }
+    if (text.includes('MT') && text.includes('แตง')) return type === 'MT' || nick === 'แตง';
+    return oldPositionRuleOk218 ? oldPositionRuleOk218(staff, rule) : true;
+  };
+
+  const oldPositionEligible218 = window.positionEligible || (typeof positionEligible === 'function' ? positionEligible : null);
+  window.positionEligible = positionEligible = function positionEligibleV218(staff, positionCode){
+    if (!staff || !positionCode) return false;
+    const key = String(positionCode || '').trim();
+    const rec = (state.positionEligibility || []).find(x => String(x.staff_id) === String(staff.id) && String(x.position_code) === key);
+    if (rec) return !!rec.is_eligible;
+    const hasAny = (state.positionEligibility || []).some(x => String(x.position_code) === key);
+    if (!hasAny && isDaySlotCode218(key)) return true;
+    return oldPositionEligible218 ? oldPositionEligible218(staff, key) : !hasAny;
+  };
+
+  window.positionCandidateOk = positionCandidateOk = function positionCandidateOkV218(staff, positionRow, date){
+    const d = normDate218(date || (typeof todayStr === 'function' ? todayStr() : ''));
+    const eligibilityKey = positionRow?.eligibility_code || positionRow?.code || positionRow?.position_code;
+    try {
+      return isDailyPositionEnabled(staff)
+        && !isActiveLeaveOn(staff.id, d)
+        && positionRuleOk(staff, positionRow?.main_rule)
+        && positionEligible(staff, eligibilityKey);
+    } catch (_) { return false; }
+  };
+
+  window.positionTemplateForDate = positionTemplateForDate = function positionTemplateForDateV218(date){
+    const d = normDate218(date);
+    try { if (isNoPositionDay(d)) return []; } catch (_) {}
+    try { if (hasOuting(d)) return outingTemplates218(); } catch (_) {}
+    return daySlotsForDate218(d);
+  };
+  window.positionTemplateByCode = positionTemplateByCode = function positionTemplateByCodeV218(code, date){
+    const base = String(typeof positionBaseCode === 'function' ? positionBaseCode(code) : code || '').trim();
+    if (!base) return null;
+    const d = normDate218(date || (typeof todayStr === 'function' ? todayStr() : ''));
+    const dayList = [...daySlotsForDate218(d), ...allDaySlotTemplates218()];
+    const foundDay = dayList.find(p => p.code === base || p.eligibility_code === base);
+    if (foundDay) return { ...foundDay };
+    const out = outingTemplates218().find(p => p.code === base || p.eligibility_code === base);
+    if (out) return { ...out };
+    try {
+      const old = window.cnmiPositionCatalogV182?.positionCatalog182?.({ includeInactive:true })?.find(p => p.code === base || p.eligibility_code === base);
+      if (old) return old;
+    } catch (_) {}
+    return null;
+  };
+  window.positionZoneForCode = positionZoneForCode = function positionZoneForCodeV218(code, fallback=''){
+    return positionTemplateByCode(code)?.zone || fallback || 'รอตรวจสอบ';
+  };
+  window.positionSortIndex = positionSortIndex = function positionSortIndexV218(code, date){
+    const base = String(typeof positionBaseCode === 'function' ? positionBaseCode(code) : code || '').trim();
+    const list = [...daySlotsForDate218(date), ...outingTemplates218(), { code:'รอตรวจสอบ', sort_order:9999 }];
+    const idx = list.findIndex(p => p.code === base || p.eligibility_code === base);
+    return idx >= 0 ? idx : 9999;
+  };
+  window.monthPositionRoleOptionsForDate = monthPositionRoleOptionsForDate = function monthPositionRoleOptionsForDateV218(date, currentCode=''){
+    const d = normDate218(date);
+    if (!d) return [];
+    if (isWeekend(d) || isHolidayDate(d)) return [];
+    let allowed = [];
+    if (hasOuting(d)) {
+      allowed = [...daySlotsForDate218(d).filter(p => p.zone === 'Blood Bank' || p.zone === 'Manual'), ...outingTemplates218()];
+    } else {
+      allowed = daySlotsForDate218(d);
+    }
+    const current = String(currentCode || '').trim();
+    if (current && !allowed.some(p => p.code === current)) {
+      const row = positionTemplateByCode(current, d);
+      if (row?.code) allowed.push(row);
+    }
+    const seen = new Set();
+    return allowed.filter(p => p?.code && !seen.has(p.code) && seen.add(p.code));
+  };
+  window.makeMonthPositionRow = makeMonthPositionRow = function makeMonthPositionRowV218(date, staffId, code){
+    const d = normDate218(date);
+    const base = positionTemplateByCode(code, d) || {};
+    return { work_date:d, position_code:String(code || '').trim(), zone:base.zone || 'รอตรวจสอบ', break_time:base.break_time || '-', main_rule:base.main_rule || '', job_desc:base.job_desc || '', staff_id:staffId, updated_by:currentStaffId() };
+  };
+
+  function activeLeaveIndex218(dates){
+    const out = new Map();
+    (state.leaves || []).forEach(l => {
+      const sid = String(l?.staff_id || '');
+      if (!sid) return;
+      try { if (typeof isLeaveEffective === 'function' && !isLeaveEffective(l)) return; } catch (_) {}
+      (dates || []).forEach(d => {
+        try { if (overlapsDate(l, d) && !out.has(`${sid}|${d}`)) out.set(`${sid}|${d}`, l); } catch (_) {}
+      });
+    });
+    return out;
+  }
+  function isNoDutyLeave218(row){
+    try { return isNoDutyLeaveType(row); } catch (_) {}
+    const t = String(row?.type || row?.leave_type || '').split(':::')[0].trim();
+    return t === 'ไม่รับเวร';
+  }
+  function leaveText218(row){
+    try { return leaveDisplayType(row); } catch (_) { return String(row?.type || row?.leave_type || 'ลาอื่นๆ').split(':::')[0].trim(); }
+  }
+  function expectedForDate218(date){
+    const d = normDate218(date);
+    if (!d || isWeekend(d) || isHolidayDate(d)) return [];
+    if (hasOuting(d)) return [...daySlotsForDate218(d).filter(p => p.zone === 'Blood Bank' || p.zone === 'Manual'), ...outingTemplates218()];
+    return daySlotsForDate218(d);
+  }
+  function renderMissingCell218(date, assignedByDate){
+    const d = normDate218(date);
+    if (isWeekend(d) || isHolidayDate(d)) return `<th class="missing-role-cell no-position-day">ไม่จัด</th>`;
+    const assigned = assignedByDate.get(d) || new Set();
+    const missing = expectedForDate218(d).filter(p => !assigned.has(p.code));
+    const bucket = daySlotBucketForDate218(d);
+    if (!missing.length) return `<th class="missing-role-cell complete">ครบ<br><small>${bucket} คน</small></th>`;
+    return `<th class="missing-role-cell has-missing" title="ชุดสล็อต ${bucket} คน">${missing.map(p => `<span>${esc218(p.code)}</span>`).join('')}<small>${bucket} คน</small></th>`;
+  }
+  function renderMonthCell218(staff, date, cellRows, canEdit, leaveIndex){
+    const d = normDate218(date);
+    if (isWeekend(d) || isHolidayDate(d)) return `<td class="matrix-cell no-position-day ${isHolidayDate(d) ? 'holiday-cell' : 'weekend-cell'}"><span>${isHolidayDate(d) ? 'HOLIDAY' : 'WEEKEND'}</span></td>`;
+    const leaveRow = leaveIndex.get(`${String(staff?.id || '')}|${d}`) || null;
+    const realLeave = !!leaveRow && !isNoDutyLeave218(leaveRow);
+    const row = (cellRows || [])[0] || null;
+    const cleanCodes = (cellRows || []).map(r => String(r?.position_code || r?.code || '').trim()).filter(Boolean);
+    const cls = `${hasOuting(d) ? 'outing-cell' : ''} ${realLeave ? 'leave-cell ' + leaveCellClass(leaveRow) : ''} ${!cleanCodes.length && !realLeave ? 'needs-review-cell' : ''}`.trim();
+    if (canEdit && !realLeave) {
+      const current = row?.position_code || '';
+      const options = monthPositionRoleOptionsForDate(d, current);
+      return `<td class="matrix-cell ${cls}"><select class="month-position-select" data-month-position-edit="${esc218(d)}|${esc218(staff?.id || '')}"><option value="">รอตรวจสอบ</option>${options.map(t => `<option value="${esc218(t.code)}" ${current===t.code?'selected':''}>${esc218(t.code)}</option>`).join('')}</select>${hasOuting(d) ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
+    }
+    const text = cleanCodes.length ? cleanCodes.join(' / ') : (realLeave ? leaveText218(leaveRow) : '');
+    const safeText = esc218(text);
+    return `<td class="matrix-cell ${cls}">${safeText ? `<span title="${safeText}">${safeText}</span>` : ''}${hasOuting(d) && cleanCodes.length ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
+  }
+  window.renderMonthPositionMatrix = renderMonthPositionMatrix = function renderMonthPositionMatrixV218(rows, dates){
+    rows = Array.isArray(rows) ? rows : [];
+    dates = Array.isArray(dates) ? dates : [];
+    if (!rows.length) return empty('ยังไม่มีแผนรายเดือน กด “สร้างตารางเปล่า” หรือ “สร้างแผนทั้งเดือน” ก่อน');
+    const byCell = Object.create(null);
+    const assignedByDate = new Map();
+    rows.forEach((r, idx) => {
+      const sid = String(r?.staff_id || '');
+      const d = normDate218(r?.work_date);
+      if (!sid || !d) return;
+      (byCell[`${sid}|${d}`] ||= []).push({ ...r, _idx:idx });
+      const code = String(r?.position_code || r?.code || '').trim();
+      if (code && code !== 'รอตรวจสอบ') {
+        if (!assignedByDate.has(d)) assignedByDate.set(d, new Set());
+        assignedByDate.get(d).add(code);
+      }
+    });
+    const rowStaffIds = new Set(rows.map(r => String(r?.staff_id || '')).filter(Boolean));
+    const displayStaff = orderedStaff((state.staff || []).filter(s => isDailyPositionEnabled(s) || rowStaffIds.has(String(s.id))));
+    const canEdit = isAdmin() && state.page === 'positionMonth';
+    const leaveIndex = activeLeaveIndex218(dates);
+    const heads = dates.map(date => { const d = parseDate(date); const cls = isHolidayDate(date) ? 'holiday-head' : isWeekend(date) ? 'weekend-head' : hasOuting(date) ? 'outing-head' : ''; return `<th class="date-head ${cls}"><b>${d.getDate()}</b><br><span>${d.toLocaleDateString('th-TH', { weekday:'short' })}</span></th>`; }).join('');
+    const missing = dates.map(date => renderMissingCell218(date, assignedByDate)).join('');
+    return `<div class="monthly-matrix-wrap v218-position-matrix"><div class="matrix-legend"><span class="legend-box weekend"></span> WEEKEND/HOLIDAY = ไม่จัดตำแหน่ง <span class="legend-box outing"></span> ออกหน่วย <span class="legend-box leave"></span> ใช้ชุดสล็อตกลางวัน 10-14 คนตามจำนวนเจ้าหน้าที่ที่มาทำงานจริง ${canEdit ? '<span class="hint">Admin เลือกตำแหน่งในช่องได้ แล้วกดบันทึกแผนทั้งเดือน</span>' : ''}</div><div class="table-wrap month-position-matrix"><table><thead><tr><th class="sticky-col staff-col">เจ้าหน้าที่</th><th class="sticky-col summary-col">สรุป</th>${heads}</tr><tr class="missing-role-row"><th class="sticky-col staff-col missing-role-head">ยังขาด</th><th class="sticky-col summary-col missing-role-head">-</th>${missing}</tr></thead><tbody>${displayStaff.map(st => { const bg = staffColor(st); const fg = textColorFor(bg); return `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${esc218(bg)};color:${esc218(fg)}"><div class="matrix-staff-name"><b>${esc218(st.nickname || st.full_name || '-')}</b><small>${esc218(st.staff_type || '')}</small></div></td><td class="sticky-col summary-col summary-action-cell"><button class="tiny-btn staff-summary-trigger compact-staff-summary" data-month-position-stat="${esc218(st.id)}" type="button">ดูสรุป</button></td>${dates.map(date => renderMonthCell218(st, date, byCell[`${st.id}|${date}`] || [], canEdit, leaveIndex)).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
+  };
+
+  window.buildMonthlyPositionDraft = buildMonthlyPositionDraft = function buildMonthlyPositionDraftV218(key){
+    const { y, m, last } = getMonthRange(key);
+    const rows = [];
+    const counts = {};
+    const serialMap = {};
+    const addCount = (staffId, code) => {
+      if (!staffId || !code) return;
+      counts[staffId] = counts[staffId] || { total:0, byCode:{}, byZone:{}, load:0 };
+      const zone = positionZoneForCode(code);
+      counts[staffId].total += 1;
+      counts[staffId].byCode[code] = (counts[staffId].byCode[code] || 0) + 1;
+      counts[staffId].byZone[zone] = (counts[staffId].byZone[zone] || 0) + 1;
+      counts[staffId].load = (counts[staffId].load || 0) + (typeof positionLoadWeight === 'function' ? positionLoadWeight(code) : 1);
+    };
+    const chooseForPosition = (position, date, pool, used) => {
+      const candidates = pool.filter(st => !used.has(st.id) && positionCandidateOk(st, position, date));
+      candidates.sort((a,b) => monthPositionCandidateScore(a, position, counts, rows, date) - monthPositionCandidateScore(b, position, counts, rows, date) || compareStaffOrder(a,b));
+      return candidates[0] || null;
+    };
+    const addRow = (staff, date, position) => { if (!staff || !position) return; rows.push(rowForStaffPosition(staff, date, position, serialMap)); addCount(staff.id, position.code); };
+    for (let day = 1; day <= last; day++) {
+      const date = `${y}-${pad(m)}-${pad(day)}`;
+      if (isNoPositionDay(date)) continue;
+      const working = workingStaffForPositionDate218(date);
+      if (!working.length) continue;
+      const used = new Set();
+      if (hasOuting(date)) {
+        const participantIds = new Set(outingParticipants(date));
+        const outingPool = working.filter(st => participantIds.has(st.id));
+        const roomPool = working.filter(st => !participantIds.has(st.id));
+        outingTemplates218().forEach(p => { const st = chooseForPosition(p, date, outingPool, used); if (st) { used.add(st.id); addRow(st, date, p); } });
+        const roomSlots = daySlotsForDate218(date).filter(p => p.zone === 'Blood Bank' || p.zone === 'Manual');
+        roomSlots.forEach(p => { const st = chooseForPosition(p, date, roomPool, used); if (st) { used.add(st.id); addRow(st, date, p); } });
+        roomPool.filter(st => !used.has(st.id)).forEach(st => rows.push(reviewRowForStaff(st, date, 'คนอยู่ห้องมากกว่าช่อง Blood Bank/Manual ในวันออกหน่วย')));
+        outingPool.filter(st => !used.has(st.id)).forEach(st => rows.push(reviewRowForStaff(st, date, 'คนออกหน่วยมากกว่าช่องออกหน่วย')));
+        continue;
+      }
+      daySlotsForDate218(date).forEach(p => { const st = chooseForPosition(p, date, working, used); if (st) { used.add(st.id); addRow(st, date, p); } });
+      working.filter(st => !used.has(st.id)).forEach(st => rows.push(reviewRowForStaff(st, date, 'จำนวนคนทำงานมากกว่าชุดสล็อต 14 คน กรุณาเพิ่มตำแหน่งเสริมเอง')));
+    }
+    return { monthKey:key, rows };
+  };
+
+  function buildBlankMonthlyPositionDraft218(key){
+    const { y, m, last } = getMonthRange(key);
+    const rows = [];
+    for (let day = 1; day <= last; day++) {
+      const date = `${y}-${pad(m)}-${pad(day)}`;
+      if (isNoPositionDay(date)) continue;
+      workingStaffForPositionDate218(date).forEach(st => rows.push({ work_date:date, position_code:'', zone:'', break_time:'', main_rule:'', job_desc:'', staff_id:st.id, updated_by:currentStaffId() }));
+    }
+    return { monthKey:key, rows };
+  }
+
+  const oldRenderPositionMonthPage218 = window.renderPositionMonthPage || (typeof renderPositionMonthPage === 'function' ? renderPositionMonthPage : null);
+  if (oldRenderPositionMonthPage218) {
+    window.renderPositionMonthPage = renderPositionMonthPage = function renderPositionMonthPageV218(){
+      let html = String(oldRenderPositionMonthPage218.apply(this, arguments) || '');
+      if (!html.includes('data-create-blank-month-positions')) {
+        html = html.replace('<button class="soft-btn" data-generate-month-positions>สร้างแผนทั้งเดือน</button>', '<button class="ghost-btn" data-create-blank-month-positions>สร้างตารางเปล่า</button><button class="soft-btn" data-generate-month-positions>สร้างแผนทั้งเดือน</button>');
+      }
+      const hint = '<div class="notice soft-notice compact v218-slot-note"><b>ชุดสล็อตกลางวันอัตโนมัติ:</b> ระบบเลือกชุด 10, 11, 12, 13 หรือ 14 ตำแหน่งตามจำนวนเจ้าหน้าที่ที่มาทำงานจริงในแต่ละวัน เช่น คนลาออก/เข้าใหม่/ลางาน ระบบจะลดหรือเพิ่มช่องให้ตามชุดที่กำหนดไว้</div>';
+      if (!html.includes('v218-slot-note')) html = html.replace(/(<\/div>\s*<div class="monthly-matrix-wrap|<\/div>\s*<div class="empty-state)/, `${hint}$1`);
+      return html;
+    };
+  }
+
+  function injectManagementTools218(){
+    if (state.page !== 'positionManagement') return;
+    const root = document.getElementById('pageContent');
+    if (!root || root.querySelector('.v218-position-slot-tools')) return;
+    const box = document.createElement('div');
+    box.className = 'card wide-card v218-position-slot-tools';
+    box.innerHTML = `<div class="section-title"><div><h3>ชุดสล็อตกลางวัน 10-14 คน</h3><p class="hint">ใช้เป็น Template หลักของหน้า “ตารางตำแหน่งรายวัน/รายเดือน” โดยเลือกตามจำนวนคนที่มาทำงานจริงในวันนั้น</p></div><div class="actions"><button class="primary-btn" data-seed-day-slots-218>อัปเดตฐานข้อมูลเป็นชุดสล็อต 14 ช่อง</button></div></div><div class="position-slot-preview218">${[10,11,12,13,14].map(n => `<details><summary><b>${n} คน</b> <span class="badge blue">${DAY_POSITION_SLOT_SETS_218[n].length} ตำแหน่ง</span></summary><div>${DAY_POSITION_SLOT_SETS_218[n].map(p => `<span class="mini-status">${esc218(p.code)}</span>`).join(' ')}</div></details>`).join('')}</div><p class="hint">ปุ่มอัปเดตจะเพิ่ม/แก้ไขตำแหน่งชุด 14 ช่อง และปิดใช้งานตำแหน่งปกติเก่าที่ไม่อยู่ในชุดนี้ ส่วนตำแหน่งออกหน่วยจะไม่ถูกลบ</p>`;
+    root.prepend(box);
+  }
+  const oldRenderPage218 = window.renderPage || (typeof renderPage === 'function' ? renderPage : null);
+  if (oldRenderPage218) {
+    window.renderPage = renderPage = function renderPageV218(){
+      const ret = oldRenderPage218.apply(this, arguments);
+      try { injectManagementTools218(); } catch (err) { console.warn(`${VERSION_V218}: inject tools failed`, err); }
+      return ret;
+    };
+  }
+
+  async function seedDaySlotsToSupabase218(){
+    if (!isAdmin()) return showToast('เฉพาะ Admin เท่านั้น');
+    if (!sb) return showToast('ไม่พบ Supabase client');
+    const ok = await confirmDialog('อัปเดตฐานข้อมูลตำแหน่งปกติเป็นชุดสล็อต 14 ช่อง และปิดใช้งานตำแหน่งปกติเก่าที่ไม่อยู่ในชุดนี้?', 'ยืนยันอัปเดตชุดสล็อตกลางวัน');
+    if (!ok) return;
+    try { setBusy(true, 'กำลังอัปเดตชุดสล็อตกลางวัน'); } catch (_) {}
+    try {
+      const desired = maxDaySlots218();
+      const desiredCodes = new Set(desired.map(p => p.code));
+      const existingRes = await sb.from('daily_position_masters').select('*');
+      if (existingRes.error) throw existingRes.error;
+      const existing = existingRes.data || [];
+      for (const row of existing) {
+        const isOuting = isOutingPosition218(row);
+        const code = String(row?.code || '').trim();
+        if (!isOuting && code && !desiredCodes.has(code) && row.is_active !== false) {
+          const res = await sb.from('daily_position_masters').update({ is_active:false, deleted_at:new Date().toISOString(), updated_by:currentStaffId() }).eq('id', row.id);
+          if (res.error) throw res.error;
+        }
+      }
+      for (const p of desired) {
+        const payload = {
+          code:p.code,
+          zone:p.zone,
+          is_outing:false,
+          break_time:p.break_time || '-',
+          main_rule:p.main_rule || null,
+          job_desc:p.job_desc || null,
+          sort_order:p.sort_order || 999,
+          eligibility_code:p.eligibility_code || p.code,
+          is_active:true,
+          deleted_at:null,
+          updated_by:currentStaffId()
+        };
+        const found = existing.find(x => String(x?.code || '') === p.code && !isOutingPosition218(x));
+        const res = found?.id
+          ? await sb.from('daily_position_masters').update(payload).eq('id', found.id)
+          : await sb.from('daily_position_masters').insert({ ...payload, created_by:currentStaffId() });
+        if (res.error) throw res.error;
+      }
+      if (typeof window.cnmiV212RefreshPositionMasters === 'function') await window.cnmiV212RefreshPositionMasters({ renderAfter:false, silent:true });
+      else if (typeof refreshPositionMasters182 === 'function') await refreshPositionMasters182({ silent:true });
+      renderPage();
+      showToast('อัปเดตชุดสล็อตกลางวัน 14 ช่องแล้ว ระบบรายเดือนจะเลือก 10-14 ช่องตามจำนวนคนจริง');
+    } catch (err) {
+      console.error(`${VERSION_V218}: seed failed`, err);
+      showToast('อัปเดตชุดสล็อตไม่สำเร็จ: ' + (err?.message || String(err)));
+    } finally {
+      try { setBusy(false); } catch (_) {}
+    }
+  }
+
+  document.addEventListener('click', async function(e){
+    const blank = e.target?.closest?.('[data-create-blank-month-positions]');
+    if (blank) {
+      e.preventDefault(); e.stopPropagation();
+      const key = state.positionMonthKey || state.monthKey || monthKey(new Date());
+      state.monthPositionDraft = buildBlankMonthlyPositionDraft218(key);
+      renderPage();
+      showToast('สร้างตารางเปล่าแล้ว เลือกตำแหน่งในช่อง แล้วกดบันทึกแผนทั้งเดือน');
+      return;
+    }
+    const seed = e.target?.closest?.('[data-seed-day-slots-218]');
+    if (seed) { e.preventDefault(); e.stopPropagation(); await seedDaySlotsToSupabase218(); return; }
+  }, true);
+
+  window.cnmiDayPositionSlotsV218 = { DAY_POSITION_SLOT_SETS_218, daySlotsForDate218, daySlotBucketForDate218, buildBlankMonthlyPositionDraft218 };
+  console.info(`${VERSION_V218} loaded`);
+})();
