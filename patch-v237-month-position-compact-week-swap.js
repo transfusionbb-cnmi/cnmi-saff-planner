@@ -3,11 +3,13 @@
    - Full-week leave cells show only leave type (ex: ลาคลอด), details stay in data/title.
    - Count row shows compact "13/13 คน" only; extra slot details stay in title.
    - Missing row treats reduced weekly slot target as complete when all required staff/unique slots are filled.
-   - Editing one monthly position swaps that position across the same work week.
+   - Editing one normal-day position swaps that position across the same work week, excluding outing columns.
+   - Outing columns are edited only for that date.
+   - Dropdown choices are capped to the effective Slot count; old out-of-slot value is preserved as hidden selected value.
    ========================= */
 (function(){
   'use strict';
-  const VERSION = 'V237_MONTH_POSITION_COMPACT_WEEK_SWAP';
+  const VERSION = 'V239_MONTH_POSITION_SLOT_COUNT_OUTING_INDEPENDENT';
   if (window.__CNMI_V237_MONTH_POSITION_COMPACT_WEEK_SWAP__) return;
   window.__CNMI_V237_MONTH_POSITION_COMPACT_WEEK_SWAP__ = true;
 
@@ -192,32 +194,59 @@
     try { if (window.cnmiV233?.fullWeekLeaveCount) return window.cnmiV233.fullWeekLeaveCount(date) || 0; } catch (_) {}
     return positionEnabledStaff().filter(s => isFullWeekLeave(s.id, date)).length;
   }
+  function optionCode(p){ return String(p?.code || p?.position_code || '').trim(); }
+  function uniqueTemplates(list){
+    const seen = new Set();
+    return (list || []).filter(p => {
+      const c = optionCode(p);
+      if (!c || seen.has(c)) return false;
+      seen.add(c);
+      return true;
+    });
+  }
+  function capTemplatesToEffectiveSlots(date, list){
+    const d = normDate(date);
+    const clean = uniqueTemplates(list);
+    if (!clean.length || noPositionDay(d)) return clean;
+    // When someone is unavailable for the whole working week, the effective Slot count is reduced.
+    // The selectable list must follow the same number shown in the คน/Slot row, not the original 14-slot master list.
+    const available = weeklyAvailableStaff(d).length;
+    const target = available ? Math.min(available, clean.length) : clean.length;
+    return clean.slice(0, target);
+  }
   function expectedTemplates(date){
     const d = normDate(date);
     if (!d || noPositionDay(d)) return [];
     try {
       const list = window.cnmiV231?.expectedTemplatesForDate231?.(d);
-      if (Array.isArray(list) && list.length) return list;
+      if (Array.isArray(list) && list.length) return capTemplatesToEffectiveSlots(d, list);
     } catch (_) {}
     try {
       const list = monthPositionRoleOptionsForDate(d, '');
-      if (Array.isArray(list)) return list;
+      if (Array.isArray(list)) return capTemplatesToEffectiveSlots(d, list);
     } catch (_) {}
     return [];
   }
-  function optionsForDate(date, current){
-    try {
-      const list = monthPositionRoleOptionsForDate(normDate(date), current || '');
-      if (Array.isArray(list)) return list;
-    } catch (_) {}
+  function optionsForDate(date){
+    // Visible options only. Do not append the current value here, otherwise a 13-slot week can show 14 choices.
     return expectedTemplates(date);
   }
   function codeAllowedOnDate(date, code){
     const c = String(code || '').trim();
     if (!c) return true;
-    const list = optionsForDate(date, c);
+    const list = expectedTemplates(date);
     if (!list.length) return true;
-    return list.some(p => String(p?.code || p?.position_code || '') === c);
+    return list.some(p => optionCode(p) === c);
+  }
+  function renderOptionsHtml(date, current){
+    const c = String(current || '').trim();
+    const options = optionsForDate(date);
+    const hasCurrent = !!c && options.some(t => optionCode(t) === c);
+    const hiddenCurrent = c && !hasCurrent ? `<option value="${esc(c)}" selected hidden>${esc(c)} (นอก Slot)</option>` : '';
+    return hiddenCurrent + options.map(t => {
+      const code = optionCode(t);
+      return `<option value="${esc(code)}" ${c===code?'selected':''}>${esc(code)}</option>`;
+    }).join('');
   }
   function canEditMonth(){ return isAdminSafe() && String(state?.page || '') === 'positionMonth'; }
   function emptySafe(text){
@@ -283,8 +312,9 @@
     const leaveMark = hasLeave ? `<small class="leave-note-v228">${esc(leaveLabel)}</small>` : '';
     if (canEdit) {
       const current = row?.position_code || '';
-      const options = optionsForDate(d, current);
-      return `<td class="matrix-cell ${cls}"><select class="month-position-select" data-month-position-edit="${esc(d)}|${esc(sid)}" data-v237-current="${esc(current)}"><option value="">${hasLeave ? 'เว้นตำแหน่ง' : 'รอตรวจสอบ'}</option>${options.map(t => `<option value="${esc(t.code)}" ${current===t.code?'selected':''}>${esc(t.code)}</option>`).join('')}</select>${leaveMark}${hasOutingSafe(d) && cleanCodes.length ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
+      const outsideSlot = current && !codeAllowedOnDate(d, current);
+      const outsideMark = outsideSlot ? '<div class="cell-note v239-outside-slot-note">นอก Slot ที่ใช้</div>' : '';
+      return `<td class="matrix-cell ${cls}"><select class="month-position-select" data-month-position-edit="${esc(d)}|${esc(sid)}" data-v237-current="${esc(current)}"><option value="">${hasLeave ? 'เว้นตำแหน่ง' : 'รอตรวจสอบ'}</option>${renderOptionsHtml(d, current)}</select>${leaveMark}${outsideMark}${hasOutingSafe(d) && cleanCodes.length ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
     }
     const text = cleanCodes.length ? cleanCodes.join(' / ') : (hasLeave ? leaveLabel : '');
     const safeText = esc(text);
@@ -330,7 +360,7 @@
     const countRow = dates.map(date => renderCountCell(date, assignedStaffByDate)).join('');
     const missing = dates.map(date => renderMissingCell(date, assignedByDate, assignedStaffByDate)).join('');
     const base = (() => { try { return window.cnmiV231?.getBaseSlotCount231?.() || 14; } catch (_) { return 14; } })();
-    return `<div class="monthly-matrix-wrap v182-position-matrix v218-position-matrix v228-position-matrix v231-position-matrix v233-position-matrix v237-position-matrix"><div class="matrix-legend"><span class="legend-box weekend"></span> WEEKEND/HOLIDAY = ไม่จัดตำแหน่ง <span class="legend-box outing"></span> ออกหน่วย <span class="legend-box leave"></span> Slot หลัก ${esc(base)} คน • ลาทั้งสัปดาห์แสดงเฉพาะประเภทลา ${canEdit ? '<span class="hint">เลือกตำแหน่ง 1 ช่อง = สลับตำแหน่งทั้งสัปดาห์อัตโนมัติ แล้วกดบันทึกแผนทั้งเดือน</span>' : ''}</div><div class="table-wrap month-position-matrix"><table><thead><tr><th class="sticky-col staff-col">เจ้าหน้าที่</th><th class="sticky-col summary-col">สรุป</th>${heads}</tr><tr class="count-role-row"><th class="sticky-col staff-col count-role-head">จำนวนคน</th><th class="sticky-col summary-col count-role-head">คน/Slot</th>${countRow}</tr><tr class="missing-role-row"><th class="sticky-col staff-col missing-role-head">ยังขาด</th><th class="sticky-col summary-col missing-role-head">ตำแหน่ง</th>${missing}</tr></thead><tbody>${displayStaff.map(st => { const bg = staffColorSafe(st); const fg = textColorSafe(bg); return `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${esc(bg)};color:${esc(fg)}"><div class="matrix-staff-name"><b>${esc(st.nickname || st.full_name || '-')}</b><small>${esc(st.staff_type || '')}</small></div></td><td class="sticky-col summary-col summary-action-cell"><button class="tiny-btn staff-summary-trigger compact-staff-summary" data-month-position-stat="${esc(st.id)}" type="button">ดูสรุป</button></td>${dates.map(date => renderMonthCell(st, date, byCell[`${st.id}|${date}`] || [], canEdit, leaves)).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
+    return `<div class="monthly-matrix-wrap v182-position-matrix v218-position-matrix v228-position-matrix v231-position-matrix v233-position-matrix v237-position-matrix"><div class="matrix-legend"><span class="legend-box weekend"></span> WEEKEND/HOLIDAY = ไม่จัดตำแหน่ง <span class="legend-box outing"></span> ออกหน่วย <span class="legend-box leave"></span> Slot หลัก ${esc(base)} คน • ลาทั้งสัปดาห์แสดงเฉพาะประเภทลา ${canEdit ? '<span class="hint">วันปกติ: เลือก 1 ช่อง = สลับทั้งสัปดาห์โดยไม่แตะคอลัมน์ออกหน่วย • วันออกหน่วย: แก้เฉพาะวันนั้น แล้วกดบันทึกแผนทั้งเดือน</span>' : ''}</div><div class="table-wrap month-position-matrix"><table><thead><tr><th class="sticky-col staff-col">เจ้าหน้าที่</th><th class="sticky-col summary-col">สรุป</th>${heads}</tr><tr class="count-role-row"><th class="sticky-col staff-col count-role-head">จำนวนคน</th><th class="sticky-col summary-col count-role-head">คน/Slot</th>${countRow}</tr><tr class="missing-role-row"><th class="sticky-col staff-col missing-role-head">ยังขาด</th><th class="sticky-col summary-col missing-role-head">ตำแหน่ง</th>${missing}</tr></thead><tbody>${displayStaff.map(st => { const bg = staffColorSafe(st); const fg = textColorSafe(bg); return `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${esc(bg)};color:${esc(fg)}"><div class="matrix-staff-name"><b>${esc(st.nickname || st.full_name || '-')}</b><small>${esc(st.staff_type || '')}</small></div></td><td class="sticky-col summary-col summary-action-cell"><button class="tiny-btn staff-summary-trigger compact-staff-summary" data-month-position-stat="${esc(st.id)}" type="button">ดูสรุป</button></td>${dates.map(date => renderMonthCell(st, date, byCell[`${st.id}|${date}`] || [], canEdit, leaves)).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
   };
   window.renderMonthPositionMatrix = renderV237;
   try { renderMonthPositionMatrix = renderV237; } catch (_) {}
@@ -412,7 +442,10 @@
     const key = sourceDate.slice(0, 7);
     let rows = mergeVisibleSelections(baseRowsForMonth(key), key, `${sourceDate}|${staffId}`);
     const prevCode = String(prevValueByCell.get(`${sourceDate}|${staffId}`) || '').trim();
-    const targets = mondayToFriday(sourceDate);
+    const sourceIsOuting = hasOutingSafe(sourceDate);
+    const targets = sourceIsOuting
+      ? [sourceDate]
+      : mondayToFriday(sourceDate).filter(d => !hasOutingSafe(d));
     const changedCells = new Set();
     let changed = 0;
     let swapped = 0;
@@ -442,9 +475,10 @@
     state.weeklySwappedPositionCellsV237 = changedCells;
     rerenderPreserve();
     setTimeout(highlightSwaps, 40);
-    if (!changed) return toast('ยังไม่ได้เปลี่ยนตำแหน่ง: วันในสัปดาห์นี้อาจเป็นวันหยุด/ตำแหน่งไม่อยู่ในชุด Slot ของวันนั้น', 'error');
+    if (!changed) return toast('ยังไม่ได้เปลี่ยนตำแหน่ง: วันนั้นอาจเป็นวันหยุด/ตำแหน่งไม่อยู่ในชุด Slot ที่ใช้จริง', 'error');
     const sourceStaff = (() => { try { return state.staff.find(s => String(s.id) === staffId)?.nickname || ''; } catch (_) { return ''; } })();
-    toast(`สลับตำแหน่งทั้งสัปดาห์แล้ว${sourceStaff ? ` (${sourceStaff})` : ''}: เปลี่ยน ${changed} วัน${swapped ? ` • สลับคู่ ${swapped} ช่อง` : ''}${skipped ? ` • ข้าม ${skipped} วัน` : ''} — ตรวจทานแล้วกดบันทึกแผนทั้งเดือน`);
+    const editScopeText = sourceIsOuting ? 'แก้ตำแหน่งวันออกหน่วยเฉพาะวันนี้แล้ว' : 'สลับตำแหน่งวันปกติทั้งสัปดาห์แล้ว (ไม่แตะคอลัมน์ออกหน่วย)';
+    toast(`${editScopeText}${sourceStaff ? ` (${sourceStaff})` : ''}: เปลี่ยน ${changed} วัน${swapped ? ` • สลับคู่ ${swapped} ช่อง` : ''}${skipped ? ` • ข้าม ${skipped} วัน` : ''} — ตรวจทานแล้วกดบันทึกแผนทั้งเดือน`);
   }
   window.applyMonthPositionEdit = applyMonthPositionEditV237;
   try { applyMonthPositionEdit = applyMonthPositionEditV237; } catch (_) {}
@@ -479,6 +513,7 @@
     .v237-full-week-leave-pill{display:inline-flex;align-items:center;justify-content:center;min-width:76px;padding:5px 10px;border-radius:999px;background:#ffe4e6;color:#9f1239;font-weight:800;font-size:12px;line-height:1.1}
     .v237-position-matrix .week-swap-cell-v237{outline:2px solid #60a5fa;outline-offset:-2px;background:#eff6ff!important}
     .v237-position-matrix .matrix-legend .hint{margin-left:8px;color:#64748b;font-size:12px}
+    .v237-position-matrix .v239-outside-slot-note{color:#b45309;font-weight:800}
   `;
   document.head.appendChild(style);
 
