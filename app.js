@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { id: 'audit', icon: '🕵️', title: 'Audit Log ล่าสุด', subtitle: 'ประวัติการใช้งานแบบอ่านง่าย กรองรายวันได้', group: 'staff' },
   { id: 'hr', icon: '🧾', title: 'ตรวจสอบ HR', subtitle: 'Admin ตรวจว่าแจ้งใน HR แล้วหรือยัง', group: 'admin' },
   { id: 'hrSummary', icon: '✅', title: 'สรุปตรวจสอบ HR แล้ว', subtitle: 'รายการที่ Admin ตรวจสอบ HR แล้ว ย้อนกลับมาดูได้', group: 'admin' },
-  { id: 'scheduler', icon: '🧩', title: 'จัดตารางเวร', subtitle: 'สร้างร่าง Auto Assign และบันทึกตาราง', group: 'admin' },
+  { id: 'scheduler', icon: '🧩', title: 'จัดตารางเวรประจำเดือน', subtitle: 'สร้างร่าง Auto Assign และบันทึกตารางเวรประจำเดือน', group: 'admin' },
   { id: 'positionMonth', icon: '🗓️', title: 'จัดตำแหน่งรายเดือน', subtitle: 'Admin วางแผนรายเดือนก่อนให้อินชาร์จปรับรายวัน', group: 'admin' },
   { id: 'profileRequests', icon: '📝', title: 'คำขอแก้ไขข้อมูลส่วนตัว', subtitle: 'Admin อนุมัติชื่อ/ชื่อเล่น/เบอร์โทร', group: 'admin' },
   { id: 'users', icon: '👥', title: 'ผู้ใช้งานและสิทธิ์', subtitle: 'เพิ่ม/แก้ไขเจ้าหน้าที่ เฉพาะ Admin', group: 'admin' },

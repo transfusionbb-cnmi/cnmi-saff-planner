@@ -120,8 +120,8 @@
       if (Array.isArray(NAV_ITEMS)) {
         const sched = NAV_ITEMS.find(x => x.id === 'scheduler');
         if (sched) {
-          sched.title = 'จัดตารางตำแหน่งรายเดือน';
-          sched.subtitle = 'สร้าง/ตรวจทานแผนตำแหน่งรายเดือน';
+          sched.title = 'จัดตารางเวรประจำเดือน';
+          sched.subtitle = 'สร้าง/ตรวจทานตารางเวรประจำเดือน';
         }
         const pm = NAV_ITEMS.find(x => x.id === 'positionMonth');
         if (pm) {
@@ -137,6 +137,9 @@
       const subtitle = document.getElementById('pageSubtitle');
       const content = document.getElementById('pageContent');
       const isMonthlyPosition = state?.page === 'positionMonth' || !!content?.querySelector?.('.monthly-position-page');
+
+      if (state?.page === 'scheduler' && title) title.textContent = 'จัดตารางเวรประจำเดือน';
+      if (state?.page === 'scheduler' && subtitle) subtitle.textContent = 'สร้าง/ตรวจทานตารางเวรประจำเดือน';
       if (isMonthlyPosition && title && title.textContent.trim() === 'จัดตารางเวร') title.textContent = 'จัดตารางตำแหน่งรายเดือน';
       if (state?.page === 'positionMonth' && title) title.textContent = 'จัดตารางตำแหน่งรายเดือน';
       if (state?.page === 'positionMonth' && subtitle) subtitle.textContent = 'สร้าง/ตรวจทานแผนตำแหน่งรายเดือน';
