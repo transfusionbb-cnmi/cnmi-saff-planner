@@ -11,8 +11,8 @@
   window.__CNMI_V225_WEEKLY_ROTATION_POSITION_PLAN__ = true;
 
   const DAY_SETS = [10,11,12,13,14];
-  const ROOM_COLUMNS = ['Blood Bank','Manual','Donor Room','ออกหน่วย'];
-  const FY_ROOM_COLUMNS = ['Blood Bank','Manual','Donor Room','ออกหน่วย'];
+  const ROOM_COLUMNS = ['Blood Bank','Donor Room','ออกหน่วย'];
+  const FY_ROOM_COLUMNS = ['Blood Bank','Donor Room','ออกหน่วย'];
   const LS_DAILY_SLOT_KEY = 'cnmi_v225_daily_slot_set_by_date';
 
   function esc(v){
@@ -39,6 +39,7 @@
   function outingIds(date){ try { return new Set((outingParticipants(norm(date)) || []).map(String)); } catch (_) { return new Set(); } }
   function compareStaffSafe(a,b){ try { return compareStaffOrder(a,b); } catch (_) { return String(staffName(a)).localeCompare(String(staffName(b)), 'th'); } }
   function orderStaff(rows){ try { return orderedStaff(rows || []); } catch (_) { return (rows || []).slice().sort(compareStaffSafe); } }
+  function displayZone(z, code=''){ const raw = String(z || '').trim(); const c = String(code || '').trim(); if (raw === 'ออกหน่วย') return 'ออกหน่วย'; if (raw === 'Manual' || /^BB-Manual/i.test(c) || /manual/i.test(c)) return 'Blood Bank'; if (raw === 'Donor Room' || /^DR-/i.test(c)) return 'Donor Room'; if (raw === 'Blood Bank' || /^BB-/i.test(c)) return 'Blood Bank'; return raw || 'Blood Bank'; }
   function monthRange(key){
     try { const r = getMonthRange(key); return { y:r.y, m:r.m, last:r.last || new Date(r.y, r.m, 0).getDate(), start:r.start || `${r.y}-${pad2(r.m)}-01`, end:r.end || `${r.y}-${pad2(r.m)}-${pad2(r.last || new Date(r.y, r.m, 0).getDate())}` }; }
     catch (_) { const [yy,mm] = String(key || today().slice(0,7)).split('-').map(Number); const y = yy || new Date().getFullYear(); const m = mm || new Date().getMonth()+1; const last = new Date(y, m, 0).getDate(); return { y, m, last, start:`${y}-${pad2(m)}-01`, end:`${y}-${pad2(m)}-${pad2(last)}` }; }
@@ -98,7 +99,7 @@
         ...r,
         code,
         position_code: code,
-        zone: out ? 'ออกหน่วย' : (String(r?.zone || '').trim() || 'Blood Bank'),
+        zone: out ? 'ออกหน่วย' : displayZone(r?.zone, code),
         break_time: String(r?.break_time || '').trim() || (out ? 'ออกหน่วย' : '-'),
         main_rule: String(r?.main_rule || '').trim() || '',
         job_desc: String(r?.job_desc || r?.detail || '').trim() || '',
@@ -118,7 +119,7 @@
     return sanitizeSlots(rows, false);
   }
   function daySlotsForDateByCount(date, count){
-    if (hasOutingSafe(date)) return daySlotsForCount(count).filter(p => ['Blood Bank','Manual'].includes(String(p.zone || '')));
+    if (hasOutingSafe(date)) return daySlotsForCount(count).filter(p => displayZone(p.zone, p.code) === 'Blood Bank');
     return daySlotsForCount(count);
   }
   function outingSlots(){
@@ -140,11 +141,7 @@
     const code = baseCode(pos?.code || pos?.position_code || '');
     let z = String(pos?.zone || '').trim();
     if (!z) { try { z = positionTemplateByCode(code)?.zone || ''; } catch (_) {} }
-    if (z === 'ออกหน่วย') return 'ออกหน่วย';
-    if (z === 'Manual' || /^BB-Manual/i.test(code) || /manual/i.test(code)) return 'Manual';
-    if (z === 'Donor Room' || /^DR-/i.test(code)) return 'Donor Room';
-    if (z === 'Blood Bank' || /^BB-/i.test(code)) return 'Blood Bank';
-    return z || 'Blood Bank';
+    return displayZone(z, code);
   }
   function roomOf(pos){ return zoneOf(pos); }
   function ruleOkNoLeave(staff, pos){
@@ -239,7 +236,7 @@
     if (lastMonth.has(code)) score += 1800;
     if (ctx.prevWeekCode[sid] === code) score += 2600;
     if (ctx.prevWeekRoom[sid] === room) score += 380;
-    const requiredRooms = ['Blood Bank','Manual','Donor Room'];
+    const requiredRooms = ['Blood Bank','Donor Room'];
     if (requiredRooms.includes(room) && !(cur.byRoom[room] || 0)) score -= 420;
     if (requiredRooms.includes(room) && !(hist.byRoom[room] || 0)) score -= 90;
     score += circularDistance(posIndex, desired, ctx.slots.length) * 6;
@@ -503,7 +500,7 @@
   }
   function renderDailySelect(row, idx, date, layout){
     const code = row.position_code || row.code || 'รอตรวจสอบ';
-    const zone = row.zone || zoneOf(row);
+    const zone = zoneOf(row);
     const breakTime = row.break_time || '-';
     const rule = row.main_rule || '';
     const job = row.job_desc || '';
@@ -544,7 +541,7 @@
       const rowHtml = rows.map((r,idx) => {
         const code = r.position_code || r.code || 'รอตรวจสอบ';
         const label = labelCode(code);
-        const zone = r.zone || zoneOf(r);
+        const zone = zoneOf(r);
         const breakTime = r.break_time || '-';
         const rule = r.main_rule || '-';
         const job = r.job_desc || '-';
@@ -555,7 +552,7 @@
       }).join('');
       const cardHtml = rows.map((r,idx) => {
         const code = r.position_code || r.code || 'รอตรวจสอบ';
-        const zone = r.zone || zoneOf(r);
+        const zone = zoneOf(r);
         const breakTime = r.break_time || '-';
         const rule = r.main_rule || '-';
         const select = canManage ? renderDailySelect(r, idx, date, 'mobile') : staffPillSafe(r.staff_id);
@@ -694,7 +691,7 @@
       e.preventDefault(); e.stopPropagation();
       const idx = Number(detail.getAttribute('data-v225-position-detail'));
       const row = window.__CNMI_V225_DAILY_POSITION_ROWS__?.[idx];
-      if (row) showModal(`<h2>${esc(labelCode(row.position_code || row.code))}</h2><p class="hint">${esc(row.zone || zoneOf(row))} • พัก ${esc(row.break_time || '-')} • ${esc(row.main_rule || '-')}</p><div class="notice soft-notice">${esc(row.job_desc || '-')}</div>`, { large:false });
+      if (row) showModal(`<h2>${esc(labelCode(row.position_code || row.code))}</h2><p class="hint">${esc(zoneOf(row))} • พัก ${esc(row.break_time || '-')} • ${esc(row.main_rule || '-')}</p><div class="notice soft-notice">${esc(row.job_desc || '-')}</div>`, { large:false });
       return;
     }
   }, true);
