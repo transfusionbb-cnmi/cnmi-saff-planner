@@ -1,18 +1,18 @@
 /* =========================
-   V235 Default Slot Templates
+   V240 Default Slot Templates
    - Adds CNMI latest default slot templates for 8-14 normal staff sets.
    - Adds outing templates for 12/13/14 people.
    - Lets Admin restore/save all templates in one click instead of retyping after updates.
    ========================= */
 (function(){
   'use strict';
-  const VERSION = 'V235_DEFAULT_SLOT_TEMPLATES_LATEST';
-  if (window.__CNMI_V235_DEFAULT_SLOT_TEMPLATES__) return;
-  window.__CNMI_V235_DEFAULT_SLOT_TEMPLATES__ = true;
+  const VERSION = 'V240_DEFAULT_SLOT_TEMPLATES_OUTING_COUNT_FIX';
+  if (window.__CNMI_V240_DEFAULT_SLOT_TEMPLATES__) return;
+  window.__CNMI_V240_DEFAULT_SLOT_TEMPLATES__ = true;
 
   const CFG_PREFIX = '__CNMI_SLOT_TEMPLATE_V224__';
   const LS_KEY = 'cnmi_slot_template_v224_cache';
-  const SEED_KEY = 'cnmi_slot_template_v235_seeded_once';
+  const SEED_KEY = 'cnmi_slot_template_v240_seeded_once';
   const DAY_SETS = [8,9,10,11,12,13,14];
   const DEFAULT_CONFIGS_232 = {
   "day": {
@@ -1739,7 +1739,7 @@
       const d14 = cur.day?.[14] || cur.day?.['14'] || [];
       const out = cur.outing || [];
       // Seed once when the browser still has empty/old template cache. This is local/runtime only, not a DB overwrite.
-      return d14.length < 14 || out.length < 13 || !cur.day;
+      return d14.length < 14 || out.length < 14 || !cur.day;
     } catch (_) { return true; }
   }
   function injectButton232(){
@@ -1751,7 +1751,7 @@
       if (!target) return;
       const holder = document.createElement('span');
       holder.className = 'v232-default-slot-actions';
-      holder.innerHTML = `<button type="button" class="soft-btn" data-v232-load-default-slots>โหลดรายละเอียดล่าสุด V235</button><button type="button" class="primary-btn" data-v232-save-default-slots>ใช้รายละเอียดล่าสุด V235 + บันทึก</button>`;
+      holder.innerHTML = `<button type="button" class="soft-btn" data-v232-load-default-slots>โหลดรายละเอียดล่าสุด V240</button><button type="button" class="primary-btn" data-v232-save-default-slots>ใช้รายละเอียดล่าสุด V240 + บันทึก</button>`;
       target.appendChild(holder);
     } catch (err) { console.warn(`${VERSION}: inject button failed`, err); }
   }
@@ -1768,20 +1768,20 @@
     (async()=>{
       try {
         if (saveBtn) {
-          const ok = window.confirm ? window.confirm('ยืนยันใช้รายละเอียดตำแหน่งล่าสุด V235 ตามไฟล์ที่มัสส่งมา และบันทึกทับฐาน Slot เดิมทั้งหมด?') : true;
+          const ok = window.confirm ? window.confirm('ยืนยันใช้รายละเอียดตำแหน่งล่าสุด V240 ตามไฟล์ที่มัสส่งมา และบันทึกทับฐาน Slot เดิมทั้งหมด?') : true;
           if (!ok) return;
           saveBtn.disabled = true;
           saveBtn.textContent = 'กำลังบันทึก...';
           await saveDefaults232();
-          toast('บันทึกรายละเอียดตำแหน่งล่าสุด V235 ลงฐานข้อมูลแล้ว');
+          toast('บันทึกรายละเอียดตำแหน่งล่าสุด V240 ลงฐานข้อมูลแล้ว');
         } else {
           installDefaults232();
         }
         renderAgain232();
       } catch (err) {
-        toast('ตั้งค่ารายละเอียดตำแหน่งล่าสุด V235 ไม่สำเร็จ: ' + friendly(err), 'error');
+        toast('ตั้งค่ารายละเอียดตำแหน่งล่าสุด V240 ไม่สำเร็จ: ' + friendly(err), 'error');
       } finally {
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'ใช้รายละเอียดล่าสุด V235 + บันทึก'; }
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'ใช้รายละเอียดล่าสุด V240 + บันทึก'; }
       }
     })();
   }, true);

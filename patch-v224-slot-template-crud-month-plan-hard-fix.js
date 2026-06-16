@@ -49,27 +49,87 @@
     DAY_SETS.forEach(n => { out[n] = sanitizeRows(deepClone(src[n] || []), false); });
     return out;
   }
+  function latestOutingByCount(){
+    const row = (code, zone, main_rule, break_time, job_desc, sort_order) => ({
+      code, zone, break_time, main_rule, job_desc, sort_order,
+      eligibility_code: zone === 'ออกหน่วย' ? `OUTING:${code}` : code,
+      is_outing:true,
+      is_active:true
+    });
+    const commonDesc = {
+      report:'รับผิดชอบการออกผลตรวจ Routine, ทำหน้าที่คล้องเลือด (Cross-match), พิมพ์รายงาน A4 สำหรับแจ้งผล, และทำ QC LDPRC (Post-storage) เพื่อความถูกต้องของผลแล็บ',
+      report2:'รับผิดชอบการออกผลตรวจ Routine, ทำหน้าที่คล้องเลือด (Cross-match), พิมพ์รายงาน A4 สำหรับแจ้งผล, ตรวจสอบ QC LDPRC (Post-storage) เพื่อความถูกต้องของผลแล็บ',
+      approve:'รับผิดชอบการอนุมัติผลในระบบ LIS, การรับเลือดเข้า Stock, การจ่ายเลือดทั้งกรณีปกติและเร่งด่วน (OR/ER), และการปลดเลือดตามขั้นตอน',
+      manual1:'รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, การแปะ Bag, ทำ Pool Plt',
+      manual2:'รับผิดชอบงานเทคนิคขั้นสูง ได้แก่ การใช้เครื่อง IH-500, การตรวจ Ab ID, งาน Manual ทั้งหมด, การแปะ Bag, วัดค่า pH & Adam',
+      support:'รับผิดชอบงานสนับสนุนที่ช่วยให้งานในห้อง BB ดำเนินไปอย่างต่อเนื่อง เช่น การรับแล็บ, การเดินส่งเลือด, การรับโทรศัพท์ประสานงาน, และการรับเลือดจากสภากาชาด, และบันทึกอุณหภูมิห้อง BB และ Manual (เช้า-เย็น)',
+      register:'รับผิดชอบงานหน้าด่าน คือการลงทะเบียนผู้บริจาค, คัดกรอง Vital signs (ความดัน, ชีพจร, อุณหภูมิ), และบันทึกอุณหภูมิห้อง Donor (เช้า-เย็น)',
+      prep:'เตรียม set ดูแลโปรแกรมออกหน่วย กรณีไปหน้างานแล้วเกิดปัญหา ดูแลภาพรวม กลับมาลงทะเบียน',
+      finger:'คัดกรอง สัมภาษณ์ เจาะปลายนิ้ว กลับมาปั่นเลือด',
+      main:'เจาะเลือดตัวหลัก กลับมาปั่นเลือด',
+      outSupport:'เก็บเซตเจาะ เก็บเลือด เตรียมน้ำดื่ม/ขนม เช็ดเตียง เก็บถุงเลือด จดอุณหภูมิห้องก่อนออกหน่วย'
+    };
+    const rows14 = [
+      row('BB-Report 1','Blood Bank','MT เท่านั้น','11:00',commonDesc.report,1),
+      row('BB-Report 2','Blood Bank','MT เท่านั้น','12:00',commonDesc.report2,2),
+      row('BB-Approve','Blood Bank','MT เท่านั้น','12:00',commonDesc.approve,3),
+      row('BB-Manual 1','Manual','MT เท่านั้น','11:00',commonDesc.manual1,4),
+      row('BB-Manual 2','Manual','MT เท่านั้น','11:00',commonDesc.manual2,5),
+      row('BB-Support','Blood Bank','Clerk หรือ แตง','12:00',commonDesc.support,6),
+      row('DR-Register','ออกหน่วย','Clerk หรือ แตง','12:00',commonDesc.register,7),
+      row('DR-Preparation','ออกหน่วย','มัส','12:00',commonDesc.prep,8),
+      row('DR-Finger+Interview 1','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.finger,9),
+      row('DR-Finger+Interview 2','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.finger,10),
+      row('DR-Main 1','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.main,11),
+      row('DR-Main 2','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.main,12),
+      row('DR-Main 3','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.main,13),
+      row('DR-Support','ออกหน่วย','Clerk','12:00',commonDesc.outSupport,14)
+    ];
+    const rows13 = [
+      row('BB-Report','Blood Bank','MT เท่านั้น','11:00',commonDesc.report,1),
+      row('BB-Approve','Blood Bank','MT เท่านั้น','12:00',commonDesc.approve,2),
+      row('BB-Manual 1','Manual','MT เท่านั้น','11:00',commonDesc.manual1,3),
+      row('BB-Manual 2','Manual','MT เท่านั้น','11:00',commonDesc.manual2,4),
+      row('BB-Support','Blood Bank','Clerk หรือ แตง','12:00',commonDesc.support,5),
+      row('DR-Register','ออกหน่วย','Clerk หรือ แตง','12:00',commonDesc.register,6),
+      row('DR-Preparation','ออกหน่วย','มัส','12:00',commonDesc.prep,7),
+      row('DR-Finger+Interview 1','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.finger,8),
+      row('DR-Finger+Interview 2','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.finger,9),
+      row('DR-Main 1','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.main,10),
+      row('DR-Main 2','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.main,11),
+      row('DR-Main 3','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.main,12),
+      row('DR-Support','ออกหน่วย','Clerk','12:00',commonDesc.outSupport,13)
+    ];
+    const rows12 = [
+      row('BB-Report','Blood Bank','MT เท่านั้น','11:00',commonDesc.report,1),
+      row('BB-Approve','Blood Bank','MT เท่านั้น','12:00',commonDesc.approve,2),
+      row('BB-Manual 1','Manual','MT เท่านั้น','11:00',commonDesc.manual1,3),
+      row('BB-Manual 2','Manual','MT เท่านั้น','11:00',commonDesc.manual2,4),
+      row('BB-Support','Blood Bank','Clerk หรือ แตง','12:00',commonDesc.support,5),
+      row('DR-Register','ออกหน่วย','Clerk หรือ แตง','12:00',commonDesc.register,6),
+      row('DR-Preparation','ออกหน่วย','มัส','12:00',commonDesc.prep,7),
+      row('DR-Finger+Interview 1','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.finger,8),
+      row('DR-Finger+Interview 2','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.finger,9),
+      row('DR-Main 1','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.main,10),
+      row('DR-Main 2','ออกหน่วย','MT หรือ แตง','12:00',commonDesc.main,11),
+      row('DR-Support','ออกหน่วย','Clerk','12:00',commonDesc.outSupport,12)
+    ];
+    return { 12:sanitizeRows(rows12, true), 13:sanitizeRows(rows13, true), 14:sanitizeRows(rows14, true) };
+  }
+  function outingBucket(n){ const raw = Number(n || 14); return raw <= 12 ? 12 : (raw <= 13 ? 13 : 14); }
+  function latestOutingRows(count=14){ return latestOutingByCount()[outingBucket(count)] || []; }
+  function hasCompleteOuting(rows, min=12){ return Array.isArray(rows) && rows.length >= min; }
   function baseOutingRows(){
     let rows = [];
     try { rows = (window.cnmiPositionCatalogV182?.outingPositions182?.() || []).map(x => ({ ...x })); } catch (_) {}
-    if (!rows.length) {
+    if (!hasCompleteOuting(rows)) {
       try { rows = (state.positionMasters || []).filter(p => p?.is_outing === true || String(p?.zone || '') === 'ออกหน่วย').map(x => ({ ...x })); } catch (_) {}
     }
-    if (!rows.length) {
-      rows = [
-        { code:'DR-Registration', zone:'ออกหน่วย', break_time:'ออกหน่วย', main_rule:'MT / แตง', job_desc:'ลงทะเบียน, คัดกรองความดัน ชีพจร อุณหภูมิ', sort_order:210, is_outing:true, eligibility_code:'OUTING:DR-Registration' },
-        { code:'DR-Preparation', zone:'ออกหน่วย', break_time:'ออกหน่วย', main_rule:'มัส', job_desc:'เตรียม set ดูแลโปรแกรมออกหน่วย กรณีไปหน้างานแล้วเกิดปัญหา ดูแลภาพรวม กลับมาลงทะเบียน', sort_order:220, is_outing:true, eligibility_code:'OUTING:DR-Preparation' },
-        { code:'DR-Finger 1', zone:'ออกหน่วย', break_time:'ออกหน่วย', main_rule:'MT / แตง', job_desc:'คัดกรอง สัมภาษณ์ เจาะปลายนิ้ว กลับมาปั่นเลือด', sort_order:230, is_outing:true, eligibility_code:'OUTING:DR-Finger 1' },
-        { code:'DR-Finger 2', zone:'ออกหน่วย', break_time:'ออกหน่วย', main_rule:'MT / แตง', job_desc:'คัดกรอง สัมภาษณ์ เจาะปลายนิ้ว กลับมาปั่นเลือด', sort_order:240, is_outing:true, eligibility_code:'OUTING:DR-Finger 2' },
-        { code:'DR-Main 1', zone:'ออกหน่วย', break_time:'ออกหน่วย', main_rule:'MT / แตง', job_desc:'เจาะเลือดตัวหลัก กลับมาปั่นเลือด', sort_order:250, is_outing:true, eligibility_code:'OUTING:DR-Main 1' },
-        { code:'DR-Main', zone:'ออกหน่วย', break_time:'ออกหน่วย', main_rule:'MT / แตง', job_desc:'เจาะเลือดตัวหลัก กลับมาปั่นเลือด', sort_order:260, is_outing:true, eligibility_code:'OUTING:DR-Main' },
-        { code:'DR-Support', zone:'ออกหน่วย', break_time:'ออกหน่วย', main_rule:'แก๊ส / เฟื่อง', job_desc:'เก็บเซตเจาะ เก็บเลือด เตรียมน้ำดื่ม/ขนม เช็ดเตียง เก็บถุงเลือด จดอุณหภูมิห้องก่อนออกหน่วย', sort_order:270, is_outing:true, eligibility_code:'OUTING:DR-Support' }
-      ];
-    }
+    if (!hasCompleteOuting(rows)) rows = latestOutingRows(14);
     return sanitizeRows(rows, true);
   }
   function defaultConfigs(){
-    return { day:baseDaySets(), outing:baseOutingRows() };
+    return { day:baseDaySets(), outing:latestOutingRows(14), outing_by_count:latestOutingByCount() };
   }
   function sanitizeRows(rows, outing){
     return (Array.isArray(rows) ? rows : []).map((r, i) => {
@@ -100,8 +160,21 @@
   }
   function mergeConfigs(base, extra){
     const out = deepClone(base || defaultConfigs());
+    if (!out.outing_by_count) out.outing_by_count = latestOutingByCount();
     if (extra?.day) DAY_SETS.forEach(n => { if (Array.isArray(extra.day[n])) out.day[n] = sanitizeRows(extra.day[n], false); });
-    if (Array.isArray(extra?.outing)) out.outing = sanitizeRows(extra.outing, true);
+    if (extra?.outing_by_count) [12,13,14].forEach(n => {
+      const rows = extra.outing_by_count[n] || extra.outing_by_count[String(n)] || [];
+      if (hasCompleteOuting(rows, n)) out.outing_by_count[n] = sanitizeRows(rows, true);
+    });
+    if (Array.isArray(extra?.outing)) {
+      const rows = sanitizeRows(extra.outing, true);
+      if (hasCompleteOuting(rows, 12)) {
+        out.outing = rows;
+        if (!hasCompleteOuting(out.outing_by_count?.[14], 14) && rows.length >= 14) out.outing_by_count[14] = rows;
+      }
+    }
+    [12,13,14].forEach(n => { if (!hasCompleteOuting(out.outing_by_count?.[n], n)) out.outing_by_count[n] = latestOutingRows(n); });
+    if (!hasCompleteOuting(out.outing, 12)) out.outing = out.outing_by_count[14] || latestOutingRows(14);
     return out;
   }
   async function loadDbConfigs(force=false){
@@ -119,6 +192,8 @@
           const parsed = safeJsonParse(row.job_desc);
           if (!Array.isArray(parsed)) return;
           const code = String(row.code || '');
+          const mo = code.match(/:OUTING:(\d+)$/);
+          if (mo) { db.outing_by_count = db.outing_by_count || {}; db.outing_by_count[Number(mo[1])] = sanitizeRows(parsed, true); return; }
           if (code.endsWith(':OUTING')) db.outing = sanitizeRows(parsed, true);
           const m = code.match(/:DAY:(\d+)$/);
           if (m) { db.day = db.day || {}; db.day[Number(m[1])] = sanitizeRows(parsed, false); }
@@ -141,7 +216,11 @@
     const configs = currentConfigs();
     const entries = [];
     if (!kinds || kinds.includes('day')) DAY_SETS.forEach(n => entries.push({ key:cfgKey('day', n), rows:configs.day[n] || [] }));
-    if (!kinds || kinds.includes('outing')) entries.push({ key:cfgKey('outing'), rows:configs.outing || [] });
+    if (!kinds || kinds.includes('outing')) {
+      const by = configs.outing_by_count || latestOutingByCount();
+      entries.push({ key:cfgKey('outing'), rows:by[14] || configs.outing || latestOutingRows(14) });
+      [12,13,14].forEach(n => entries.push({ key:`${CFG_PREFIX}:OUTING:${n}`, rows:by[n] || latestOutingRows(n) }));
+    }
     for (const ent of entries) {
       const payload = {
         code:ent.key,
@@ -168,7 +247,9 @@
       if (window.cnmiDayPositionSlotsV218) {
         window.cnmiDayPositionSlotsV218.DAY_POSITION_SLOT_SETS_218 = target;
         window.cnmiDayPositionSlotsV218.daySlotsForDateV224 = configuredDaySlotsForDate;
-        window.cnmiDayPositionSlotsV218.outingSlotsV224 = () => sanitizeRows(currentConfigs().outing || [], true);
+        window.cnmiDayPositionSlotsV218.outingSlotsV224 = () => sanitizeRows(currentConfigs().outing_by_count?.[14] || currentConfigs().outing || latestOutingRows(14), true);
+        window.cnmiDayPositionSlotsV218.outingSlotsV232 = (count) => sanitizeRows(currentConfigs().outing_by_count?.[outingBucket(count)] || currentConfigs().outing || latestOutingRows(count), true);
+        window.cnmiDayPositionSlotsV218.outingSlotsV226 = () => sanitizeRows(currentConfigs().outing_by_count?.[14] || currentConfigs().outing || latestOutingRows(14), true);
       }
     } catch (err) { console.warn(`${VERSION}: apply runtime config failed`, err); }
   }
@@ -177,12 +258,17 @@
   function selectedSet(){ return Number(getState().setNo || 10); }
   function selectedRows(){
     const cfg = currentConfigs();
-    return selectedKind() === 'outing' ? (cfg.outing || []) : (cfg.day[selectedSet()] || []);
+    if (selectedKind() === 'outing') return cfg.outing_by_count?.[outingBucket(selectedSet())] || cfg.outing || latestOutingRows(selectedSet());
+    return cfg.day[selectedSet()] || [];
   }
   function setSelectedRows(rows){
     const cfg = currentConfigs();
-    if (selectedKind() === 'outing') cfg.outing = sanitizeRows(rows, true);
-    else cfg.day[selectedSet()] = sanitizeRows(rows, false);
+    if (selectedKind() === 'outing') {
+      cfg.outing_by_count = cfg.outing_by_count || latestOutingByCount();
+      const n = outingBucket(selectedSet());
+      cfg.outing_by_count[n] = sanitizeRows(rows, true);
+      if (n === 14) cfg.outing = cfg.outing_by_count[14];
+    } else cfg.day[selectedSet()] = sanitizeRows(rows, false);
     getState().configs = cfg;
     writeLocal(cfg);
     applyConfigsToRuntime();
@@ -195,7 +281,8 @@
     const setNo = selectedSet();
     const rows = selectedRows();
     const kindOptions = `<option value="day" ${kind==='day'?'selected':''}>วันทำงานปกติ</option><option value="outing" ${kind==='outing'?'selected':''}>วันที่ออกหน่วย</option>`;
-    const setOptions = DAY_SETS.map(n => `<option value="${n}" ${setNo===n?'selected':''}>${n} คน</option>`).join('');
+    const availableSets = kind === 'outing' ? [12,13,14] : DAY_SETS;
+    const setOptions = availableSets.map(n => `<option value="${n}" ${setNo===n?'selected':''}>${n} คน</option>`).join('');
     const tableRows = rows.map((r, i) => `<tr>
       <td>${i + 1}</td>
       <td><b>${esc(r.code)}</b><div class="muted">${esc(r.eligibility_code || '')}</div></td>
@@ -211,7 +298,7 @@
         <button class="tiny-btn danger" type="button" data-v224-delete-slot="${i}">ลบ</button>
       </td>
     </tr>`).join('');
-    const title = kind === 'outing' ? 'ชุด Slot วันที่ออกหน่วย' : `ชุด Slot วันทำงานปกติ ${setNo} คน`;
+    const title = kind === 'outing' ? `ชุด Slot วันที่ออกหน่วย ${outingBucket(setNo)} คน` : `ชุด Slot วันทำงานปกติ ${setNo} คน`;
     return `<div class="position-management-page v224-position-template-page">
       <div class="card wide-card v224-slot-crud-card">
         <div class="section-title">
@@ -220,7 +307,7 @@
         </div>
         <div class="v224-template-toolbar">
           <label>ประเภทวัน <select id="slotTemplateKindV224" data-v224-kind>${kindOptions}</select></label>
-          <label class="${kind==='outing'?'hidden':''}">จำนวนคน <select id="slotTemplateSetV224" data-v224-set>${setOptions}</select></label>
+          <label>จำนวนคน <select id="slotTemplateSetV224" data-v224-set>${setOptions}</select></label>
           <button type="button" class="soft-btn" data-v224-add-slot>เพิ่ม Slot</button>
           <button type="button" class="primary-btn" data-v224-save-current>บันทึกชุดนี้</button>
         </div>
@@ -243,11 +330,11 @@
     if (copy && row.code) row.code = `${row.code} copy`;
     const zoneOptions = ZONES.map(z => `<option value="${esc(z)}" ${row.zone===z?'selected':''}>${esc(z)}</option>`).join('');
     const title = editing && !copy ? 'แก้ไข Slot' : 'เพิ่ม Slot';
-    showModal(`<div class="v224-slot-modal"><h2>${title}</h2><p class="hint">${selectedKind()==='outing'?'วันที่ออกหน่วย':`${selectedSet()} คน`}</p>
+    showModal(`<div class="v224-slot-modal"><h2>${title}</h2><p class="hint">${selectedKind()==='outing'?`วันที่ออกหน่วย ${outingBucket(selectedSet())} คน`:`${selectedSet()} คน`}</p>
       <form id="slotTemplateFormV224" class="form-grid compact-form" action="javascript:void(0)">
         <input type="hidden" name="idx" value="${idx == null || copy ? '' : esc(idx)}">
         <label>Code ตำแหน่ง <input name="code" value="${esc(row.code || '')}" required placeholder="เช่น BB-Report 1"></label>
-        <label>โซน <select name="zone" ${isOut?'disabled':''}>${zoneOptions}</select><input type="hidden" name="zone_hidden" value="${isOut?'ออกหน่วย':''}"></label>
+        <label>โซน <select name="zone">${zoneOptions}</select><input type="hidden" name="zone_hidden" value="${esc(row.zone || (isOut?'ออกหน่วย':'Blood Bank'))}"></label>
         <label>ผู้ปฏิบัติหลัก <input name="main_rule" value="${esc(row.main_rule || '')}" required placeholder="เช่น MT เท่านั้น / Clerk หรือ แตง"></label>
         <label>เวลาพัก <input name="break_time" value="${esc(row.break_time || '')}" required placeholder="11:00 / 12:00 / ออกหน่วย"></label>
         <label class="wide">รายละเอียดหน้าที่ <textarea name="job_desc" rows="5" required>${esc(row.job_desc || '')}</textarea></label>
@@ -261,14 +348,14 @@
     const idx = idxRaw === '' ? null : Number(idxRaw);
     const isOut = selectedKind() === 'outing';
     const code = String(fd.get('code') || '').trim();
-    const zone = isOut ? 'ออกหน่วย' : String(fd.get('zone') || fd.get('zone_hidden') || '').trim();
+    const zone = String(fd.get('zone') || fd.get('zone_hidden') || '').trim() || (isOut ? 'ออกหน่วย' : 'Blood Bank');
     const row = {
       code,
-      zone:zone || (isOut ? 'ออกหน่วย' : 'Blood Bank'),
+      zone,
       main_rule:String(fd.get('main_rule') || '').trim(),
-      break_time:String(fd.get('break_time') || '').trim() || (isOut ? 'ออกหน่วย' : '-'),
+      break_time:String(fd.get('break_time') || '').trim() || (zone === 'ออกหน่วย' ? 'ออกหน่วย' : '-'),
       job_desc:String(fd.get('job_desc') || '').trim(),
-      eligibility_code:String(fd.get('eligibility_code') || '').trim() || (isOut ? `OUTING:${code}` : code),
+      eligibility_code:String(fd.get('eligibility_code') || '').trim() || (zone === 'ออกหน่วย' ? `OUTING:${code}` : code),
       is_outing:isOut,
       is_active:true
     };
@@ -310,7 +397,7 @@
       const cfg = currentConfigs();
       await saveConfigRows();
       const dayRows = uniqueDayRows();
-      const outingRows = sanitizeRows(cfg.outing || [], true);
+      const outingRows = sanitizeRows(cfg.outing_by_count?.[14] || cfg.outing || latestOutingRows(14), true);
       const dayCodes = new Set(dayRows.map(r => r.code));
       const outingCodes = new Set(outingRows.map(r => r.code));
       const existingRes = await sb.from('daily_position_masters').select('*');
@@ -333,9 +420,9 @@
       const upsertRow = async (r, outing) => {
         const payload = {
           code:r.code,
-          eligibility_code:r.eligibility_code || (outing ? `OUTING:${r.code}` : r.code),
-          zone:outing ? 'ออกหน่วย' : r.zone,
-          break_time:r.break_time || (outing ? 'ออกหน่วย' : '-'),
+          eligibility_code:r.eligibility_code || (r.zone === 'ออกหน่วย' ? `OUTING:${r.code}` : r.code),
+          zone:outing ? (r.zone || 'ออกหน่วย') : r.zone,
+          break_time:r.break_time || (r.zone === 'ออกหน่วย' ? 'ออกหน่วย' : '-'),
           main_rule:r.main_rule || null,
           job_desc:r.job_desc || null,
           is_outing:!!outing,
@@ -391,7 +478,7 @@
     const n = bucketForCount(working);
     return sanitizeRows((currentConfigs().day[n] || currentConfigs().day[10] || []), false);
   }
-  function configuredOutingSlots(){ return sanitizeRows(currentConfigs().outing || [], true); }
+  function configuredOutingSlots(date){ const cfg = currentConfigs(); const n = date ? outingBucket(activePositionStaff(date).length) : 14; return sanitizeRows(cfg.outing_by_count?.[n] || cfg.outing || latestOutingRows(n), true); }
   function hasOutingSafe(date){ try { return !!hasOuting(date); } catch (_) { return false; } }
   function outingIds(date){ try { return new Set(outingParticipants(date) || []); } catch (_) { return new Set(); } }
   function baseCode(code){ try { return positionBaseCode(code); } catch (_) { return String(code || '').replace(/\s+#\d+$/, '').trim(); } }
@@ -496,8 +583,11 @@
         const outIds = outingIds(date);
         const outingPool = working.filter(st => outIds.has(st.id));
         const roomPool = working.filter(st => !outIds.has(st.id));
-        configuredOutingSlots().forEach(pos => { const st = chooseStaff(pos, date, outingPool, used, counts, rows); if (st) { used.add(String(st.id)); rows.push(makeRow(date, st, pos)); addCount(counts, st.id, pos); } });
-        configuredDaySlotsForDate(date).filter(p => ['Blood Bank','Manual'].includes(String(p.zone || ''))).forEach(pos => { const st = chooseStaff(pos, date, roomPool, used, counts, rows); if (st) { used.add(String(st.id)); rows.push(makeRow(date, st, pos)); addCount(counts, st.id, pos); } });
+        const outingSet = configuredOutingSlots(date);
+        const outingSlots = outingSet.filter(p => String(p.zone || '') === 'ออกหน่วย');
+        const roomSlots = outingSet.filter(p => ['Blood Bank','Manual'].includes(String(p.zone || '')));
+        outingSlots.forEach(pos => { const st = chooseStaff(pos, date, outingPool, used, counts, rows); if (st) { used.add(String(st.id)); rows.push(makeRow(date, st, pos)); addCount(counts, st.id, pos); } });
+        (roomSlots.length ? roomSlots : configuredDaySlotsForDate(date).filter(p => ['Blood Bank','Manual'].includes(String(p.zone || '')))).forEach(pos => { const st = chooseStaff(pos, date, roomPool, used, counts, rows); if (st) { used.add(String(st.id)); rows.push(makeRow(date, st, pos)); addCount(counts, st.id, pos); } });
       } else {
         configuredDaySlotsForDate(date).forEach(pos => { const st = chooseStaff(pos, date, working, used, counts, rows); if (st) { used.add(String(st.id)); rows.push(makeRow(date, st, pos)); addCount(counts, st.id, pos); } });
       }
@@ -568,7 +658,7 @@
 
   document.addEventListener('change', function(e){
     const kind = e.target?.closest?.('[data-v224-kind]');
-    if (kind) { getState().kind = kind.value === 'outing' ? 'outing' : 'day'; renderPositionManagementV224(); return; }
+    if (kind) { getState().kind = kind.value === 'outing' ? 'outing' : 'day'; if (getState().kind === 'outing' && ![12,13,14].includes(Number(getState().setNo))) getState().setNo = 14; renderPositionManagementV224(); return; }
     const set = e.target?.closest?.('[data-v224-set]');
     if (set) { getState().setNo = Number(set.value) || 10; renderPositionManagementV224(); return; }
   }, true);
