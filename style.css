@@ -3430,3 +3430,60 @@ thead .v179-sticky-first-col {
   .v219-position-select { max-width: none; }
   .v219-position-toolbar { align-items: stretch; }
 }
+
+/* V228 weekly leave-aware monthly position plan */
+.v228-position-matrix {
+  --month-header-height: 38px;
+  --month-count-height: 30px;
+  --month-missing-height: 32px;
+  --month-row-height: 34px;
+}
+.v228-position-matrix .month-position-matrix thead .count-role-row th {
+  height: var(--month-count-height) !important;
+  min-height: var(--month-count-height) !important;
+  max-height: var(--month-count-height) !important;
+  position: sticky !important;
+  top: var(--month-header-height) !important;
+  z-index: 39;
+  background: #fff7ed !important;
+}
+.v228-position-matrix .month-position-matrix thead .missing-role-row th {
+  top: calc(var(--month-header-height) + var(--month-count-height)) !important;
+}
+.v228-position-matrix .count-role-cell {
+  width: var(--month-day-col-width) !important;
+  min-width: var(--month-day-col-width) !important;
+  max-width: var(--month-day-col-width) !important;
+  padding: 3px 4px !important;
+  font-size: 10px !important;
+  line-height: 1.05 !important;
+  background: #fff7ed !important;
+  color: #9a3412 !important;
+  white-space: nowrap !important;
+}
+.v228-position-matrix .count-role-cell.complete {
+  background: #f0fdf4 !important;
+  color: #166534 !important;
+}
+.v228-position-matrix .count-role-cell.no-position-day {
+  background: #eef2f7 !important;
+  color: #475569 !important;
+}
+.v228-position-matrix .leave-note-v228 {
+  display: block !important;
+  max-width: 100%;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8px;
+  line-height: 1;
+  opacity: .9;
+}
+.v228-position-matrix .matrix-cell.leave-cell > span {
+  display: block;
+}
+.v228-position-matrix .matrix-cell.leave-cell .month-position-select {
+  border-color: #f9c74f !important;
+  background: rgba(255,255,255,.92) !important;
+}
