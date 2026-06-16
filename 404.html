@@ -1,22 +1,139 @@
 <!doctype html>
 <html lang="th">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Redirecting...</title></head>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Staff Planner | Blood Bank CNMI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=233" />
+</head>
 <body>
-<script>
-(function(){
-  var parts = location.pathname.split('/').filter(Boolean);
-  var base = location.origin + (parts.length ? '/' + parts[0] + '/' : '/');
-  var search = location.search || '';
-  var hash = location.hash || '';
-  // Preserve Supabase auth query/hash, but move back to the app root so GitHub Pages does not stay on 404.
-  if (/access_token=|refresh_token=|token_hash=|type=recovery|type=invite|error_description=|code=/.test(search + hash)) {
-    if (!/[?&]mode=/.test(search) && /type=recovery|type=invite|access_token=|code=/.test(search + hash)) {
-      search = (search ? search + '&' : '?') + 'mode=recovery';
-    }
-  }
-  location.replace(base + search + hash);
-})();
-</script>
-กำลังพากลับเข้าระบบ...
+  <div id="setupWarning" class="setup-warning hidden">
+    <b>ยังไม่ได้ตั้งค่า config.js</b>
+    <span>กรุณาใส่ SUPABASE_URL และ SUPABASE_ANON_KEY ก่อนใช้งานจริง</span>
+  </div>
+
+  <section id="authView" class="auth-view">
+    <div class="auth-card">
+      <div class="brand-mark">CNMI</div>
+      <h1>ระบบเวรและกิจกรรมหน่วยงาน</h1>
+      <p class="muted">กรอก Username หรือ อีเมล Mahidol และ Password เพื่อเข้าสู่ระบบ</p>
+
+      <div class="auth-tabs hidden" aria-hidden="true">
+        <button class="auth-tab active" data-auth-tab="login" type="button">เข้าสู่ระบบ</button>
+        <button class="auth-tab" data-auth-tab="setupPassword" type="button">Login ครั้งแรก / ลืมรหัสผ่าน</button>
+      </div>
+
+      <form id="loginForm" class="auth-panel active">
+        <label>Username หรือ อีเมล Mahidol
+          <input id="loginEmail" type="text" placeholder="Username หรือ name@mahidol.ac.th" autocomplete="username" required>
+        </label>
+        <label>รหัสผ่าน
+          <span class="password-field">
+            <input id="loginPassword" type="password" placeholder="เช่น CNMI@รหัสพนักงาน" autocomplete="current-password" required>
+            <button class="password-toggle" type="button" data-toggle-password="loginPassword" aria-label="แสดงรหัสผ่าน" aria-pressed="false">👁</button>
+          </span>
+        </label>
+        <button class="primary-btn full-btn" type="submit">เข้าสู่ระบบ</button>
+        <p class="hint login-helper-text">สำหรับการล็อกอินครั้งแรก หรือ ลืมรหัสผ่าน กรุณาใช้อีเมลมหิดล ส่วนรหัสผ่านคือ CNMI@ ตามด้วยรหัสพนักงาน</p>
+      </form>
+
+      <form id="setupPasswordForm" class="auth-panel hidden" aria-hidden="true">
+        <label>อีเมล Mahidol
+          <input id="setupPasswordEmail" type="email" placeholder="name@mahidol.ac.th" autocomplete="username">
+        </label>
+        <button class="primary-btn full-btn" type="submit">ส่งลิงก์ตั้งรหัสผ่าน</button>
+        <p class="hint">ระบบจะส่งลิงก์เฉพาะอีเมลที่อยู่ในรายชื่อเจ้าหน้าที่และเปิดใช้งานแล้วเท่านั้น</p>
+      </form>
+
+      <form id="resetPasswordForm" class="auth-panel reset-panel hidden">
+        <label>ตั้งชื่อผู้ใช้
+          <input id="recoveryLoginName" type="text" placeholder="เช่น user หรือ gift123 หรือ 012345" autocomplete="username" required>
+        </label>
+        <label>รหัสผ่านใหม่
+          <span class="password-field">
+            <input id="newPassword" type="password" placeholder="รหัสผ่านใหม่" autocomplete="new-password" required>
+            <button class="password-toggle" type="button" data-toggle-password="newPassword" aria-label="แสดงรหัสผ่าน" aria-pressed="false">👁</button>
+          </span>
+        </label>
+        <button class="primary-btn full-btn" type="submit">บันทึกชื่อผู้ใช้และรหัสผ่านใหม่</button>
+        <p class="hint">ชื่อผู้ใช้ใช้ตัวอักษรอังกฤษหรือตัวเลขได้ เช่น user, gift123, 012345</p>
+      </form>
+    </div>
+  </section>
+
+  <section id="appView" class="app-view hidden">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-head">
+        <div class="brand-icon">CNMI</div>
+        <div>
+          <div class="app-title">Staff Planner</div>
+          <div class="app-subtitle">Blood Bank CNMI</div>
+        </div>
+      </div>
+      <nav id="mainNav" class="main-nav"></nav>
+      <div class="sidebar-foot">
+        <div id="userMini" class="user-mini"></div>
+        <button id="logoutBtn" class="danger-ghost full-btn">Log Out</button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <button id="mobileMenuBtn" class="icon-btn">☰</button>
+        <div>
+          <h2 id="pageTitle">Dashboard</h2>
+          <p id="pageSubtitle" class="muted">ภาพรวมวันนี้</p>
+        </div>
+        <div class="topbar-actions">
+          <span id="syncStatus" class="sync-status">พร้อมใช้งาน</span>
+          <button id="reloadBtn" class="ghost-btn">รีเฟรช</button>
+        </div>
+      </header>
+      <div id="pageContent" class="page-content"></div>
+    </main>
+  </section>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button id="modalClose" class="modal-close">×</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="config.js?v=233"></script>
+  <script src="patch-v136-preauth.js?v=233"></script>
+  <script src="app.js?v=233"></script>
+  <script src="patch-v136-auth-layout-tabs-final.js?v=233"></script>
+  <script src="patch-v137-critical-regression-restore.js?v=233"></script>
+  <script src="patch-v138-password-complete-redirect.js?v=233"></script>
+  <script src="patch-v140-long-leave-balance-admin.js?v=233"></script>
+  <script src="patch-v141-admin-long-leave-ui-force.js?v=233"></script>
+  <script src="patch-v143-neutral-long-leave-label.js?v=233"></script>
+  <script src="patch-v196-no-stale-recovery.js?v=233"></script>
+  <script src="patch-v197-duty-permission-sync.js?v=233"></script>
+  <script src="patch-v204-duty-eligibility-state-fix.js?v=233"></script>
+  <script src="patch-v213-fast-scheduler-daily-position-dedup.js?v=233"></script>
+  <script src="patch-v214-position-management-crud-hard-fix.js?v=233"></script>
+  <script src="patch-v215-weekly-position-copy.js?v=233"></script>
+  <script src="patch-v216-month-position-blank-table.js?v=233"></script>
+  <script src="patch-v217-partial-sell-shift-segments.js?v=233"></script>
+  <script src="patch-v220-ot-approval-position-slots-final.js?v=233"></script>
+  <script src="patch-v221-duty-date-slot-edit-month-ui.js?v=233"></script>
+  <script src="patch-v222-clean-ot-ch4-month-position-ui.js?v=233"></script>
+  <script src="patch-v223-month-plan-source-template-only.js?v=233"></script>
+  <script src="patch-v224-slot-template-crud-month-plan-hard-fix.js?v=233"></script>
+  <script src="patch-v225-weekly-rotation-position-plan.js?v=233"></script>
+  <script src="patch-v227-manual-as-blood-bank-zone.js?v=233"></script>
+  <script src="patch-v230-weekly-leave-aware-position-plan-final.js?v=233"></script>
+  <script src="patch-v231-main-slot-weekly-leave-config.js?v=233"></script>
+  <script src="patch-v232-default-slot-templates.js?v=233"></script>
+  <script src="patch-v233-full-week-leave-no-position.js?v=233"></script>
 </body>
 </html>
