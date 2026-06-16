@@ -3369,3 +3369,41 @@ thead .v179-sticky-first-col {
     flex: 1 1 140px;
   }
 }
+
+/* V215 Weekly Position Copy */
+.week-copy-source-v215,
+.week-copy-checkbox-v215 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.week-copy-source-v215 input[type="date"] {
+  min-width: 145px;
+}
+.week-copy-checkbox-v215 input {
+  width: auto;
+}
+.week-copy-btn-v215 {
+  border-color: #bae6fd;
+  background: #eff6ff;
+}
+.week-copy-cell-v215 {
+  background: #e8f7ff !important;
+  box-shadow: inset 0 0 0 2px #bae6fd;
+}
+.week-copy-cell-v215 select {
+  background: #f0fbff !important;
+  border-color: #7dd3fc !important;
+}
+@media (max-width: 768px) {
+  .week-copy-source-v215,
+  .week-copy-checkbox-v215,
+  .week-copy-btn-v215 {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .week-copy-source-v215 input[type="date"] {
+    width: 100%;
+  }
+}
