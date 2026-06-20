@@ -1760,27 +1760,15 @@
     return cfg;
   }
   function shouldAutoSeed232(){
-    try {
-      if (localStorage.getItem(SEED_KEY)) return false;
-      const cur = JSON.parse(localStorage.getItem(LS_KEY) || '{}') || {};
-      const d14 = cur.day?.[14] || cur.day?.['14'] || [];
-      const out = cur.outing || [];
-      // Seed once when the browser still has empty/old template cache. This is local/runtime only, not a DB overwrite.
-      return d14.length < 14 || out.length < 14 || !cur.day;
-    } catch (_) { return true; }
+    // V260: ห้ามนำต้นแบบ V240 มาแทนฐานตำแหน่งปัจจุบันอัตโนมัติ
+    // Supabase configuration rows are the source of truth after login.
+    return false;
   }
   function injectButton232(){
+    // V260: ซ่อนปุ่มคืนค่า V240 เพื่อป้องกันการกดทับฐานตำแหน่งปัจจุบันโดยไม่ตั้งใจ
     try {
-      if (state?.page !== 'positionManagement') return;
-      const root = document.getElementById('pageContent');
-      if (!root || root.querySelector('[data-v232-save-default-slots]')) return;
-      const target = root.querySelector('.v224-template-toolbar') || root.querySelector('.section-title .actions') || root.querySelector('.section-title');
-      if (!target) return;
-      const holder = document.createElement('span');
-      holder.className = 'v232-default-slot-actions';
-      holder.innerHTML = `<button type="button" class="soft-btn" data-v232-load-default-slots>โหลดรายละเอียดล่าสุด V240</button><button type="button" class="primary-btn" data-v232-save-default-slots>ใช้รายละเอียดล่าสุด V240 + บันทึก</button>`;
-      target.appendChild(holder);
-    } catch (err) { console.warn(`${VERSION}: inject button failed`, err); }
+      document.querySelectorAll('.v232-default-slot-actions').forEach(node => node.remove());
+    } catch (_) {}
   }
   function renderAgain232(){
     try { if (state?.page === 'positionManagement' && typeof renderPage === 'function') renderPage(); } catch (_) {}

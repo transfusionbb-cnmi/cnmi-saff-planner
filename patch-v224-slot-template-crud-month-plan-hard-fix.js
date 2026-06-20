@@ -303,7 +303,7 @@
       <div class="card wide-card v224-slot-crud-card">
         <div class="section-title">
           <div><h3>ชุด Slot ตำแหน่งกลางวัน</h3><p class="hint">จัดการ Slot ผ่านหน้าเว็บนี้ได้เลย: เพิ่ม / แก้ไข / ลบ / เรียงลำดับ แล้วบันทึกเป็นต้นทางเดียวของตารางรายวันและรายเดือน</p></div>
-          <div class="actions"><button type="button" class="ghost-btn" data-v224-refresh-config>รีเฟรชจากฐานข้อมูล</button><button type="button" class="primary-btn" data-v224-save-all>บันทึกทั้งหมดเป็นฐานตำแหน่ง</button></div>
+          <div class="actions"><button type="button" class="ghost-btn" data-v224-refresh-config>รีเฟรชจากฐานข้อมูลล่าสุด</button><button type="button" class="primary-btn" data-v224-save-all>บันทึกทั้งหมดเป็นฐานตำแหน่งปัจจุบัน</button></div>
         </div>
         <div class="v224-template-toolbar">
           <label>ประเภทวัน <select id="slotTemplateKindV224" data-v224-kind>${kindOptions}</select></label>
