@@ -1,13 +1,15 @@
 /* =========================
    V255 Personal Permission Enforcement for Position Plans
-   - A staff member with no eligible positions in the active Slot set is excluded from Auto Assign counts.
-   - Existing current/future assignments that conflict with newly saved personal permissions are removed.
-   - Stale invalid assignments are hidden from the monthly matrix and are not saved back.
+   Optimized in V257
+   - Staff with no eligible position in the active Slot set are excluded from monthly counts.
+   - Current/future assignments that conflict with newly saved permissions are removed.
+   - Invalid saved assignments are hidden and are not saved back.
    - Historical assignments before today are preserved.
+   - Uses per-render caches and does not replace the Slot-template resolver, preventing the monthly page from freezing.
    ========================= */
 (function(){
   'use strict';
-  const VERSION = 'V255_PERSONAL_PERMISSION_ENFORCE_PLAN';
+  const VERSION = 'V255_PERSONAL_PERMISSION_ENFORCE_PLAN_V257_OPTIMIZED';
   if (window.__CNMI_V255_PERSONAL_PERMISSION_ENFORCE_PLAN__) return;
   window.__CNMI_V255_PERSONAL_PERMISSION_ENFORCE_PLAN__ = true;
 
@@ -75,22 +77,31 @@
     const row = { ...template, staff_id:staff.id, work_date:normDate(date), position_code:template.code || template.position_code };
     return assignmentAllowed(row);
   }
-  function hasAnyEligible(staff, date, templates){
-    return (templates || []).some(p => templateAllowedForStaff(staff, p, date));
-  }
   function cloneRows(rows){ return (Array.isArray(rows) ? rows : []).map(r => ({ ...r })); }
-  function codesKey(rows){ return (rows || []).map(r => String(r?.code || r?.position_code || '')).filter(Boolean).join('|'); }
 
   const oldExpected231 = window.cnmiV231?.expectedTemplatesForDate231 || null;
   const oldWeekly233 = window.cnmiV233?.weeklyAvailableStaff || null;
   const oldWeekly231 = window.cnmiV231?.weeklyAvailableStaff231 || null;
 
+  let expectedCache = new Map();
+  let anyEligibleCache = new Map();
+  let weeklyCache = new Map();
+
+  function resetPermissionCaches(){
+    expectedCache = new Map();
+    anyEligibleCache = new Map();
+    weeklyCache = new Map();
+  }
   function originalExpected(date){
     const d = normDate(date);
+    if (expectedCache.has(d)) return expectedCache.get(d);
+    let rows = [];
     try {
-      const rows = oldExpected231 ? oldExpected231(d) : (typeof monthPositionRoleOptionsForDate === 'function' ? monthPositionRoleOptionsForDate(d, '') : []);
-      return cloneRows(rows);
-    } catch (_) { return []; }
+      rows = oldExpected231 ? oldExpected231(d) : (typeof monthPositionRoleOptionsForDate === 'function' ? monthPositionRoleOptionsForDate(d, '') : []);
+    } catch (_) { rows = []; }
+    const clean = cloneRows(rows);
+    expectedCache.set(d, clean);
+    return clean;
   }
   function originalWeeklyStaff(date){
     const d = normDate(date);
@@ -99,44 +110,37 @@
       return Array.isArray(rows) ? rows.slice() : [];
     } catch (_) { return []; }
   }
-  function runtimeDaySlots(count){
-    const n = Math.max(8, Math.min(14, Math.round(Number(count) || 8)));
-    try {
-      const sets = window.cnmiDayPositionSlotsV218?.DAY_POSITION_SLOT_SETS_218 || window.cnmiDayPositionSlotsV218?.DAY_POSITION_SLOT_SETS;
-      if (Array.isArray(sets?.[n]) && sets[n].length) return cloneRows(sets[n]);
-    } catch (_) {}
-    return [];
-  }
-  function isOutingDate(date){ try { return !!hasOuting(normDate(date)); } catch (_) { return false; } }
-  function effectiveExpected(date){
+  function hasAnyEligible(staff, date, templates){
+    if (!staff) return false;
     const d = normDate(date);
-    let templates = originalExpected(d);
-    if (!templates.length || isOutingDate(d)) return templates;
-    const source = originalWeeklyStaff(d);
-    if (!source.length) return templates;
-
-    // Iterate because reducing the Slot set can also change which staff still have an eligible position.
-    for (let i = 0; i < 4; i += 1) {
-      const eligibleStaff = source.filter(st => hasAnyEligible(st, d, templates));
-      const target = Math.min(templates.length, eligibleStaff.length);
-      if (target >= templates.length || target < 8) break;
-      const next = runtimeDaySlots(target);
-      if (!next.length || codesKey(next) === codesKey(templates)) break;
-      templates = next;
-    }
-    return templates;
+    const sid = String(staff?.id || '');
+    const list = Array.isArray(templates) ? templates : originalExpected(d);
+    const signature = list.map(p => String(p?.code || p?.position_code || '')).join('|');
+    const key = `${d}|${sid}|${signature}`;
+    if (anyEligibleCache.has(key)) return anyEligibleCache.get(key);
+    const allowed = list.some(p => templateAllowedForStaff(staff, p, d));
+    anyEligibleCache.set(key, allowed);
+    return allowed;
   }
   function effectiveWeeklyStaff(date){
     const d = normDate(date);
-    const templates = effectiveExpected(d);
-    return originalWeeklyStaff(d).filter(st => hasAnyEligible(st, d, templates));
+    if (weeklyCache.has(d)) return weeklyCache.get(d).slice();
+    const source = originalWeeklyStaff(d);
+    const templates = originalExpected(d);
+    const filtered = templates.length ? source.filter(st => hasAnyEligible(st, d, templates)) : source;
+    weeklyCache.set(d, filtered.slice());
+    return filtered;
   }
 
-  // V237 reads these APIs dynamically for count rows and Slot options.
-  try {
-    if (window.cnmiV231) window.cnmiV231.expectedTemplatesForDate231 = effectiveExpected;
-    if (window.cnmiV233) window.cnmiV233.weeklyAvailableStaff = effectiveWeeklyStaff;
-  } catch (_) {}
+  // Important: only replace the weekly staff source. Do not replace
+  // expectedTemplatesForDate231 because the monthly matrix calls both APIs many
+  // times per cell; replacing both created a recursive/heavy render path.
+  function applyFastWeeklyApi(){
+    try {
+      if (window.cnmiV233) window.cnmiV233.weeklyAvailableStaff = effectiveWeeklyStaff;
+    } catch (_) {}
+  }
+  applyFastWeeklyApi();
 
   function sanitizeRows(rows, options={}){
     const invalid = [];
@@ -147,7 +151,7 @@
       const staff = staffById(row?.staff_id);
       if (!date || !staff) { cleaned.push(row); return; }
       if (isReviewCode(code)) {
-        if (options.dropZeroPermissionReview !== false && !hasAnyEligible(staff, date, effectiveExpected(date))) {
+        if (options.dropZeroPermissionReview !== false && !hasAnyEligible(staff, date, originalExpected(date))) {
           invalid.push({ ...row, _v255_reason:'no_eligible_position' });
           return;
         }
@@ -166,6 +170,8 @@
   const oldBuildMonthly = window.buildMonthlyPositionDraft || (typeof buildMonthlyPositionDraft === 'function' ? buildMonthlyPositionDraft : null);
   if (oldBuildMonthly && !oldBuildMonthly.__v255PermissionEnforced) {
     const wrappedBuild = function buildMonthlyPositionDraftV255(){
+      resetPermissionCaches();
+      applyFastWeeklyApi();
       const draft = oldBuildMonthly.apply(this, arguments) || { monthKey:String(arguments[0] || '').slice(0,7), rows:[] };
       const result = sanitizeRows(draft.rows || [], { dropZeroPermissionReview:true });
       return { ...draft, rows:result.rows, invalidPermissionRowsV255:result.invalid.length };
@@ -178,6 +184,8 @@
   const oldRenderMatrix = window.renderMonthPositionMatrix || (typeof renderMonthPositionMatrix === 'function' ? renderMonthPositionMatrix : null);
   if (oldRenderMatrix && !oldRenderMatrix.__v255PermissionEnforced) {
     const wrappedRender = function renderMonthPositionMatrixV255(rows, dates){
+      resetPermissionCaches();
+      applyFastWeeklyApi();
       const result = sanitizeRows(rows || [], { dropZeroPermissionReview:true });
       let html = String(oldRenderMatrix.call(this, result.rows, dates) || '');
       if (result.invalid.length) {
@@ -195,6 +203,8 @@
   const oldSaveMonthly = window.saveMonthlyPositions || (typeof saveMonthlyPositions === 'function' ? saveMonthlyPositions : null);
   if (oldSaveMonthly && !oldSaveMonthly.__v255PermissionEnforced) {
     const wrappedSaveMonthly = async function saveMonthlyPositionsV255(){
+      resetPermissionCaches();
+      applyFastWeeklyApi();
       const st = appState();
       const key = String(st?.positionMonthKey || st?.monthKey || todayKey().slice(0,7)).slice(0,7);
       const source = st?.monthPositionDraft?.monthKey === key
@@ -212,6 +222,7 @@
   async function deleteInvalidFutureAssignments(staffIds){
     const ids = Array.from(new Set((staffIds || []).map(String).filter(Boolean)));
     if (!ids.length || typeof sb === 'undefined' || !sb) return 0;
+    resetPermissionCaches();
     let removed = 0;
     for (const sid of ids) {
       const res = await sb.from('daily_positions').select('*').eq('staff_id', sid).gte('work_date', todayKey());
@@ -226,8 +237,10 @@
         }
       } else {
         for (const row of bad) {
-          let q = sb.from('daily_positions').delete().eq('staff_id', sid).eq('work_date', normDate(row.work_date)).eq('position_code', codeOf(row));
-          const del = await q;
+          const del = await sb.from('daily_positions').delete()
+            .eq('staff_id', sid)
+            .eq('work_date', normDate(row.work_date))
+            .eq('position_code', codeOf(row));
           if (del.error) throw del.error;
         }
       }
@@ -254,6 +267,8 @@
   function sanitizeLocalPositionState(){
     const st = appState();
     if (!st) return;
+    resetPermissionCaches();
+    applyFastWeeklyApi();
     if (Array.isArray(st.positions)) st.positions = sanitizeRows(st.positions, { dropZeroPermissionReview:true }).rows;
     if (Array.isArray(st.monthPositionDraft?.rows)) st.monthPositionDraft.rows = sanitizeRows(st.monthPositionDraft.rows, { dropZeroPermissionReview:true }).rows;
   }
@@ -264,6 +279,8 @@
       const snapshot = desiredPermissionSnapshot();
       const staffIds = snapshot.map(x => x.staffId);
       await oldSaveEligibility.apply(this, arguments);
+      resetPermissionCaches();
+      applyFastWeeklyApi();
       if (!permissionSaveSucceeded(snapshot)) return;
       try {
         sanitizeLocalPositionState();
@@ -289,12 +306,10 @@
     try { savePositionEligibility = wrappedSaveEligibility; } catch (_) {}
   }
 
-  // Keep APIs patched after delayed renders/config reloads from older patches.
+  // Re-apply only the fast weekly staff hook after delayed configuration renders.
   [80, 300, 900].forEach(ms => setTimeout(() => {
-    try {
-      if (window.cnmiV231) window.cnmiV231.expectedTemplatesForDate231 = effectiveExpected;
-      if (window.cnmiV233) window.cnmiV233.weeklyAvailableStaff = effectiveWeeklyStaff;
-    } catch (_) {}
+    resetPermissionCaches();
+    applyFastWeeklyApi();
   }, ms));
 
   const style = document.createElement('style');
@@ -305,6 +320,13 @@
   `;
   document.head.appendChild(style);
 
-  window.cnmiV255 = { assignmentAllowed, effectiveExpected, effectiveWeeklyStaff, sanitizeRows, deleteInvalidFutureAssignments };
+  window.cnmiV255 = {
+    assignmentAllowed,
+    effectiveWeeklyStaff,
+    sanitizeRows,
+    deleteInvalidFutureAssignments,
+    resetPermissionCaches,
+    optimizedInV257:true
+  };
   console.info(`${VERSION} loaded`);
 })();
