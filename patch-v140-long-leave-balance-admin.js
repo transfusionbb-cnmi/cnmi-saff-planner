@@ -19,6 +19,20 @@
 
   const LONG_LEAVE_RE = /(คลอด|ลาคลอด|บวช|ลาบวช|ดูใจ|ลาดูใจ|ถือศีล|ลาถือศีล|long.?term|maternity|mat\s*leave)/i;
 
+  // v263: reuse the real Supabase client already created by app.js.
+  // The original v140 checked only window.sb, while the app exposes the client as
+  // window.supabaseClient / window.sbClient, causing a false “not connected” error.
+  function getSupabaseClientV263() {
+    try {
+      return window.supabaseClient
+        || window.sbClient
+        || window.sb
+        || (typeof sb !== 'undefined' ? sb : null);
+    } catch (_) {
+      return window.supabaseClient || window.sbClient || window.sb || null;
+    }
+  }
+
   function monthKeyNow() {
     if (window.state && state.monthKey) return state.monthKey;
     const d = new Date();
@@ -258,15 +272,25 @@
   }
 
   async function resetBalance(staffId) {
-    if (!window.sb) return showToast('ยังไม่ได้เชื่อม Supabase', { tone: 'error' });
+    const client = getSupabaseClientV263();
+    if (!client) return showToast('ยังไม่ได้เชื่อม Supabase', { tone: 'error' });
     const st = (state.staff || []).find(s => String(s.id) === String(staffId)) || {};
     const name = st.nickname || st.full_name || 'เจ้าหน้าที่นี้';
     if (!confirm(`ยืนยันรีเซ็ตยอดสะสมของ ${name} เป็น 0 ?`)) return;
     setBusy && setBusy(true, 'กำลังรีเซ็ตยอดสะสม');
     try {
-      const patch = { carry_over_balance: 0, overtime_balance: 0, ot_balance: 0, balance_reset_at: new Date().toISOString() };
-      const { error } = await sb.from('staff_profiles').update(patch).eq('id', staffId);
-      if (error) throw error;
+      const resetAt = new Date().toISOString();
+      const patch = { carry_over_balance: 0, overtime_balance: 0, ot_balance: 0, balance_reset_at: resetAt };
+
+      // Prefer the SECURITY DEFINER helper so Admin can reset another staff member
+      // even when normal table RLS blocks direct updates.
+      const rpcResult = await client.rpc('reset_staff_balance_v140', { p_staff_id: staffId });
+      if (rpcResult.error) {
+        const updateResult = await client.from('staff_profiles').update(patch).eq('id', staffId).select('id').maybeSingle();
+        if (updateResult.error) throw updateResult.error;
+        if (!updateResult.data) throw rpcResult.error || new Error('ไม่มีสิทธิ์อัปเดตข้อมูลเจ้าหน้าที่รายนี้');
+      }
+
       Object.assign(st, patch);
       showToast('รีเซ็ตยอดสะสมเป็น 0 แล้ว');
       replaceBalanceDashboard();
