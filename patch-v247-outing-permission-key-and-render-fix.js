@@ -173,6 +173,11 @@
     const rows = (appState()?.positionEligibility) || [];
     const rec = rows.find(x => String(x.staff_id) === String(staff.id) && String(x.position_code) === key);
     if (rec) return !!rec.is_eligible;
+    const legacyKey = key.replace(/^(DR-Finger\+Interview|DR-Main)\s+\d+$/, '$1');
+    if (legacyKey !== key) {
+      const legacyRec = rows.find(x => String(x.staff_id) === String(staff.id) && String(x.position_code) === legacyKey);
+      if (legacyRec) return !!legacyRec.is_eligible;
+    }
     const hasAnyExact = rows.some(x => String(x.position_code) === key);
     if (key.startsWith('OUTING:')) return hasAnyExact ? false : true;
     return oldPositionEligible ? oldPositionEligible(staff, key) : !hasAnyExact;

@@ -1629,10 +1629,37 @@
       is_active:r?.is_active === false ? false : true
     };
   }
+  function uniqueDaySlotCodes232(rows){
+    const list = (rows || []).map(r => ({ ...r }));
+    const totals = new Map();
+    list.forEach(r => {
+      const code = String(r?.code || r?.position_code || '').trim();
+      if (code) totals.set(code, (totals.get(code) || 0) + 1);
+    });
+    const seen = new Map();
+    return list.map(r => {
+      const code = String(r?.code || r?.position_code || '').trim();
+      if (!code || (totals.get(code) || 0) <= 1) return r;
+      const no = (seen.get(code) || 0) + 1;
+      seen.set(code, no);
+      const uniqueCode = `${code} ${no}`;
+      const currentEligibility = String(r?.eligibility_code || '').trim();
+      return {
+        ...r,
+        code: uniqueCode,
+        position_code: uniqueCode,
+        eligibility_code: !currentEligibility || currentEligibility === code ? uniqueCode : currentEligibility,
+        legacy_position_code: code
+      };
+    });
+  }
   function normalizeConfig(configs){
     const src = configs || DEFAULT_CONFIGS_232;
     const out = { day:{}, outing:[], outing_by_count:{} };
-    DAY_SETS.forEach(n => { out.day[n] = (src.day?.[n] || src.day?.[String(n)] || []).map((r,i) => normalizeRow(r, i, false)).filter(Boolean); });
+    DAY_SETS.forEach(n => {
+      const rows = (src.day?.[n] || src.day?.[String(n)] || []).map((r,i) => normalizeRow(r, i, false)).filter(Boolean);
+      out.day[n] = uniqueDaySlotCodes232(rows);
+    });
     out.outing = (src.outing || src.outing_by_count?.[14] || src.outing_by_count?.['14'] || []).map((r,i) => normalizeRow(r, i, true)).filter(Boolean);
     out.outing_by_count[12] = (src.outing_by_count?.[12] || src.outing_by_count?.['12'] || out.outing).map((r,i) => normalizeRow(r, i, true)).filter(Boolean);
     out.outing_by_count[13] = (src.outing_by_count?.[13] || src.outing_by_count?.['13'] || out.outing).map((r,i) => normalizeRow(r, i, true)).filter(Boolean);

@@ -80,6 +80,11 @@
     const key = String(positionCode || '').trim();
     const rec = findEligibility(staff.id, key);
     if (rec) return !!rec.is_eligible;
+    const legacyKey = key.replace(/^(DR-Finger\+Interview|DR-Main)\s+\d+$/, '$1');
+    if (legacyKey !== key) {
+      const legacyRec = findEligibility(staff.id, legacyKey);
+      if (legacyRec) return !!legacyRec.is_eligible;
+    }
     // For OUTING keys, no explicit row means default allowed until Admin sets overrides.
     if (key.startsWith('OUTING:')) return true;
     return oldPositionEligible ? oldPositionEligible(staff, key) : true;
