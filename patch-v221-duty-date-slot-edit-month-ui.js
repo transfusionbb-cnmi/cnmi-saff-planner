@@ -36,10 +36,15 @@
     try { return isWeekend(date) || isHolidayDate(date); }
     catch (_) { const day = new Date(`${norm(date)}T00:00:00`).getDay(); return day === 0 || day === 6; }
   }
+  function isCh3Composite(code){
+    const c = String(code || '').trim();
+    return c === 'ช3A' || c === 'ช3B';
+  }
   function isManualDuty(code){
     const c = String(code || '').trim();
-    return c === 'ช4' || c === 'ช4A' || c === 'ช4B' || c === 'ช3A' || c === 'ช3B';
+    return c === 'ช4' || c === 'ช4A' || c === 'ช4B';
   }
+  // V251: ช3A/ช3B ยืนยันเวรหลัก 8 ชม. เหมือน ช9; ส่วน ช4/เวลาปั่นเลือดให้กรอกเพิ่มตามจริง
   function isAutoDuty(code){ return !!String(code || '').trim() && !isManualDuty(code); }
   function dutiesOn(staffId, date){
     const d = norm(date);
@@ -148,7 +153,7 @@
     const auto = autoDuties(staffId, d);
     const manual = manualDuties(staffId, d);
     if (!auto.length) {
-      if (manual.length) return toast('วันนี้เป็น ช4/ช3A/ช3B ให้กรอกเวลาจริงในส่วนที่ 2 แล้วรอ Admin เทียบ LIS', 'error');
+      if (manual.length) return toast('วันนี้มีเฉพาะ ช4 ให้เลือกทำเอง/มีคนอยู่แทน หรือกรอกเวลาจริงในส่วนที่ 2', 'error');
       return toast('วันที่เลือกไม่มีเวรหลักที่ต้องยืนยัน', 'error');
     }
     try { if (typeof setBusy === 'function') setBusy(true, 'กำลังบันทึกยืนยันอยู่เวร'); } catch (_) {}
@@ -231,6 +236,7 @@
     const duties = dutiesOn(staffId, d);
     const auto = duties.filter(x => isAutoDuty(x?.duty_code));
     const manual = duties.filter(x => isManualDuty(x?.duty_code));
+    const ch3 = duties.filter(x => isCh3Composite(x?.duty_code));
     const att = attendanceRows(staffId, d);
     const ot = attendanceOtRows(staffId, d);
     const latestOt = latest(ot);
@@ -241,11 +247,11 @@
     else if (!auto.length && manual.length) status = 'ต้องกรอกเวลาจริง';
     else if (!duties.length) status = 'ไม่มีเวรที่ต้องยืนยัน';
     const dutyNames = duties.length ? duties.map(a => dutyName(a.duty_code)).join(' / ') : '-';
-    const timeText = auto.length ? win.label : (manual.length ? 'กรอกเวลาจริงในส่วนที่ 2' : '-');
+    const timeText = auto.length ? (ch3.length ? `${win.label} (เวรหลัก 8 ชม.)` : win.label) : (manual.length ? 'กรอกเวลาจริงในส่วนที่ 2' : '-');
     const missingOt = att.length && !ot.length && auto.length;
     const canCheck = auto.length && !latestOt && d <= today();
     return `<div class="card ot-card my-duty-today-card v221-ot-card">
-      <div class="section-title"><div><h3>ส่วนที่ 1 เวรของฉันตามวันที่เลือก</h3><p class="hint">ใช้ยืนยันเวรหลัก ชบด/ช9 ได้ทั้งวันนี้และย้อนหลัง กรณีลืมกดวันก่อน</p></div></div>
+      <div class="section-title"><div><h3>ส่วนที่ 1 เวรของฉันตามวันที่เลือก</h3><p class="hint">ใช้ยืนยันเวรหลัก ชบด/ช9/ช3A/ช3B ได้ทั้งวันนี้และย้อนหลัง กรณีลืมกดวันก่อน</p></div></div>
       <label class="wide v221-duty-date-label">เลือกวันที่อยู่เวร <input id="myDutyDateV221" type="date" value="${esc(d)}" max="${esc(today())}"></label>
       <div class="my-duty-detail v221-duty-detail">
         <div><span class="muted">เวร</span><b>${esc(dutyNames)}</b></div>
@@ -253,10 +259,11 @@
         <div><span class="muted">สถานะ</span>${b(status, statusCls(status))}</div>
       </div>
       ${missingOt ? '<div class="notice error-notice compact"><b>พบรายการค้าง</b><br>ลงชื่อแล้ว แต่ยังไม่มีรายการ OT รออนุมัติ กดปุ่มด้านล่างเพื่อสร้างรายการให้ใหม่</div>' : ''}
-      ${manual.length ? '<div class="notice soft-notice compact">ช4/ช3A/ช3B ไม่สร้าง 8 ชม. อัตโนมัติ ให้กรอกเวลาเริ่ม-สิ้นสุดจริงในส่วนที่ 2</div>' : ''}
+      ${ch3.length ? '<div class="notice soft-notice compact"><b>ช3A/ช3B = ช9 + ช4</b><br>ปุ่มด้านล่างยืนยันเวรหลัก 8 ชม. ส่วนเวลาปั่นเลือด/อยู่ต่อของ ช4 ให้กรอกเพิ่มในส่วนที่ 2 ตามเวลาจริง</div>' : ''}
+      ${manual.length ? '<div class="notice soft-notice compact">ช4 ไม่สร้าง 8 ชม. อัตโนมัติ ให้เลือกสถานะ ช4 หรือกรอกเวลาเริ่ม-สิ้นสุดจริงในส่วนที่ 2</div>' : ''}
       ${!duties.length ? '<div class="my-duty-empty"><b>วันที่เลือกไม่มีเวรที่ต้องยืนยัน</b><span class="muted">ถ้าอยู่ต่อจริง ใช้ส่วนที่ 2 เพื่อขอ OT เพิ่ม</span></div>' : ''}
       <div class="actions v221-ot-actions">
-        <button class="primary-btn" type="button" data-check-in-selected-v221="${esc(d)}" ${canCheck ? '' : 'disabled'}>${latestOt ? 'รอ/บันทึกแล้ว' : (canCheck ? 'ส่งให้ Admin อนุมัติ' : 'ไม่ต้องยืนยันเวรหลัก')}</button>
+        <button class="primary-btn" type="button" data-check-in-selected-v221="${esc(d)}" ${canCheck ? '' : 'disabled'}>${latestOt ? 'รอ/บันทึกแล้ว' : (canCheck ? (ch3.length ? 'ยืนยันเวรหลัก 8 ชม.' : 'ส่งให้ Admin อนุมัติ') : 'ไม่ต้องยืนยันเวรหลัก')}</button>
       </div>
     </div>`;
   }
@@ -273,7 +280,7 @@
       const att = attendanceRows(staffId, d).length;
       const st = ot ? statusText(ot) : (att && auto ? 'ยืนยันแล้ว แต่ยังไม่มีรายการ OT' : (auto ? 'ยังไม่ได้ยืนยัน' : 'บันทึกเวลาจริงถ้าจะเบิก'));
       const time = auto ? shiftWindowForDuties(d, [a]).label : 'เวลาจริง';
-      const hint = auto ? 'เวรหลัก: ต้องมีรายการรอ Admin อนุมัติ' : 'ช4/ช3A/ช3B: ไม่คิด 8 ชม. อัตโนมัติ';
+      const hint = isCh3Composite(a.duty_code) ? 'ช3A/ช3B: เวรหลัก 8 ชม. + ส่วน ช4 กรอกเวลาจริงเพิ่ม' : (auto ? 'เวรหลัก: ต้องมีรายการรอ Admin อนุมัติ' : 'ช4: ไม่คิด 8 ชม. อัตโนมัติ');
       return `<tr><td>${thDate(d)}</td><td><b>${esc(dutyName(a.duty_code))}</b></td><td>${esc(time)}</td><td>${b(st, statusCls(st))}<br><span class="muted">${esc(hint)}</span></td></tr>`;
     }).join('');
     return `<div class="card wide-card v221-my-month-card" style="grid-column:1/-1;">

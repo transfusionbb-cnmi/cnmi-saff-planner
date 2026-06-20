@@ -60,7 +60,7 @@
   }
   function isManualDuty(code){
     const c = String(code || '').trim();
-    return c === 'ช4' || c === 'ช4A' || c === 'ช4B' || c === 'ช3A' || c === 'ช3B';
+    return c === 'ช4' || c === 'ช4A' || c === 'ช4B';
   }
   function dutiesOn(staffId, date){
     const d = normDate(date);

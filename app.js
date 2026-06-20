@@ -12231,7 +12231,8 @@ function bindGlobalEvents() {
 /* V206 Staff My Duty Today + My Month OT Guide
    - Staff sees today's roster duty directly on OT page.
    - Staff sees only their own monthly duty checklist with confirmation/LIS status.
-   - ช4 / ช3A / ช3B are manual-time duties and must NOT auto-create 8h OT from check-in.
+   - ช3A / ช3B are composite duties: auto-confirm the ช9-like 8h base, while the ช4-like extra time stays manual.
+   - ช4 remains manual-time only and must NOT auto-create 8h OT from check-in.
    - Schedule page gets a "ดูเฉพาะเวรของฉัน" toggle.
 */
 (function(){
@@ -12263,7 +12264,7 @@ function bindGlobalEvents() {
   function dutyCode206(a){ return String(a?.duty_code || '').trim(); }
   function isManualTimeDuty206(code){
     const c = String(code || '').trim();
-    return c === 'ช4' || c === 'ช4A' || c === 'ช4B' || c === 'ช3A' || c === 'ช3B';
+    return c === 'ช4' || c === 'ช4A' || c === 'ช4B';
   }
   function isAutoCheckInDuty206(code){
     const c = String(code || '').trim();
@@ -13022,8 +13023,9 @@ function bindGlobalEvents() {
     return c === 'ช4' || c === 'ช4A' || c === 'ช4B' || c === 'ช4-MT';
   }
   function isCh3Manual209(code){
-    const c = String(code || '').trim();
-    return c === 'ช3A' || c === 'ช3B';
+    // V251: ช3A/ช3B = ช9 (เวรหลัก 8 ชม.) + ช4 (เวลาส่วนเพิ่มตามจริง)
+    // จึงต้องกดยืนยันเวรหลักได้ ไม่จัดเป็น manual-only อีกต่อไป
+    return false;
   }
   function isAutoCheckInDuty209(code){
     return !!String(code || '').trim() && !isCh4209(code) && !isCh3Manual209(code);
@@ -14326,7 +14328,7 @@ function bindGlobalEvents() {
       if (typeof tools.isManualTimeDuty206 === 'function') return tools.isManualTimeDuty206(code);
     } catch (_) {}
     const c = String(code || '').trim();
-    return c === 'ช4' || c === 'ช4A' || c === 'ช4B' || c === 'ช3A' || c === 'ช3B';
+    return c === 'ช4' || c === 'ช4A' || c === 'ช4B';
   }
   function isAutoDuty219(code){
     const c = String(code || '').trim();
