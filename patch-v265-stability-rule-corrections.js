@@ -184,6 +184,44 @@
     const d = normDate(date);
     return ordered((st?.staff || []).filter(person => positionStaffEnabled(person) && !unavailableRecord(person.id, d)));
   }
+  // Slot size is a weekly rule: a one-day leave keeps the weekly Slot base,
+  // while real leave covering every working day of the week reduces it.
+  // "ไม่รับเวร" is excluded by unavailableRecord(), so it never reduces daytime Slots.
+  function weekWorkingDatesV265(date){
+    const d = parseSafe(date);
+    if (Number.isNaN(d.getTime())) return [];
+    const day = d.getDay() || 7;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - day + 1);
+    const dates = [];
+    for (let i=0; i<7; i++) {
+      const current = new Date(monday);
+      current.setDate(monday.getDate() + i);
+      const key = (() => {
+        try { return toDateInput(current); }
+        catch (_) {
+          const y = current.getFullYear();
+          const m = String(current.getMonth() + 1).padStart(2, '0');
+          const dayNo = String(current.getDate()).padStart(2, '0');
+          return `${y}-${m}-${dayNo}`;
+        }
+      })();
+      if (!isNoPositionDaySafe(key)) dates.push(key);
+    }
+    return dates;
+  }
+  function hasFullWeekRealLeaveV265(person, date){
+    if (!person?.id) return false;
+    const dates = weekWorkingDatesV265(date);
+    return dates.length > 0 && dates.every(workDate => !!unavailableRecord(person.id, workDate));
+  }
+  function weeklySlotStaffV265(date){
+    const st = appState();
+    return ordered((st?.staff || []).filter(person =>
+      positionStaffEnabled(person) && !hasFullWeekRealLeaveV265(person, date)
+    ));
+  }
+  function weeklySlotHeadcountV265(date){ return weeklySlotStaffV265(date).length; }
   function outingBucket(count){
     const n = Math.max(0, Number(count || 0));
     if (n <= 12) return 12;
@@ -209,7 +247,7 @@
   function expectedTemplatesV265(date){
     const d = normDate(date);
     if (!d || isNoPositionDaySafe(d)) return [];
-    if (hasOutingSafe(d)) return outingSlotsForCount(actualAvailableStaff(d).length);
+    if (hasOutingSafe(d)) return outingSlotsForCount(weeklySlotHeadcountV265(d));
     try {
       const rows = previousExpectedTemplates231 ? previousExpectedTemplates231(d) : null;
       if (Array.isArray(rows)) return rows;
@@ -221,7 +259,7 @@
     return [];
   }
   if (window.cnmiV231) {
-    window.cnmiV231.weekSlotCount231 = function weekSlotCountV265(date){ return outingBucket(actualAvailableStaff(date).length); };
+    window.cnmiV231.weekSlotCount231 = function weekSlotCountV265(date){ return outingBucket(weeklySlotHeadcountV265(date)); };
     window.cnmiV231.expectedTemplatesForDate231 = expectedTemplatesV265;
   }
 
@@ -266,7 +304,7 @@
     const available = actualAvailableStaff(d);
     const availableIds = new Set(available.map(person => String(person.id)));
     const participants = participantIds(d);
-    const templates = outingSlotsForCount(available.length);
+    const templates = outingSlotsForCount(weeklySlotHeadcountV265(d));
     const existingByCode = new Map();
     (oldRows || []).forEach(row => {
       const code = baseCode(row?.position_code || row?.code);
@@ -441,7 +479,9 @@
           const options = monthOptions(date, current);
           return `<td class="matrix-cell ${classes}"><select class="month-position-select" data-month-position-edit="${esc(normDate(date))}|${esc(sid)}"><option value="">${leave ? 'เว้นตำแหน่ง' : 'รอตรวจสอบ'}</option>${options.map(row => { const code = String(row?.code || row?.position_code || ''); return `<option value="${esc(code)}" ${current === code ? 'selected' : ''}>${esc(code)}</option>`; }).join('')}</select>${leave ? `<small class="leave-note-v228">${esc(leaveLabel(leave))}</small>` : ''}</td>`;
         }
-        const text = cleanCodes.length ? cleanCodes.join(' / ') : (leave ? leaveLabel(leave) : '');
+        // If there is no position, show the leave type only once in the leave note.
+        // If there is a position plus partial-day leave, show position + one leave note.
+        const text = cleanCodes.length ? cleanCodes.join(' / ') : '';
         return `<td class="matrix-cell ${classes}">${text ? `<span>${esc(text)}</span>` : ''}${leave ? `<small class="leave-note-v228">${esc(leaveLabel(leave))}</small>` : ''}</td>`;
       }).join('');
       return `<tr><td class="sticky-col staff-col staff-color-cell" style="background:${esc(bg)};color:${esc(fg)}"><div class="matrix-staff-name"><b>${esc(person.nickname || person.full_name || '-')}</b><small>${esc(person.staff_type || '')}</small></div></td><td class="sticky-col summary-col summary-action-cell"><button class="tiny-btn staff-summary-trigger compact-staff-summary" data-month-position-stat="${esc(person.id)}" type="button">ดูสรุป</button></td>${cells}</tr>`;
@@ -466,7 +506,7 @@
             const available = actualAvailableStaff(date);
             const availableIds = new Set(available.map(person => String(person.id)));
             (st?.staff || []).forEach(person => { if (!availableIds.has(String(person.id))) unavailableIds.add(String(person.id)); });
-            if (cfg) cfg.outing = outingSlotsForCount(available.length);
+            if (cfg) cfg.outing = outingSlotsForCount(weeklySlotHeadcountV265(date));
             if (st && oldPositions) {
               st.positions = oldPositions.filter(row => normDate(row?.work_date) !== date || !row?.staff_id || availableIds.has(String(row.staff_id)));
             }
@@ -501,7 +541,7 @@
     const available = actualAvailableStaff(date);
     const participants = participantIds(date);
     const joining = available.filter(person => participants.has(String(person.id))).length;
-    const slots = outingSlotsForCount(available.length).length;
+    const slots = outingSlotsForCount(weeklySlotHeadcountV265(date)).length;
     const cards = root.querySelectorAll('.v225-compare-cards > div');
     const diff = available.length - slots;
     cards.forEach((card, index) => {
@@ -883,6 +923,9 @@
 
   window.cnmiV265 = {
     actualAvailableStaff,
+    weeklySlotStaffV265,
+    weeklySlotHeadcountV265,
+    hasFullWeekRealLeaveV265,
     unavailableRecord,
     outingSlotsForCount,
     expectedTemplatesV265,

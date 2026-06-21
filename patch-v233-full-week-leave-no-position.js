@@ -241,7 +241,8 @@
       const options = monthPositionOptions(d, current);
       return `<td class="matrix-cell ${cls}"><select class="month-position-select" data-month-position-edit="${esc(d)}|${esc(sid)}"><option value="">${hasLeave ? 'เว้นตำแหน่ง' : 'รอตรวจสอบ'}</option>${options.map(t => `<option value="${esc(t.code)}" ${current===t.code?'selected':''}>${esc(t.code)}</option>`).join('')}</select>${leaveMark}${hasOutingSafe(d) && cleanCodes.length ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
     }
-    const text = cleanCodes.length ? cleanCodes.join(' / ') : (hasLeave ? leaveLabel : '');
+    // Avoid rendering the leave type twice when no position is assigned.
+    const text = cleanCodes.length ? cleanCodes.join(' / ') : '';
     const safeText = esc(text);
     return `<td class="matrix-cell ${cls}">${safeText ? `<span title="${safeText}${hasLeave && cleanCodes.length ? ' • ' + esc(leaveLabel) : ''}">${safeText}</span>` : ''}${leaveMark}${hasOutingSafe(d) && cleanCodes.length ? '<div class="cell-note">ออกหน่วย</div>' : ''}</td>`;
   }
