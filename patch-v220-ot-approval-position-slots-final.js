@@ -333,7 +333,7 @@
     const buttons = [8,9,10,11,12,13,14].map(n => `<button type="button" class="${selected===n?'primary-btn':'ghost-btn'}" data-slot-set-preview-v220="${n}">${n} คน</button>`).join('');
     const tableRows = rows.map((p, idx) => `<tr><td>${idx + 1}</td><td>${esc(p.zone || '-')}</td><td><b>${esc(p.code)}</b></td><td>${esc(p.main_rule || '-')}</td><td>${esc(p.break_time || '-')}</td><td>${esc(p.job_desc || '-')}</td></tr>`).join('');
     return `<div class="card wide-card v220-slot-manager-card">
-      <div class="section-title"><div><h3>ชุด Slot ตำแหน่งกลางวัน 8-14 คน</h3><p class="hint">เลือกดูชุดตามจำนวนคนทำงานจริง รายละเอียดนี้ใช้เป็น Template ของตารางตำแหน่งรายวัน/รายเดือน</p></div><div class="actions"><button type="button" class="soft-btn" data-seed-all-slots-v220>อัปเดตฐานข้อมูลจากชุด 8-14 ทั้งหมด</button></div></div>
+      <div class="section-title"><div><h3>ชุด Slot ตำแหน่งกลางวัน 8-14 คน</h3><p class="hint">เลือกดูชุดตามจำนวนคนทำงานจริง รายละเอียดนี้ใช้เป็น Template ของตารางตำแหน่งกลางวัน รายวัน/รายเดือน</p></div><div class="actions"><button type="button" class="soft-btn" data-seed-all-slots-v220>อัปเดตฐานข้อมูลจากชุด 8-14 ทั้งหมด</button></div></div>
       <div class="v220-slot-tabs">${buttons}</div>
       <div class="notice soft-notice compact"><b>ชุดที่เลือก:</b> ${selected} คน / ${rows.length} ตำแหน่ง — ระบบรายวันจะเลือกชุดตามจำนวนเจ้าหน้าที่ที่มาทำงานจริงอัตโนมัติ</div>
       <div class="table-wrap compact-table v220-slot-detail-table"><table><thead><tr><th>#</th><th>โซน</th><th>ตำแหน่ง</th><th>ผู้ปฏิบัติหลัก</th><th>เวลาพัก</th><th>รายละเอียดหน้าที่ประจำตำแหน่ง</th></tr></thead><tbody>${tableRows}</tbody></table></div>

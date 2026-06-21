@@ -125,7 +125,7 @@
         }
         const pm = NAV_ITEMS.find(x => x.id === 'positionMonth');
         if (pm) {
-          pm.title = 'จัดตารางตำแหน่งรายเดือน';
+          pm.title = 'จัดตารางตำแหน่งกลางวัน รายเดือน';
           pm.subtitle = 'Admin วางแผนตำแหน่งรายเดือนก่อนประกาศให้ Staff เห็น';
         }
       }
@@ -140,8 +140,8 @@
 
       if (state?.page === 'scheduler' && title) title.textContent = 'จัดตารางเวรประจำเดือน';
       if (state?.page === 'scheduler' && subtitle) subtitle.textContent = 'สร้าง/ตรวจทานตารางเวรประจำเดือน';
-      if (isMonthlyPosition && title && title.textContent.trim() === 'จัดตารางเวร') title.textContent = 'จัดตารางตำแหน่งรายเดือน';
-      if (state?.page === 'positionMonth' && title) title.textContent = 'จัดตารางตำแหน่งรายเดือน';
+      if (isMonthlyPosition && title && title.textContent.trim() === 'จัดตารางเวร') title.textContent = 'จัดตารางตำแหน่งกลางวัน รายเดือน';
+      if (state?.page === 'positionMonth' && title) title.textContent = 'จัดตารางตำแหน่งกลางวัน รายเดือน';
       if (state?.page === 'positionMonth' && subtitle) subtitle.textContent = 'สร้าง/ตรวจทานแผนตำแหน่งรายเดือน';
     } catch (_) {}
   }
@@ -586,7 +586,7 @@
     window.renderPositionMonthPage = renderPositionMonthPage = function renderPositionMonthPageV231(){
       let html = String(oldRenderPositionMonthPage231.apply(this, arguments) || '');
       const base = getBaseSlotCount231();
-      html = html.replace(/จัดตำแหน่งรายเดือน/g, 'จัดตารางตำแหน่งรายเดือน');
+      html = html.replace(/จัดตำแหน่งรายเดือน/g, 'จัดตารางตำแหน่งกลางวัน รายเดือน');
       html = html.replace(/สร้างแผนทั้งเดือน/g, 'สร้างแผนรายสัปดาห์ทั้งเดือน');
       html = html.replace(/วันปกติ(?:ชุด)?\s*\d+\s*Slot/g, `Slot หลัก ${base} คน`);
       if (!html.includes('v231-base-slot-badge')) {

@@ -224,11 +224,11 @@
         <div class="notice soft-notice">ตรวจตำแหน่งของวันนี้ให้ตรงกับคนลาและงานจริง แล้วกดบันทึกตำแหน่งวันนี้ หากมีคนลาหลังจากบันทึกแล้ว ให้ปรับหน้างานและบันทึกใหม่อีกครั้ง</div>
         ${noPosition ? `<div class="notice">วันนี้เป็น${isHolidayDate(date) ? 'วันหยุดราชการ' : 'วันเสาร์-อาทิตย์'} จึงไม่ต้องจัดตำแหน่งรายวัน</div>` : ''}
         ${!noPosition && hasOuting(date) ? `<div class="notice">วันนี้มีออกหน่วย: คนที่ถูกติ๊กในกิจกรรมจะถูกจัดลงชุดออกหน่วย ส่วนคนที่เหลือจะถูกเกลี่ยไปตำแหน่งห้อง Blood Bank</div>` : ''}
-        ${noPosition ? (typeof empty === 'function' ? empty('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : '') : table}
+        ${noPosition ? (typeof empty === 'function' ? empty('ไม่มีตารางตำแหน่งกลางวัน รายวันสำหรับวันนี้') : '') : table}
       </div>`;
     } catch (err) {
       console.error(`${VERSION}: renderPositionsPage failed`, err);
-      return `<div class="notice error-notice">โหลดตารางตำแหน่งรายวันไม่สำเร็จ: ${esc(err?.message || err)}</div>`;
+      return `<div class="notice error-notice">โหลดตารางตำแหน่งกลางวัน รายวันไม่สำเร็จ: ${esc(err?.message || err)}</div>`;
     }
   };
 
@@ -283,7 +283,7 @@
       return;
     }
     if (state?.page === 'positions') {
-      safeTitleFor('positions', 'ตารางตำแหน่งรายวัน', 'ดู/ปรับตำแหน่งประจำวันก่อนเริ่มงาน');
+      safeTitleFor('positions', 'ตารางตำแหน่งกลางวัน รายวัน', 'ดู/ปรับตำแหน่งประจำวันก่อนเริ่มงาน');
       safeRenderNav();
       const content = document.getElementById('pageContent');
       if (content) content.innerHTML = window.renderPositionsPage();

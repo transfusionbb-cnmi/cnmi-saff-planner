@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { id: 'schedule', icon: '📋', title: 'ตารางเวรประจำเดือน', subtitle: 'ดูรายเดือน Export Excel / PDF / Print', group: 'staff' },
   { id: 'tradeRequests', icon: '💸', title: 'คำขอขายเวร', subtitle: 'รอฉันยืนยัน / รอ Admin บันทึก', group: 'staff' },
   { id: 'positionMonthView', icon: '🗓️', title: 'ตารางตำแหน่งกลางวัน รายเดือน', subtitle: 'ดูแผนตำแหน่งกลางวันรายเดือนที่ประกาศแล้ว', group: 'staff' },
-  { id: 'positions', icon: '🧪', title: 'ตารางตำแหน่งรายวัน', subtitle: 'ดู/ปรับตำแหน่งประจำวันก่อนเริ่มงาน', group: 'staff' },
+  { id: 'positions', icon: '🧪', title: 'ตารางตำแหน่งกลางวัน รายวัน', subtitle: 'ดู/ปรับตำแหน่งประจำวันก่อนเริ่มงาน', group: 'staff' },
   { id: 'ot', icon: '⏱️', title: 'ลงชื่ออยู่เวร / ขอ OT เพิ่ม', subtitle: 'ยืนยันอยู่เวร ขอ OT เพิ่ม และสรุป OT', group: 'staff' },
   { id: 'audit', icon: '🕵️', title: 'Audit Log ล่าสุด', subtitle: 'ประวัติการใช้งานแบบอ่านง่าย กรองรายวันได้', group: 'staff' },
   { id: 'hr', icon: '🧾', title: 'ตรวจสอบ HR', subtitle: 'Admin ตรวจว่าแจ้งใน HR แล้วหรือยัง', group: 'admin' },
@@ -2020,7 +2020,7 @@ function renderLeavePage() {
           <label>แนบไฟล์ (ถ้ามี) <input name="file" type="file"><span class="hint">ไม่บังคับแนบไฟล์ ถ้ามีเอกสารค่อยแนบได้</span></label>
           ${isAdmin() ? `<label class="wide">เหตุผลที่ Admin บันทึกแทน / ย้อนหลัง <textarea name="admin_record_reason" placeholder="เช่น น้องไม่สะดวกเข้าระบบ / บันทึกย้อนหลังตามใบลา / แจ้งทางโทรศัพท์">${escapeHtml(editing?.admin_record_reason || '')}</textarea></label>` : ''}
           <label class="wide">หมายเหตุ <textarea name="note" placeholder="ระบุรายละเอียดเพิ่มเติม">${escapeHtml(editing?.note || '')}</textarea></label>
-          <div class="notice soft-notice wide">ถ้าวันที่ขอลามีการประกาศตารางตำแหน่งรายวันแล้ว ระบบยังบันทึกได้ แต่จะแจ้งเตือนให้ติดต่ออินชาร์จหรือหัวหน้า เพื่อให้ปรับตำแหน่งหน้างานทันที</div>
+          <div class="notice soft-notice wide">ถ้าวันที่ขอลามีการประกาศตารางตำแหน่งกลางวัน รายวันแล้ว ระบบยังบันทึกได้ แต่จะแจ้งเตือนให้ติดต่ออินชาร์จหรือหัวหน้า เพื่อให้ปรับตำแหน่งหน้างานทันที</div>
           <button class="primary-btn wide" type="submit">${editing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}</button>
         </form>
       </div>
@@ -2702,7 +2702,7 @@ function renderPositionsPage() {
     <div class="notice soft-notice">ตรวจตำแหน่งของวันนี้ให้ตรงกับคนลาและงานจริง แล้วกดบันทึกตำแหน่งวันนี้ หากมีคนลาหลังจากบันทึกแล้ว ให้ปรับหน้างานและบันทึกใหม่อีกครั้ง</div>
     ${noPosition ? `<div class="notice">วันนี้เป็น${isHolidayDate(date) ? 'วันหยุดราชการ' : 'วันเสาร์-อาทิตย์'} จึงไม่ต้องจัดตำแหน่งรายวัน</div>` : ''}
     ${!noPosition && hasOuting(date) ? `<div class="notice">วันนี้มีออกหน่วย: คนที่ถูกติ๊กในกิจกรรมจะถูกจัดลงชุดออกหน่วย ส่วนคนที่เหลือจะถูกเกลี่ยไปตำแหน่งห้อง Blood Bank</div>` : ''}
-    ${noPosition ? empty('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : renderDailyPositionList(rows, date, canManage)}
+    ${noPosition ? empty('ไม่มีตารางตำแหน่งกลางวัน รายวันสำหรับวันนี้') : renderDailyPositionList(rows, date, canManage)}
   </div>`;
 }
 function renderDailyPositionList(rows, date, canManage) {
@@ -3475,7 +3475,7 @@ async function saveLeave(form) {
   }
   if (hasPublishedDay && isAdmin()) {
     row.recorded_by_admin = true;
-    row.admin_record_reason = row.admin_record_reason || 'Admin บันทึก/แก้ไขรายการหลังประกาศตารางตำแหน่งรายวัน';
+    row.admin_record_reason = row.admin_record_reason || 'Admin บันทึก/แก้ไขรายการหลังประกาศตารางตำแหน่งกลางวัน รายวัน';
   }
   const file = fd.get('file');
   if (file && file.size) row.attachment_path = await uploadFile(file, 'leave');
@@ -4336,7 +4336,7 @@ function auditBadge(a) {
 function tableLabel(table) {
   return ({
     auth: 'ระบบ Login', staff_profiles: 'ผู้ใช้งานและสิทธิ์', leave_requests: 'แจ้งลา/ไม่รับเวร', activity_events: 'กิจกรรมหน่วยงาน',
-    hr_checks: 'ตรวจสอบ HR', roster_months: 'สถานะตารางเวร', roster_assignments: 'ตารางเวร', daily_positions: 'ตารางตำแหน่งรายวัน',
+    hr_checks: 'ตรวจสอบ HR', roster_months: 'สถานะตารางเวร', roster_assignments: 'ตารางเวร', daily_positions: 'ตารางตำแหน่งกลางวัน รายวัน',
     attendance_logs: 'ลงชื่อเข้าเวร', ot_requests: 'OT', public_holidays: 'วันหยุดราชการ', monthly_incharges: 'อินชาร์จประจำเดือน', daily_position_eligibility: 'สิทธิ์ตำแหน่งรายวัน', daily_position_day_status: 'ประกาศตำแหน่งรายวัน', roster_trade_requests: 'คำขอขายเวร'
   }[table] || table || '-');
 }
@@ -4600,7 +4600,7 @@ async function saveLeave(form) {
   }
   if (hasPublishedDay && isAdmin()) {
     row.recorded_by_admin = true;
-    row.admin_record_reason = row.admin_record_reason || 'Admin บันทึก/แก้ไขรายการหลังประกาศตารางตำแหน่งรายวัน';
+    row.admin_record_reason = row.admin_record_reason || 'Admin บันทึก/แก้ไขรายการหลังประกาศตารางตำแหน่งกลางวัน รายวัน';
   }
   const file = fd.get('file');
   if (file && file.size) row.attachment_path = await uploadFile(file, 'leave');
@@ -5772,7 +5772,7 @@ function bindGlobalEvents() {
             <label>แนบไฟล์ (ถ้ามี) <input name="file" type="file"><span class="hint">ไม่บังคับแนบไฟล์ ถ้ามีเอกสารค่อยแนบได้</span></label>
             ${adminMode ? `<label class="wide">เหตุผลที่ Admin บันทึกแทน / ย้อนหลัง <textarea name="admin_record_reason" placeholder="เช่น น้องไม่สะดวกเข้าระบบ / บันทึกย้อนหลังตามใบลา / แจ้งทางโทรศัพท์">${escapeHtml(editing?.admin_record_reason || '')}</textarea></label>` : ''}
             <label class="wide">หมายเหตุ <textarea name="note" placeholder="ระบุรายละเอียดเพิ่มเติม">${escapeHtml(editing?.note || '')}</textarea></label>
-            <div class="notice soft-notice wide">ถ้าวันที่ขอลามีการประกาศตารางตำแหน่งรายวันแล้ว ระบบยังบันทึกได้ แต่จะแจ้งเตือนให้ติดต่ออินชาร์จหรือหัวหน้า เพื่อให้ปรับตำแหน่งหน้างานทันที</div>
+            <div class="notice soft-notice wide">ถ้าวันที่ขอลามีการประกาศตารางตำแหน่งกลางวัน รายวันแล้ว ระบบยังบันทึกได้ แต่จะแจ้งเตือนให้ติดต่ออินชาร์จหรือหัวหน้า เพื่อให้ปรับตำแหน่งหน้างานทันที</div>
             <button class="primary-btn wide" type="submit">${editing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}</button>
           </form>
         </div>
@@ -6750,14 +6750,14 @@ function bindGlobalEvents() {
         <div class="notice soft-notice">ตรวจตำแหน่งของวันนี้ให้ตรงกับคนลาและงานจริง แล้วกดบันทึกตำแหน่งวันนี้ หากมีคนลาหลังจากบันทึกแล้ว ให้ปรับหน้างานและบันทึกใหม่อีกครั้ง</div>
         ${noPosition ? `<div class="notice">วันนี้เป็น${isHolidayDate(date) ? 'วันหยุดราชการ' : 'วันเสาร์-อาทิตย์'} จึงไม่ต้องจัดตำแหน่งรายวัน</div>` : ''}
         ${!noPosition && hasOuting(date) ? `<div class="notice">วันนี้มีออกหน่วย: คนที่ถูกติ๊กในกิจกรรมจะถูกจัดลงชุดออกหน่วย ส่วนคนที่เหลือจะถูกเกลี่ยไปตำแหน่งห้อง Blood Bank</div>` : ''}
-        ${noPosition ? empty('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : table}
+        ${noPosition ? empty('ไม่มีตารางตำแหน่งกลางวัน รายวันสำหรับวันนี้') : table}
       </div>`;
     } catch (err) {
       console.error('V162 renderPositionsPage failed', err);
       if (oldRenderPositionsPage) {
         try { return oldRenderPositionsPage.apply(this, arguments); } catch (_) {}
       }
-      return `<div class="notice error-notice">โหลดตารางตำแหน่งรายวันไม่สำเร็จ: ${v162Esc(err.message || err)}</div>`;
+      return `<div class="notice error-notice">โหลดตารางตำแหน่งกลางวัน รายวันไม่สำเร็จ: ${v162Esc(err.message || err)}</div>`;
     }
   };
   try { renderPositionsPage = window.renderPositionsPage; } catch (_) {}
@@ -10316,7 +10316,7 @@ function bindGlobalEvents() {
     const listHtml = Object.entries(grouped).map(([zone, list]) => `<div class="position-master-zone"><div class="section-title"><h3>${esc182(zone)}</h3><span class="badge blue">${list.length} ตำแหน่ง</span></div><div class="table-wrap compact-table"><table><thead><tr><th>ลำดับ</th><th>Code</th><th>ประเภท</th><th>เวลาพัก</th><th>ผู้ปฏิบัติหลัก</th><th>รายละเอียด</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>${list.map((p, idx) => `<tr class="${p.is_active === false || p.deleted_at ? 'inactive-row' : ''}"><td title="sort_order: ${esc182(p.sort_order)}">${idx + 1}</td><td><b>${esc182(p.code)}</b>${p.eligibility_code && p.eligibility_code !== p.code ? `<br><small>${esc182(p.eligibility_code)}</small>` : ''}</td><td>${p.is_outing ? badge('ออกหน่วย', 'red') : badge('ปกติ', 'blue')}</td><td>${esc182(p.break_time || '-')}</td><td>${esc182(p.main_rule || '-')}</td><td>${esc182(p.job_desc || '-')}</td><td>${p.is_active === false || p.deleted_at ? badge('ปิดใช้งาน', 'orange') : badge('ใช้งาน', 'green')}</td><td><div class="actions"><button class="tiny-btn" data-edit-position-master="${esc182(p.id)}">แก้ไข</button>${p.is_active === false || p.deleted_at ? `<button class="tiny-btn" data-restore-position-master="${esc182(p.id)}">เปิดใช้</button>` : `<button class="tiny-btn danger-soft-btn" data-delete-position-master="${esc182(p.id)}">ลบ</button>`}</div></td></tr>`).join('')}</tbody></table></div></div>`).join('');
     return `<div class="position-management-page">
       <div class="card wide-card position-management-header-card">
-        <div class="section-title"><div><h2>จัดการตำแหน่งรายวัน</h2><p class="hint">ตำแหน่งที่เปิดใช้งานจะถูกส่งต่อไปหน้า “สิทธิ์ตำแหน่งรายวัน”, “ตารางตำแหน่งรายวัน” และ “จัดตำแหน่งรายเดือน” อัตโนมัติ</p></div><div class="position-management-actions"><button class="primary-btn" data-add-position-master>เพิ่มตำแหน่งใหม่</button><button class="ghost-btn" data-refresh-position-masters>รีเฟรชจากฐานข้อมูล</button></div></div>
+        <div class="section-title"><div><h2>จัดการตำแหน่งรายวัน</h2><p class="hint">ตำแหน่งที่เปิดใช้งานจะถูกส่งต่อไปหน้า “สิทธิ์ตำแหน่งรายวัน”, “ตารางตำแหน่งกลางวัน รายวัน” และ “จัดตำแหน่งรายเดือน” อัตโนมัติ</p></div><div class="position-management-actions"><button class="primary-btn" data-add-position-master>เพิ่มตำแหน่งใหม่</button><button class="ghost-btn" data-refresh-position-masters>รีเฟรชจากฐานข้อมูล</button></div></div>
         ${dbWarning}
       </div>
 
@@ -14196,7 +14196,7 @@ function bindGlobalEvents() {
     if (!root || root.querySelector('.v218-position-slot-tools')) return;
     const box = document.createElement('div');
     box.className = 'card wide-card v218-position-slot-tools';
-    box.innerHTML = `<div class="section-title"><div><h3>ชุดสล็อตกลางวัน 8-14 คน</h3><p class="hint">ใช้เป็น Template หลักของหน้า “ตารางตำแหน่งรายวัน/รายเดือน” โดยเลือกตามจำนวนคนที่มาทำงานจริงในวันนั้น</p></div><div class="actions"><button class="primary-btn" data-seed-day-slots-218>อัปเดตฐานข้อมูลเป็นชุดสล็อต 14 ช่อง</button></div></div><div class="position-slot-preview218">${[8,9,10,11,12,13,14].map(n => `<details><summary><b>${n} คน</b> <span class="badge blue">${DAY_POSITION_SLOT_SETS_218[n].length} ตำแหน่ง</span></summary><div>${DAY_POSITION_SLOT_SETS_218[n].map(p => `<span class="mini-status">${esc218(p.code)}</span>`).join(' ')}</div></details>`).join('')}</div><p class="hint">ปุ่มอัปเดตจะเพิ่ม/แก้ไขตำแหน่งชุด 14 ช่อง และปิดใช้งานตำแหน่งปกติเก่าที่ไม่อยู่ในชุดนี้ ส่วนตำแหน่งออกหน่วยจะไม่ถูกลบ</p>`;
+    box.innerHTML = `<div class="section-title"><div><h3>ชุดสล็อตกลางวัน 8-14 คน</h3><p class="hint">ใช้เป็น Template หลักของหน้า “ตารางตำแหน่งกลางวัน รายวัน/รายเดือน” โดยเลือกตามจำนวนคนที่มาทำงานจริงในวันนั้น</p></div><div class="actions"><button class="primary-btn" data-seed-day-slots-218>อัปเดตฐานข้อมูลเป็นชุดสล็อต 14 ช่อง</button></div></div><div class="position-slot-preview218">${[8,9,10,11,12,13,14].map(n => `<details><summary><b>${n} คน</b> <span class="badge blue">${DAY_POSITION_SLOT_SETS_218[n].length} ตำแหน่ง</span></summary><div>${DAY_POSITION_SLOT_SETS_218[n].map(p => `<span class="mini-status">${esc218(p.code)}</span>`).join(' ')}</div></details>`).join('')}</div><p class="hint">ปุ่มอัปเดตจะเพิ่ม/แก้ไขตำแหน่งชุด 14 ช่อง และปิดใช้งานตำแหน่งปกติเก่าที่ไม่อยู่ในชุดนี้ ส่วนตำแหน่งออกหน่วยจะไม่ถูกลบ</p>`;
     root.prepend(box);
   }
   const oldRenderPage218 = window.renderPage || (typeof renderPage === 'function' ? renderPage : null);
@@ -14707,11 +14707,11 @@ function bindGlobalEvents() {
         <div class="notice soft-notice compact v219-position-note"><b>วิธีใช้:</b> เลือกคนในแต่ละตำแหน่ง → กด “บันทึกตำแหน่งวันนี้” → ถ้าต้องการให้ Staff เห็นชัด ให้กด “ประกาศให้ Staff เห็น”</div>
         ${noPosition ? `<div class="notice">วันนี้เป็น${isHolidayDate(date) ? 'วันหยุดราชการ' : 'วันเสาร์-อาทิตย์'} จึงไม่ต้องจัดตำแหน่งรายวัน</div>` : ''}
         ${!noPosition && hasOuting(date) ? '<div class="notice compact">วันนี้มีออกหน่วย ระบบแยกตำแหน่งออกหน่วยกับห้อง Blood Bank/Manual ให้แล้ว</div>' : ''}
-        ${noPosition ? empty('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : table}
+        ${noPosition ? empty('ไม่มีตารางตำแหน่งกลางวัน รายวันสำหรับวันนี้') : table}
       </div>`;
     } catch (err) {
       console.error(`${VERSION_V219}: renderPositionsPage failed`, err);
-      return `<div class="notice error-notice">โหลดตารางตำแหน่งรายวันไม่สำเร็จ: ${esc219(err?.message || err)}</div>`;
+      return `<div class="notice error-notice">โหลดตารางตำแหน่งกลางวัน รายวันไม่สำเร็จ: ${esc219(err?.message || err)}</div>`;
     }
   };
 

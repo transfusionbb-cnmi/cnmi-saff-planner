@@ -281,7 +281,7 @@
       return true;
     })().catch(error => {
       console.error(`${VERSION}: monthly refresh failed`, error);
-      if (!options.silent) toast(`รีเฟรชตารางตำแหน่งรายเดือนไม่สำเร็จ: ${friendly(error)}`, 'error');
+      if (!options.silent) toast(`รีเฟรชตารางตำแหน่งกลางวัน รายเดือนไม่สำเร็จ: ${friendly(error)}`, 'error');
       return false;
     }).finally(() => monthRefreshInFlight.delete(range.key));
 

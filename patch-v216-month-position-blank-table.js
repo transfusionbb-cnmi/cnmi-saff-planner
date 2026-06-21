@@ -198,8 +198,8 @@
   if (oldRenderMonthPositionMatrix) {
     window.renderMonthPositionMatrix = renderMonthPositionMatrix = function renderMonthPositionMatrixV216(rows, dates){
       if (!Array.isArray(rows) || !rows.length) {
-        try { return empty('ยังไม่มีตารางตำแหน่งรายเดือน กด “สร้างตารางเปล่า” ก่อน หรือกด “สร้างแผนทั้งเดือน” เพื่อให้ระบบลองจัดอัตโนมัติ'); }
-        catch (_) { return '<div class="empty-state">ยังไม่มีตารางตำแหน่งรายเดือน กด “สร้างตารางเปล่า” ก่อน</div>'; }
+        try { return empty('ยังไม่มีตารางตำแหน่งกลางวัน รายเดือน กด “สร้างตารางเปล่า” ก่อน หรือกด “สร้างแผนทั้งเดือน” เพื่อให้ระบบลองจัดอัตโนมัติ'); }
+        catch (_) { return '<div class="empty-state">ยังไม่มีตารางตำแหน่งกลางวัน รายเดือน กด “สร้างตารางเปล่า” ก่อน</div>'; }
       }
       return oldRenderMonthPositionMatrix.apply(this, arguments);
     };

@@ -571,11 +571,11 @@
         ${noPosition ? `<div class="notice">วันนี้เป็น${isHolidaySafe(date) ? 'วันหยุดราชการ' : 'วันเสาร์-อาทิตย์'} จึงไม่ต้องจัดตำแหน่งรายวัน</div>` : ''}
         ${!noPosition ? renderDailyComparePanel(date, rows) : ''}
         ${!noPosition && hasOutingSafe(date) ? '<div class="notice compact">วันนี้มีออกหน่วย สามารถปรับชุด Slot วันนี้และคนหน้างานได้จากตารางด้านล่าง</div>' : ''}
-        ${noPosition ? emptySafe('ไม่มีตารางตำแหน่งรายวันสำหรับวันนี้') : table}
+        ${noPosition ? emptySafe('ไม่มีตารางตำแหน่งกลางวัน รายวันสำหรับวันนี้') : table}
       </div>`;
     } catch (err) {
       console.error(`${VERSION}: renderPositionsPage failed`, err);
-      return `<div class="notice error-notice">โหลดตารางตำแหน่งรายวันไม่สำเร็จ: ${esc(err?.message || err)}</div>`;
+      return `<div class="notice error-notice">โหลดตารางตำแหน่งกลางวัน รายวันไม่สำเร็จ: ${esc(err?.message || err)}</div>`;
     }
   }
   try { window.renderPositionsPage = renderPositionsPage = renderPositionsPageV225; } catch (_) { window.renderPositionsPage = renderPositionsPageV225; }
@@ -669,7 +669,7 @@
       try {
         const item = (window.NAV_ITEMS || NAV_ITEMS || []).find(x => x.id === 'positions') || {};
         const title = document.getElementById('pageTitle'); const sub = document.getElementById('pageSubtitle');
-        if (title) title.textContent = item.title || 'ตารางตำแหน่งรายวัน';
+        if (title) title.textContent = item.title || 'ตารางตำแหน่งกลางวัน รายวัน';
         if (sub) sub.textContent = item.subtitle || 'ดู/ปรับตำแหน่งประจำวันก่อนเริ่มงาน';
       } catch (_) {}
       const content = document.getElementById('pageContent');
