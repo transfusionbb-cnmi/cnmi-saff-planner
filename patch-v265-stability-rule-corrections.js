@@ -182,7 +182,7 @@
   function actualAvailableStaff(date){
     const st = appState();
     const d = normDate(date);
-    return ordered((st?.staff || []).filter(person => positionStaffEnabled(person) && !unavailableRecord(person.id, d)));
+    return ordered((st?.staff || []).filter(person => positionStaffEnabled(person) && !unavailableRecord(person.id, d) && !window.cnmiV271?.excludeFromDaySlot?.(person, d)));
   }
   // Slot size is a weekly rule: a one-day leave keeps the weekly Slot base,
   // while real leave covering every working day of the week reduces it.
@@ -218,7 +218,9 @@
   function weeklySlotStaffV265(date){
     const st = appState();
     return ordered((st?.staff || []).filter(person =>
-      positionStaffEnabled(person) && !hasFullWeekRealLeaveV265(person, date)
+      positionStaffEnabled(person)
+      && !hasFullWeekRealLeaveV265(person, date)
+      && !window.cnmiV271?.excludeFromDaySlot?.(person, normDate(date))
     ));
   }
   function weeklySlotHeadcountV265(date){ return weeklySlotStaffV265(date).length; }

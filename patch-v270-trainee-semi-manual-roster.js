@@ -56,6 +56,9 @@
   function activeStaff(){ return ordered((appState()?.staff || []).filter(person => person && person.is_active !== false)); }
   function activeMT(){ return activeStaff().filter(person => String(person.staff_type || '').toUpperCase() === 'MT'); }
   function isTrainee(person){
+    // V271 replaces permanent profile flags with date-range mentorship rows.
+    // Keep this patch inert after V271 is loaded so it cannot pair/exclude people forever.
+    if (window.cnmiV271?.usesDateRangeMentorship) return false;
     if (!person) return false;
     if (person.is_trainee === true) return true;
     if (person.is_trainee === false) return false;
