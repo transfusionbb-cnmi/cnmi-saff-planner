@@ -93,13 +93,18 @@
       const heading=stats.querySelector('.v278-stats-heading');
       heading?.insertAdjacentElement('afterend',controls);
     }
-    controls.innerHTML=`<div class="v281-stat-tabs" role="tablist" aria-label="เลือกสถิติตำแหน่ง">
+    const markup=`<div class="v281-stat-tabs" role="tablist" aria-label="เลือกสถิติตำแหน่ง">
       ${sections.map((_,index)=>{const [title,sub]=statTabLabel(index);return `<button type="button" role="tab" data-v281-stat-tab="${index}" class="${index===activeStat?'active':''}" aria-selected="${index===activeStat?'true':'false'}"><b>${title}</b><small>${sub}</small></button>`;}).join('')}
     </div>
     <label class="v281-zero-toggle" ${activeStat===1||activeStat===3?'':'hidden'}>
       <input type="checkbox" data-v281-show-zero ${showZeroColumns?'checked':''}>
       <span>แสดงตำแหน่งที่เป็น 0 ทุกคอลัมน์</span>
     </label>`;
+    const signature=`${sections.length}|${activeStat}|${showZeroColumns?'1':'0'}`;
+    if(controls.dataset.v281Signature!==signature){
+      controls.innerHTML=markup;
+      controls.dataset.v281Signature=signature;
+    }
   }
 
   function applyStatsView(){

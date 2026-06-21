@@ -714,7 +714,10 @@
   function decorateTrainingManagement(){
     if (st()?.page !== 'positionManagement') return;
     const tab = document.querySelector('[data-v270-position-tab="mentors"]');
-    if (tab) tab.innerHTML = '<b>พี่เลี้ยง–น้องใหม่ / Intern</b><small>กำหนดช่วงวันที่และไม่นับ Slot</small>';
+    if (tab) {
+      const desired = '<b>พี่เลี้ยง–น้องใหม่ / Intern</b><small>กำหนดช่วงวันที่และไม่นับ Slot</small>';
+      if (tab.innerHTML !== desired) tab.innerHTML = desired;
+    }
     if (!mentorTabIsActive()) return;
     const page = document.querySelector('.v244-position-management-page');
     if (!page) return;

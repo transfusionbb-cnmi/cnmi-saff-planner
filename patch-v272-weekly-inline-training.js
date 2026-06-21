@@ -467,7 +467,7 @@
     body.classList.toggle('v272-editing-history',!!st()?.editingTrainingIdV271);
     if (!body.querySelector('.v272-history-notice')) body.insertAdjacentHTML('afterbegin','<div class="notice v272-history-notice"><b>กำหนดงานจริงที่เมนู “ตารางตำแหน่งกลางวัน”</b><br>หน้านี้ใช้ดูประวัติ ยกเลิก หรือแก้ไขข้อมูลย้อนหลังเท่านั้น</div>');
     const title = body.querySelector('.v271-training-layout > .card:nth-child(2) h3');
-    if (title) title.textContent = 'ประวัติพี่เลี้ยง–น้องใหม่ / Intern';
+    if (title && title.textContent !== 'ประวัติพี่เลี้ยง–น้องใหม่ / Intern') title.textContent = 'ประวัติพี่เลี้ยง–น้องใหม่ / Intern';
   }
 
   /* Render monthly table without persisted/injected trainee rows, then add inherited cells and weekly controls. */
