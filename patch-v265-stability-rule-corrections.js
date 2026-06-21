@@ -608,9 +608,16 @@
       // Local state/cache is updated only after the database read-back matches.
       const result = await api.persistRows(rows);
       const staffId = result.staffId || Array.from(staffIds)[0];
-      const readback = await db.from('daily_position_eligibility').select('*').eq('staff_id', staffId);
-      if (readback.error) throw readback.error;
-      const serverRows = normalizePermissionRows(readback.data || []);
+      // V269: bypass every old in-flight/global refresh flag and read this staff directly.
+      // This is the real post-save force refresh used by the final active save function.
+      let serverRows;
+      if (typeof window.loadStaffPermissions === 'function') {
+        serverRows = normalizePermissionRows(await window.loadStaffPermissions(staffId, { force:true, render:false, silent:true }));
+      } else {
+        const readback = await db.from('daily_position_eligibility').select('*').eq('staff_id', staffId);
+        if (readback.error) throw readback.error;
+        serverRows = normalizePermissionRows(readback.data || []);
+      }
       const desired = new Map(rows.map(row => [String(row.position_code), !!row.is_eligible]));
       for (const [code, wanted] of desired) {
         const saved = serverRows.find(row => String(row.position_code) === code);
@@ -619,7 +626,7 @@
       const others = (st?.positionEligibility || []).filter(row => String(row?.staff_id || '') !== String(staffId));
       if (st) {
         st.positionEligibility = normalizePermissionRows(others.concat(serverRows));
-        st.positionEligibilitySourceV265 = 'supabase-verified';
+        st.positionEligibilitySourceV265 = 'supabase-force-verified-v269';
         st.positionEligibilityLoadedAtV265 = new Date().toISOString();
       }
       try { api.sessionValues?.clear?.(); } catch (_) {}

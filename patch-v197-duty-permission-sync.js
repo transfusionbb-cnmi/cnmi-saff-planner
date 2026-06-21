@@ -217,11 +217,23 @@
     return rows || [];
   }
 
+  function nextPermissionRefreshGenerationV269(){
+    const next = Number(window.__CNMI_PERMISSION_REFRESH_GENERATION__ || 0) + 1;
+    window.__CNMI_PERMISSION_REFRESH_GENERATION__ = next;
+    return next;
+  }
+
   async function refreshDutyEligibilityFromDb(options={}) {
     if (!sb || !state?.profile) return false;
+    const requestGeneration = nextPermissionRefreshGenerationV269();
     try {
       const q = await sb.from('daily_position_eligibility').select('*');
       if (q.error) throw q.error;
+      // V269: a query that started before a later force refresh must never overwrite newer state.
+      if (requestGeneration !== Number(window.__CNMI_PERMISSION_REFRESH_GENERATION__ || 0)) {
+        try { console.info('V269 ignored stale V197 permission refresh', requestGeneration); } catch (_) {}
+        return true;
+      }
       state.positionEligibility = q.data || [];
       state.__dutyEligibilitySyncedAtV197 = Date.now();
       if (options.clearDraft) state.rosterDraft = null;

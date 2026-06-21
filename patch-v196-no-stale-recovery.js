@@ -38,7 +38,7 @@
     if (hasStaleRecoveryMarker()) {
       try { history.replaceState({}, document.title, baseUrl()); } catch (_) {}
     }
-    try { console.info('V196 stale recovery flags cleared', reason || ''); } catch (_) {}
+    // V269: intentionally silent; this guard must not spam Console on every browser focus.
     return true;
   }
 
@@ -52,7 +52,8 @@
 
   clearFlags('initial-load');
   window.addEventListener('pageshow', function(){ clearFlags('pageshow'); }, true);
-  window.addEventListener('focus', function(){ clearFlags('focus'); }, true);
+  // V269: do not run recovery cleanup on every window focus. It is unrelated to permission refresh
+  // and previously produced repeated `stale recovery flags cleared focus` logs for all staff.
   window.addEventListener('click', function(e){
     if (e && e.target && e.target.closest && e.target.closest('[data-add-position-master], [data-edit-position-master], #positionMasterForm button[type="submit"]')) {
       clearFlags('position-management-click');

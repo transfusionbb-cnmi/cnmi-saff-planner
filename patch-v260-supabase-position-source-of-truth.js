@@ -18,6 +18,7 @@
   const OUTING_SETS = [12,13,14];
   let slotRefreshInFlight = null;
   let permissionRefreshInFlight = null;
+  let permissionRefreshSequence = Number(window.__CNMI_PERMISSION_REFRESH_GENERATION__ || 0);
   let saveSlotInFlight = false;
 
   function appState(){
@@ -218,9 +219,61 @@
       localStorage.setItem(PERMISSION_CACHE_KEY, JSON.stringify({ version:2, source:'supabase', saved_at:new Date().toISOString(), rows:normalizePermissionRows(rows) }));
     } catch (_) {}
   }
+  function nextPermissionRefreshGeneration(){
+    permissionRefreshSequence = Math.max(permissionRefreshSequence, Number(window.__CNMI_PERMISSION_REFRESH_GENERATION__ || 0)) + 1;
+    window.__CNMI_PERMISSION_REFRESH_GENERATION__ = permissionRefreshSequence;
+    return permissionRefreshSequence;
+  }
+  function isLatestPermissionRefresh(generation){
+    return Number(generation) === Number(window.__CNMI_PERMISSION_REFRESH_GENERATION__ || 0);
+  }
+  function clearSessionValuesForStaff(staffId){
+    try {
+      const map = window.cnmiV258?.sessionValues;
+      if (!map || typeof map.keys !== 'function') return;
+      const prefix = `${String(staffId || '')}|`;
+      Array.from(map.keys()).forEach(key => { if (String(key).startsWith(prefix)) map.delete(key); });
+    } catch (_) {}
+  }
+  function replaceStaffPermissionRows(staffId, serverRows){
+    const st = appState();
+    if (!st) return normalizePermissionRows(serverRows || []);
+    const sid = String(staffId || '');
+    const others = (Array.isArray(st.positionEligibility) ? st.positionEligibility : [])
+      .filter(row => String(row?.staff_id || '') !== sid);
+    const merged = normalizePermissionRows(others.concat(serverRows || []));
+    clearSessionValuesForStaff(sid);
+    st.positionEligibility = merged;
+    st.positionEligibilitySourceV260 = 'supabase-force-readback';
+    st.positionEligibilityLoadedAtV260 = new Date().toISOString();
+    try { window.cnmiV258?.normalizeStateRows?.(); } catch (_) {}
+    writePermissionCache(st.positionEligibility || merged);
+    return normalizePermissionRows(serverRows || []);
+  }
+
+  async function loadStaffPermissions(staffId, options={}){
+    const sid = String(staffId || '').trim();
+    if (!sid) throw new Error('ไม่พบ staffId สำหรับโหลดสิทธิ์');
+    if (typeof sb === 'undefined' || !sb) throw new Error('ไม่พบ Supabase client');
+    // Always starts a new request. It never reuses permissionRefreshInFlight.
+    const generation = nextPermissionRefreshGeneration();
+    const result = await sb.from('daily_position_eligibility').select('*').eq('staff_id', sid);
+    if (result.error) throw result.error;
+    const rows = normalizePermissionRows(result.data || []);
+    if (!isLatestPermissionRefresh(generation)) {
+      try { console.info(`${VERSION}: ignored stale per-staff permission response`, sid, generation); } catch (_) {}
+      return rows;
+    }
+    replaceStaffPermissionRows(sid, rows);
+    if (options.render !== false) rerenderCurrentPositionTab();
+    if (!options.silent) toast(`โหลดสิทธิ์ล่าสุดของเจ้าหน้าที่ที่เลือกแล้ว ${rows.length} รายการ`);
+    return rows;
+  }
+
   async function refreshPermissionsFromDatabase(options={}){
-    if (permissionRefreshInFlight) return permissionRefreshInFlight;
-    permissionRefreshInFlight = (async () => {
+    if (permissionRefreshInFlight && options.force !== true) return permissionRefreshInFlight;
+    const generation = nextPermissionRefreshGeneration();
+    const request = (async () => {
       if (typeof sb === 'undefined' || !sb) throw new Error('ไม่พบ Supabase client');
       const result = await sb.from('daily_position_eligibility').select('*');
       if (result.error) throw result.error;
@@ -230,10 +283,15 @@
       if (!rows.length && currentCount && options.allowEmpty !== true) {
         throw new Error('Supabase คืนค่าสิทธิ์ 0 รายการ ระบบจึงหยุดไว้ก่อนและไม่ล้างค่าที่หน้าจอ');
       }
+      // A request started before a save/readback is stale and must not touch UI state.
+      if (!isLatestPermissionRefresh(generation)) {
+        try { console.info(`${VERSION}: ignored stale all-permission response`, generation); } catch (_) {}
+        return rows;
+      }
       try { window.cnmiV258?.sessionValues?.clear?.(); } catch (_) {}
       if (st) {
         st.positionEligibility = rows;
-        st.positionEligibilitySourceV260 = 'supabase';
+        st.positionEligibilitySourceV260 = options.force === true ? 'supabase-force' : 'supabase';
         st.positionEligibilityLoadedAtV260 = new Date().toISOString();
       }
       try { window.cnmiV258?.normalizeStateRows?.(); } catch (_) {}
@@ -241,8 +299,10 @@
       if (options.render !== false) rerenderCurrentPositionTab();
       if (!options.silent) toast(`รีเฟรชสิทธิ์เฉพาะบุคคลจาก Supabase แล้ว ${rows.length} รายการ`);
       return rows;
-    })().finally(() => { permissionRefreshInFlight = null; });
-    return permissionRefreshInFlight;
+    })();
+    permissionRefreshInFlight = request;
+    try { return await request; }
+    finally { if (permissionRefreshInFlight === request) permissionRefreshInFlight = null; }
   }
 
   function slotConfigEntries(config){
@@ -455,7 +515,11 @@
     if (saveSlots) { saveAllSlotConfigsAsCurrentBase(); return; }
     if (refreshPermissions) {
       setPositionSourceButtonsBusy(true, 'กำลังโหลดสิทธิ์…');
-      refreshPermissionsFromDatabase().catch(error => {
+      const sid = String(document.getElementById('eligibilityStaffSelect')?.value || appState()?.eligibilityStaffId || '').trim();
+      const task = sid
+        ? loadStaffPermissions(sid, { force:true })
+        : refreshPermissionsFromDatabase({ force:true });
+      task.catch(error => {
         console.error(`${VERSION}: permission refresh failed`, error);
         toast('รีเฟรชสิทธิ์ไม่สำเร็จ: ' + friendly(error), 'error');
       }).finally(() => setPositionSourceButtonsBusy(false));
@@ -487,9 +551,13 @@
     const oldSaveEligibility = window.savePositionEligibility || (typeof savePositionEligibility === 'function' ? savePositionEligibility : null);
     if (oldSaveEligibility && !oldSaveEligibility.__v260ServerVerified) {
       const wrappedSaveEligibility = async function savePositionEligibilityV260(){
+        const sid = String(document.getElementById('eligibilityStaffSelect')?.value || appState()?.eligibilityStaffId || '').trim();
         const result = await oldSaveEligibility.apply(this, arguments);
-        try { await refreshPermissionsFromDatabase({ render:false, silent:true, allowEmpty:true }); }
-        catch (error) { console.warn(`${VERSION}: post-save permission refresh skipped`, error); }
+        if (result === false) return result;
+        try {
+          if (sid) await loadStaffPermissions(sid, { force:true, render:false, silent:true });
+          else await refreshPermissionsFromDatabase({ force:true, render:false, silent:true, allowEmpty:true });
+        } catch (error) { console.warn(`${VERSION}: post-save permission force refresh failed`, error); }
         rerenderCurrentPositionTab();
         return result;
       };
@@ -526,9 +594,12 @@
     ]).finally(() => injectPositionSourceControls());
   }, 900);
 
+  assignGlobalFunction('loadStaffPermissions', loadStaffPermissions);
+
   window.cnmiV260 = {
     refreshSlotTemplatesFromDatabase,
     refreshPermissionsFromDatabase,
+    loadStaffPermissions,
     saveAllSlotConfigsAsCurrentBase,
     normalizeConfig,
     normalizePermissionRows,
