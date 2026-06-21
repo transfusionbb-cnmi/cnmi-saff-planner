@@ -3606,3 +3606,173 @@ thead .v179-sticky-first-col {
   .v241-ot-tabs { gap:8px; }
   .v241-ot-tab { width:100%; text-align:left; border-radius:16px; }
 }
+
+
+/* V268 Monthly daytime-position matrix: fixed widths + two sticky columns.
+   Scope is limited to the latest V265 matrix renderer so scheduling logic is untouched. */
+.v265-position-matrix {
+  --v268-staff-col-width: 128px;
+  --v268-summary-col-width: 84px;
+  --v268-day-col-width: 108px;
+  --v268-head-row-height: 42px;
+  --v268-count-row-height: 36px;
+  --v268-missing-row-height: 36px;
+  min-width: 0;
+  max-width: 100%;
+}
+.v265-position-matrix .month-position-matrix {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  isolation: isolate;
+}
+.v265-position-matrix .month-position-matrix table {
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  width: max-content !important;
+  min-width: max-content !important;
+  margin: 0;
+}
+.v265-position-matrix .month-position-matrix th,
+.v265-position-matrix .month-position-matrix td {
+  box-sizing: border-box !important;
+  position: static;
+  min-width: 0;
+  padding: 6px 9px !important;
+  vertical-align: middle !important;
+  border-right: 1px solid #e5eaf0;
+  background-clip: padding-box !important;
+}
+.v265-position-matrix .month-position-matrix .staff-col {
+  position: sticky !important;
+  left: 0 !important;
+  width: var(--v268-staff-col-width) !important;
+  min-width: var(--v268-staff-col-width) !important;
+  max-width: var(--v268-staff-col-width) !important;
+  text-align: left !important;
+  z-index: 32 !important;
+  box-shadow: 1px 0 0 #d9e2ec, 5px 0 10px rgba(31, 50, 72, .07) !important;
+}
+.v265-position-matrix .month-position-matrix .summary-col {
+  position: sticky !important;
+  left: var(--v268-staff-col-width) !important;
+  width: var(--v268-summary-col-width) !important;
+  min-width: var(--v268-summary-col-width) !important;
+  max-width: var(--v268-summary-col-width) !important;
+  text-align: center !important;
+  z-index: 31 !important;
+  background: #fff !important;
+  box-shadow: 1px 0 0 #d9e2ec, 5px 0 10px rgba(31, 50, 72, .06) !important;
+}
+.v265-position-matrix .month-position-matrix .date-head,
+.v265-position-matrix .month-position-matrix .count-role-cell,
+.v265-position-matrix .month-position-matrix .missing-role-cell,
+.v265-position-matrix .month-position-matrix .matrix-cell {
+  width: var(--v268-day-col-width) !important;
+  min-width: var(--v268-day-col-width) !important;
+  max-width: var(--v268-day-col-width) !important;
+}
+.v265-position-matrix .month-position-matrix thead th {
+  position: sticky !important;
+  background: #f8fafc !important;
+}
+.v265-position-matrix .month-position-matrix thead tr:first-child th {
+  top: 0 !important;
+  height: var(--v268-head-row-height) !important;
+  z-index: 40 !important;
+}
+.v265-position-matrix .month-position-matrix thead .count-role-row th {
+  top: var(--v268-head-row-height) !important;
+  height: var(--v268-count-row-height) !important;
+  z-index: 39 !important;
+}
+.v265-position-matrix .month-position-matrix thead .missing-role-row th {
+  top: calc(var(--v268-head-row-height) + var(--v268-count-row-height)) !important;
+  height: var(--v268-missing-row-height) !important;
+  z-index: 38 !important;
+}
+.v265-position-matrix .month-position-matrix thead .staff-col {
+  z-index: 62 !important;
+  background: #f8fafc !important;
+}
+.v265-position-matrix .month-position-matrix thead .summary-col {
+  z-index: 61 !important;
+  background: #f8fafc !important;
+}
+.v265-position-matrix .month-position-matrix tbody .staff-col {
+  overflow: hidden;
+  background-color: #fff;
+}
+.v265-position-matrix .month-position-matrix .matrix-staff-name,
+.v265-position-matrix .month-position-matrix .matrix-staff-name b,
+.v265-position-matrix .month-position-matrix .matrix-staff-name small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v265-position-matrix .month-position-matrix .summary-action-cell .staff-summary-trigger {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0 !important;
+  padding: 5px 6px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v265-position-matrix .month-position-matrix .month-position-select {
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+/* The longer menu/header wording must wrap instead of overflowing on tablets and phones. */
+.nav-btn > span:last-child,
+#pageTitle,
+.readonly-month-position-page .section-title h3 {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .v265-position-matrix {
+    --v268-staff-col-width: 108px;
+    --v268-summary-col-width: 72px;
+    --v268-day-col-width: 96px;
+    --v268-head-row-height: 40px;
+    --v268-count-row-height: 34px;
+    --v268-missing-row-height: 34px;
+  }
+  .v265-position-matrix .month-position-matrix th,
+  .v265-position-matrix .month-position-matrix td {
+    padding: 5px 7px !important;
+    font-size: 10px !important;
+  }
+  .nav-btn > span:last-child {
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.25;
+  }
+  #pageTitle {
+    min-width: 0;
+    font-size: clamp(18px, 5vw, 22px);
+    line-height: 1.25;
+  }
+  .readonly-month-position-page .section-title h3 {
+    font-size: 16px;
+    line-height: 1.3;
+  }
+}
+@media (max-width: 420px) {
+  .v265-position-matrix {
+    --v268-staff-col-width: 100px;
+    --v268-summary-col-width: 68px;
+    --v268-day-col-width: 92px;
+  }
+}

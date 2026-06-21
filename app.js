@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { id: 'activities', icon: '🗂️', title: 'กิจกรรมหน่วยงาน', subtitle: 'ประชุม อบรม ออกหน่วย ตรวจมาตรฐาน ซ้อม CODE และอื่นๆ', group: 'staff' },
   { id: 'schedule', icon: '📋', title: 'ตารางเวรประจำเดือน', subtitle: 'ดูรายเดือน Export Excel / PDF / Print', group: 'staff' },
   { id: 'tradeRequests', icon: '💸', title: 'คำขอขายเวร', subtitle: 'รอฉันยืนยัน / รอ Admin บันทึก', group: 'staff' },
-  { id: 'positionMonthView', icon: '🗓️', title: 'ตารางตำแหน่งรายเดือน', subtitle: 'ดูแผนตำแหน่งรายเดือนที่ประกาศแล้ว', group: 'staff' },
+  { id: 'positionMonthView', icon: '🗓️', title: 'ตารางตำแหน่งกลางวัน รายเดือน', subtitle: 'ดูแผนตำแหน่งกลางวันรายเดือนที่ประกาศแล้ว', group: 'staff' },
   { id: 'positions', icon: '🧪', title: 'ตารางตำแหน่งรายวัน', subtitle: 'ดู/ปรับตำแหน่งประจำวันก่อนเริ่มงาน', group: 'staff' },
   { id: 'ot', icon: '⏱️', title: 'ลงชื่ออยู่เวร / ขอ OT เพิ่ม', subtitle: 'ยืนยันอยู่เวร ขอ OT เพิ่ม และสรุป OT', group: 'staff' },
   { id: 'audit', icon: '🕵️', title: 'Audit Log ล่าสุด', subtitle: 'ประวัติการใช้งานแบบอ่านง่าย กรองรายวันได้', group: 'staff' },
@@ -2754,7 +2754,7 @@ function renderPositionMonthViewPage() {
   const rows = state.positions.filter(x => x.work_date?.startsWith(key));
   const savedCount = rows.length;
   return `<div class="card monthly-position-page readonly-month-position-page">
-    <div class="section-title"><div><h3>ตารางตำแหน่งรายเดือน ${key}</h3><p class="hint">ดูแผนตำแหน่งรายเดือนที่ประกาศไว้</p></div></div>
+    <div class="section-title"><div><h3>ตารางตำแหน่งกลางวัน รายเดือน ${key}</h3><p class="hint">ดูแผนตำแหน่งกลางวันรายเดือนที่ประกาศไว้</p></div></div>
     <div class="toolbar">
       <label>เดือน <input type="month" id="positionMonthViewInput" value="${key}"></label>
       <span>${badge(`ข้อมูล ${savedCount} รายการ`, savedCount ? 'green' : 'black')}</span>
@@ -6687,7 +6687,7 @@ function bindGlobalEvents() {
       if (oldRenderMonthPositionMatrix) {
         try { return oldRenderMonthPositionMatrix.apply(this, arguments); } catch (_) {}
       }
-      return `<div class="notice error-notice">โหลดตารางตำแหน่งรายเดือนไม่สำเร็จ: ${v162Esc(err.message || err)}</div>`;
+      return `<div class="notice error-notice">โหลดตารางตำแหน่งกลางวันรายเดือนไม่สำเร็จ: ${v162Esc(err.message || err)}</div>`;
     }
   };
   try { renderMonthPositionMatrix = window.renderMonthPositionMatrix; } catch (_) {}
