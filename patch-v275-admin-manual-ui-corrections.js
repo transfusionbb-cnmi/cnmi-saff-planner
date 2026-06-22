@@ -150,7 +150,34 @@
     const seen=new Set();
     return rows.filter(r=>{const c=positionCode(r);if(!c||seen.has(c))return false;seen.add(c);return true;}).sort((a,b)=>Number(a.sort_order||999)-Number(b.sort_order||999)||positionCode(a).localeCompare(positionCode(b),'th'));
   }
-  function positionByCode(code){ return positionMasters().find(x=>positionCode(x)===String(code||''))||null; }
+  function isOutingDateSafe(date){
+    const key=normDate(date);
+    try { return !!hasOuting(key); }
+    catch (_) {
+      return (S()?.activities||[]).some(a=>String(a?.event_type||'').trim()==='ออกหน่วย'&&normDate(a?.start_date)<=key&&normDate(a?.end_date||a?.start_date)>=key);
+    }
+  }
+  function isOutingMaster(row){
+    const zone=String(row?.zone||'').trim().toLowerCase();
+    return row?.is_outing===true||zone.includes('ออกหน่วย')||String(row?.eligibility_code||'').startsWith('OUTING:');
+  }
+  function positionByCode(code,date=''){
+    const wanted=String(code||'');
+    if(date){
+      try {
+        const configured=window.cnmiV278?.templateRowsForDate?.(normDate(date))?.find(row=>positionCode(row)===wanted);
+        if(configured)return configured;
+      } catch (_) {}
+    }
+    const candidates=positionMasters().filter(x=>positionCode(x)===wanted);
+    if(!candidates.length)return null;
+    if(date){
+      const outing=isOutingDateSafe(date);
+      const matched=candidates.find(row=>isOutingMaster(row)===outing);
+      if(matched)return matched;
+    }
+    return candidates.find(row=>!isOutingMaster(row))||candidates[0];
+  }
   function positionRows(key){
     let rows=(S()?.positions||[]).filter(r=>normDate(r?.work_date).startsWith(key));
     try { rows=window.cnmiV272?.operationalRows?.(rows)||rows; } catch(_){}
@@ -158,7 +185,14 @@
   }
   function positionRow(rows,staffId,date){ return rows.find(r=>normId(r?.staff_id)===normId(staffId)&&normDate(r?.work_date)===normDate(date))||null; }
   function positionOptions(selected){ return `<option value="">ว่าง</option>${positionMasters().map(m=>{const c=positionCode(m);return `<option value="${esc(c)}" ${String(selected||'')===c?'selected':''}>${esc(c)}</option>`;}).join('')}`; }
-  function zoneBucket(row){const z=String(row?.zone||'').toLowerCase();if(z.includes('ออกหน่วย'))return'outing';if(z.includes('donor')||z.includes('บริจาค'))return'donor';return'bb';}
+  function zoneBucket(row){
+    const date=normDate(row?.work_date),code=String(row?.position_code||row?.code||'').trim().toUpperCase(),z=String(row?.zone||'').trim().toLowerCase();
+    if(isOutingDateSafe(date)&&(z.includes('ออกหน่วย')||row?.is_outing===true))return'outing';
+    if(code.startsWith('BB-'))return'bb';
+    if(code.startsWith('DR-'))return'donor';
+    if(z.includes('donor')||z.includes('บริจาค'))return'donor';
+    return'bb';
+  }
   function fiscalBounds(key){const y=Number(key.slice(0,4)),m=Number(key.slice(5,7)),sy=m>=10?y:y-1;return{cacheKey:String(sy),start:`${sy}-10-01`,end:`${sy+1}-09-30`,label:`ปีงบประมาณ ${sy+1+543}`};}
   async function loadFiscal(key){
     const b=fiscalBounds(key);if(fiscalCache.has(b.cacheKey))return fiscalCache.get(b.cacheKey);if(fiscalLoading.has(b.cacheKey))return fiscalLoading.get(b.cacheKey);
@@ -244,7 +278,7 @@
   function renderAdminPosition(){
     if(!isAdminSafe()){try{return noPermission();}catch(_){return'<div class="card">ไม่มีสิทธิ์</div>';}}
     const key=S()?.positionMonthKey||S()?.monthKey||new Date().toISOString().slice(0,7);schedulePositionLoads(key);const rows=positionRows(key);
-    return `<div class="v275-page"><div class="card"><div class="section-title"><div><h2>จัดตารางตำแหน่งกลางวัน รายเดือน</h2><p class="hint">Admin กำหนดจำนวนคนเองในแถว คน/Slot และเลือกพี่เลี้ยงของน้องใหม่/Intern ในช่องวันที่แทนตำแหน่งงาน</p></div><span class="badge green">Manual</span></div><div class="toolbar"><label>เดือน <input type="month" id="positionMonthInput" value="${esc(key)}"></label><button class="ghost-btn" type="button" data-v275-refresh-position>รีเฟรชข้อมูลล่าสุด</button><button class="ghost-btn danger" type="button" data-clear-month-positions>ล้างข้อมูลเดือนนี้</button></div><div class="v275-position-pool"><b>ลากตำแหน่งไปวาง</b>${positionMasters().map(m=>`<span draggable="true" data-v275-drag-position="${esc(positionCode(m))}">${esc(positionCode(m))}</span>`).join('')}</div><div class="notice soft-notice">ไม่แสดง “ไม่รับเวร” ในตารางตำแหน่งกลางวัน และไม่แสดงเจ้าหน้าที่ที่สถานะตำแหน่งรายวันไม่ใช่ “ใช้งานปกติ”</div></div>${positionMatrix(key,rows,true)}${positionStatsForAdmin(key,rows)}</div>`;
+    return `<div class="v275-page"><div class="card"><div class="section-title"><div><h2>จัดตารางตำแหน่งกลางวัน รายเดือน</h2><p class="hint">Admin กำหนดจำนวนคนเองในแถว คน/Slot และเลือกพี่เลี้ยงของน้องใหม่/Intern ในช่องวันที่แทนตำแหน่งงาน</p></div><span class="badge green">Manual</span></div><div class="toolbar"><label>เดือน <input type="month" id="positionMonthInput" value="${esc(key)}"></label><button class="ghost-btn" type="button" data-v275-refresh-position>รีเฟรชข้อมูลล่าสุด</button><button class="ghost-btn danger" type="button" data-clear-month-positions>ล้างข้อมูลเดือนนี้</button></div></div>${positionMatrix(key,rows,true)}${positionStatsForAdmin(key,rows)}</div>`;
   }
   function renderStaffPosition(){
     const key=S()?.positionMonthViewKey||S()?.monthKey||new Date().toISOString().slice(0,7);schedulePositionLoads(key);const rows=positionRows(key);
@@ -252,7 +286,7 @@
   }
   async function savePosition(cell,code){
     const date=normDate(cell?.dataset?.date),staffId=normId(cell?.dataset?.staffId),status=cell?.querySelector('[data-v275-status]');if(!date||!staffId||!DB())return;if(status)status.textContent='กำลังบันทึก…';
-    try{const d1=await DB().from('daily_positions').delete().eq('work_date',date).eq('staff_id',staffId);if(d1.error)throw d1.error;if(code){const d2=await DB().from('daily_positions').delete().eq('work_date',date).eq('position_code',code);if(d2.error)throw d2.error;}let saved=null;if(code){const m=positionByCode(code)||{},payload={work_date:date,position_code:code,zone:m.zone||'',break_time:m.break_time||'-',main_rule:m.main_rule||'',job_desc:m.job_desc||'',staff_id:staffId,updated_by:currentStaff()};const ins=await DB().from('daily_positions').insert(payload).select('*').single();if(ins.error)throw ins.error;saved=ins.data;}await DB().from('daily_position_day_status').upsert({work_date:date,month_key:date.slice(0,7),status:'draft',updated_by:currentStaff()},{onConflict:'work_date'});if(S()){S().positions=(S().positions||[]).filter(r=>!(normDate(r.work_date)===date&&(normId(r.staff_id)===staffId||(code&&String(r.position_code||'')===code))));if(saved)S().positions.push(saved);}fiscalCache.delete(fiscalBounds(date.slice(0,7)).cacheKey);if(status)status.textContent='บันทึกแล้ว';rerender(snapshot('.v275-position-wrap'));}catch(e){if(status)status.textContent='บันทึกไม่สำเร็จ';toast(friendly(e),'error');}
+    try{const d1=await DB().from('daily_positions').delete().eq('work_date',date).eq('staff_id',staffId);if(d1.error)throw d1.error;if(code){const d2=await DB().from('daily_positions').delete().eq('work_date',date).eq('position_code',code);if(d2.error)throw d2.error;}let saved=null;if(code){const m=positionByCode(code,date)||{},payload={work_date:date,position_code:code,zone:m.zone||'',break_time:m.break_time||'-',main_rule:m.main_rule||'',job_desc:m.job_desc||'',staff_id:staffId,updated_by:currentStaff()};const ins=await DB().from('daily_positions').insert(payload).select('*').single();if(ins.error)throw ins.error;saved=ins.data;}await DB().from('daily_position_day_status').upsert({work_date:date,month_key:date.slice(0,7),status:'draft',updated_by:currentStaff()},{onConflict:'work_date'});if(S()){S().positions=(S().positions||[]).filter(r=>!(normDate(r.work_date)===date&&(normId(r.staff_id)===staffId||(code&&String(r.position_code||'')===code))));if(saved)S().positions.push(saved);}fiscalCache.delete(fiscalBounds(date.slice(0,7)).cacheKey);if(status)status.textContent='บันทึกแล้ว';rerender(snapshot('.v275-position-wrap'));}catch(e){if(status)status.textContent='บันทึกไม่สำเร็จ';toast(friendly(e),'error');}
   }
   function queuePosition(cell,code){const k=`${cell?.dataset?.staffId}|${cell?.dataset?.date}`;clearTimeout(positionTimers.get(k));positionTimers.set(k,setTimeout(()=>savePosition(cell,code),220));}
   async function saveMentor(cell,mentorId){

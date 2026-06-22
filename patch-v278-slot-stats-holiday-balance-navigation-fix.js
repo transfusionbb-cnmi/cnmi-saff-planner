@@ -174,12 +174,38 @@
     });
     return [...map.values()];
   }
-  function positionMaster(code){ return activeMasterRows().find(row=>String(row.code||'')===String(code||'')) || null; }
+  function isOutingDateForSummary(date){
+    const key=normDate(date);
+    try { return !!hasOuting(key); }
+    catch (_) {
+      return (S()?.activities||[]).some(a=>String(a?.event_type||'').trim()==='ออกหน่วย'&&normDate(a?.start_date)<=key&&normDate(a?.end_date||a?.start_date)>=key);
+    }
+  }
+  function positionMaster(code,date=''){
+    const wanted=String(code||'');
+    const rows=activeMasterRows().filter(row=>String(row.code||'')===wanted);
+    if(!rows.length)return null;
+    if(date){
+      const outing=isOutingDateForSummary(date);
+      const matched=rows.find(row=>{
+        const zone=String(row?.zone||'').trim().toLowerCase();
+        const isOuting=row?.is_outing===true||zone.includes('ออกหน่วย')||String(row?.eligibility_code||'').startsWith('OUTING:');
+        return isOuting===outing;
+      });
+      if(matched)return matched;
+    }
+    return rows.find(row=>{
+      const zone=String(row?.zone||'').trim().toLowerCase();
+      return row?.is_outing!==true&&!zone.includes('ออกหน่วย')&&!String(row?.eligibility_code||'').startsWith('OUTING:');
+    })||rows[0];
+  }
   function zoneBucket(row){
-    const master=positionMaster(row?.position_code),zone=String(row?.zone||master?.zone||'').trim().toLowerCase();
-    if(zone.includes('ออกหน่วย') || row?.is_outing===true || String(master?.eligibility_code||'').startsWith('OUTING:')) return 'outing';
-    if(zone.includes('donor') || zone.includes('บริจาค')) return 'donor';
-    return 'bb';
+    const date=normDate(row?.work_date),master=positionMaster(row?.position_code,date),code=String(row?.position_code||'').trim().toUpperCase(),zone=String(row?.zone||master?.zone||'').trim().toLowerCase();
+    if(isOutingDateForSummary(date)&&(zone.includes('ออกหน่วย')||row?.is_outing===true))return'outing';
+    if(code.startsWith('BB-'))return'bb';
+    if(code.startsWith('DR-'))return'donor';
+    if(zone.includes('donor')||zone.includes('บริจาค'))return'donor';
+    return'bb';
   }
   function aggregatePositions(rows,people){
     const result=new Map(people.map(person=>[normId(person.id),{person,total:0,bb:0,donor:0,outing:0,positions:{}}]));

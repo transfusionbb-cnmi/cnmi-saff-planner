@@ -68,8 +68,31 @@
     }finally{if(timer)clearTimeout(timer);}
   }
   function positionCode(row){return String(row?.code||row?.position_code||'').trim();}
-  function positionMaster(code){
-    return (S()?.positionMasters||[]).find(row=>positionCode(row)===String(code||''))||null;
+  function isOutingDateSafe(date){
+    const key=normDate(date);
+    try{return !!hasOuting(key);}
+    catch(_){return (S()?.activities||[]).some(a=>String(a?.event_type||'').trim()==='ออกหน่วย'&&normDate(a?.start_date)<=key&&normDate(a?.end_date||a?.start_date)>=key);}
+  }
+  function isOutingMaster(row){
+    const zone=String(row?.zone||'').trim().toLowerCase();
+    return row?.is_outing===true||zone.includes('ออกหน่วย')||String(row?.eligibility_code||'').startsWith('OUTING:');
+  }
+  function positionMaster(code,date=''){
+    const wanted=String(code||'');
+    if(date){
+      try{
+        const configured=window.cnmiV278?.templateRowsForDate?.(normDate(date))?.find(row=>positionCode(row)===wanted);
+        if(configured)return configured;
+      }catch(_){}
+    }
+    const candidates=(S()?.positionMasters||[]).filter(row=>positionCode(row)===wanted);
+    if(!candidates.length)return null;
+    if(date){
+      const outing=isOutingDateSafe(date);
+      const matched=candidates.find(row=>isOutingMaster(row)===outing);
+      if(matched)return matched;
+    }
+    return candidates.find(row=>!isOutingMaster(row))||candidates[0];
   }
   function positionRow(date,staffId){
     return (S()?.positions||[]).find(row=>normDate(row?.work_date)===date&&normId(row?.staff_id)===normId(staffId))||null;
@@ -162,9 +185,10 @@
     return String(person?.nickname||person?.full_name||person?.email||'');
   }
   function zoneBucket(row){
-    const master=positionMaster(row?.position_code)||{};
-    const zone=String(row?.zone||master.zone||'').toLowerCase();
-    if(master.is_outing===true||zone.includes('ออกหน่วย'))return'outing';
+    const date=normDate(row?.work_date),master=positionMaster(row?.position_code,date)||{},code=String(row?.position_code||'').trim().toUpperCase(),zone=String(row?.zone||master.zone||'').trim().toLowerCase();
+    if(isOutingDateSafe(date)&&(zone.includes('ออกหน่วย')||row?.is_outing===true))return'outing';
+    if(code.startsWith('BB-'))return'bb';
+    if(code.startsWith('DR-'))return'donor';
     if(zone.includes('donor')||zone.includes('บริจาค'))return'donor';
     return'bb';
   }
@@ -234,7 +258,7 @@
 
     let savedRow=null;
     if(code){
-      const master=positionMaster(code)||{};
+      const master=positionMaster(code,date)||{};
       const payload={
         work_date:date,
         position_code:code,
