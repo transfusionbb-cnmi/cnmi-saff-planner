@@ -214,10 +214,14 @@
   }
   function regularPositionCell(person,date,rows,editable){
     if(isWeekendSafe(date)||isHolidaySafe(date))return `<td class="v275-position-day off"></td>`;
-    const leave=leaveOn(person.id,date,{hideNoDuty:true});if(leave)return `<td class="v275-position-day leave">${leaveBadge(leave)}</td>`;
+    const leave=leaveOn(person.id,date,{hideNoDuty:true});
     const row=positionRow(rows,person.id,date),code=row?.position_code||'';
-    if(!editable)return `<td class="v275-position-day">${code?`<button type="button" class="v275-position-pill" data-v275-job="${esc(code)}">${esc(code)}</button>`:''}</td>`;
-    return `<td class="v275-position-day"><div class="v275-position-cell" data-v275-position-cell data-date="${esc(date)}" data-staff-id="${esc(person.id)}"><select data-v275-position-select>${positionOptions(code)}</select>${code?`<button type="button" class="v275-info" data-v275-job="${esc(code)}">i</button>`:''}<small data-v275-status></small></div></td>`;
+    const leaveType=leave?leaveText(leave):'';
+    const leaveClassName=leave?leaveClass(leave):'';
+    const leaveAttrs=leave?` data-v291-leave-label="${esc(leaveType)}" title="${esc(`${leaveType} · Admin ยังเลือกตำแหน่งหรือเว้นว่างได้`)}"`:'';
+    const cellClass=`v275-position-day${leave?` leave v291-leave-dropdown ${leaveClassName}`:''}`;
+    if(!editable)return `<td class="${esc(cellClass)}"${leaveAttrs}>${leave?leaveBadge(leave):''}${code?`<button type="button" class="v275-position-pill" data-v275-job="${esc(code)}">${esc(code)}</button>`:''}</td>`;
+    return `<td class="${esc(cellClass)}"${leaveAttrs}><div class="v275-position-cell" data-v275-position-cell data-date="${esc(date)}" data-staff-id="${esc(person.id)}"><select data-v275-position-select aria-label="เลือกตำแหน่ง ${esc(staffName(person))} วันที่ ${esc(date)}${leave?` (${esc(leaveType)})`:''}">${positionOptions(code)}</select>${code?`<button type="button" class="v275-info" data-v275-job="${esc(code)}">i</button>`:''}<small data-v275-status></small></div></td>`;
   }
   function traineeCell(item,date,rows,editable){
     if(isWeekendSafe(date)||isHolidaySafe(date))return `<td class="v275-position-day off"></td>`;

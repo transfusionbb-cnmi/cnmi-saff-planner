@@ -12,8 +12,8 @@
   if(window.__CNMI_V288_POSITION_MONTH_SAVE_SCROLL_LOCK__)return;
   window.__CNMI_V288_POSITION_MONTH_SAVE_SCROLL_LOCK__=true;
 
-  const LOCK_MS=8000;
-  const RESTORE_DELAYS=[0,18,48,95,170,290,470,760,1220,1940,3060,4300,6100,7900];
+  const LOCK_MS=3500;
+  const RESTORE_DELAYS=[0,24,80,180,420,900,1800,3200];
   let snapshot=null;
   let serial=0;
   let applying=false;
@@ -136,8 +136,8 @@
   function beginControlLock(target,reason){
     if(!isTarget())return;
     if(!target?.closest?.('.v275-position-wrap [data-v275-position-select],.v275-position-wrap [data-v275-mentor-select],.v275-position-wrap [data-v275-slot],.v275-position-wrap [data-v275-position-cell],.v275-position-wrap [data-v275-mentor-cell]'))return;
+    /* V291: capture only. Restore is scheduled only when the table DOM is actually replaced. */
     capture(target,reason);
-    scheduleRestore();
   }
   function markUserScrollIntent(event){
     if(!isTarget())return;
@@ -145,6 +145,7 @@
     if(!wrap)return;
     if(event?.target!==wrap&&!event?.target?.closest?.('.v275-position-wrap'))return;
     userIntentUntil=Date.now()+1400;
+    cancelTimers();
     requestAnimationFrame(()=>{
       if(!isTarget()||applying)return;
       capture(event.target,'user-scroll-intent');
@@ -169,13 +170,14 @@
     const wrap=scroller();
     if(!wrap||event.target!==wrap)return;
     userIntentUntil=Date.now()+1400;
+    cancelTimers();
   },true);
   document.addEventListener('scroll',event=>{
     if(applying||!isTarget()||Date.now()>userIntentUntil)return;
     const wrap=scroller();
     if(event.target!==wrap)return;
+    /* Never write scrollLeft back while the user is actively scrolling. */
     capture(wrap,'trusted-user-scroll');
-    scheduleRestore();
   },true);
   window.addEventListener('scroll',()=>{
     if(applying||!valid()||Date.now()>userIntentUntil)return;
@@ -196,7 +198,10 @@
     observer?.disconnect?.();
     observer=new MutationObserver(mutations=>{
       if(!valid())return;
-      const replaced=mutations.some(m=>m.type==='childList'&&(m.addedNodes.length||m.removedNodes.length));
+      const replaced=mutations.some(m=>Array.from(m.addedNodes||[]).some(node=>{
+        if(node?.nodeType!==1)return false;
+        return node.matches?.('.v275-page,.v275-position-wrap,.v275-position-table')||!!node.querySelector?.('.v275-position-wrap');
+      }));
       if(!replaced)return;
       scheduleRestore();
     });

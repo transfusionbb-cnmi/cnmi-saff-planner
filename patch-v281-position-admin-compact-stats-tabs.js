@@ -25,14 +25,8 @@
   function isTargetPage(){return S()?.page==='positionMonth'&&isAdminSafe();}
 
   function addDensityControl(page){
-    if(!page||page.querySelector('[data-v281-density]')) return;
-    const toolbar=page.querySelector('.toolbar');
-    if(!toolbar) return;
-    const button=document.createElement('button');
-    button.type='button';
-    button.className='ghost-btn v281-density-btn';
-    button.dataset.v281Density='1';
-    toolbar.appendChild(button);
+    /* V291: fixed compact table; remove the old expand-density control. */
+    page?.querySelectorAll?.('[data-v281-density]').forEach(button=>button.remove());
   }
 
   function applyMatrixMode(){
@@ -42,13 +36,9 @@
     if(!page||!wrap) return;
     page.classList.add('v281-admin-position-page');
     wrap.classList.add('v281-compact-position-wrap');
-    page.classList.toggle('v281-relaxed',relaxed);
+    relaxed=false;
+    page.classList.remove('v281-relaxed');
     addDensityControl(page);
-    const button=page.querySelector('[data-v281-density]');
-    if(button){
-      button.textContent=relaxed?'มุมมองกะทัดรัด':'ขยายช่องตาราง';
-      button.title=relaxed?'ลดขนาดแถวและคอลัมน์':'ขยายช่องชั่วคราวเพื่ออ่านข้อความยาว';
-    }
   }
 
   function setColumnVisible(table,index,visible){
@@ -141,8 +131,7 @@
     const density=event.target?.closest?.('[data-v281-density]');
     if(density){
       event.preventDefault();
-      relaxed=!relaxed;
-      applyMatrixMode();
+      density.remove();
       return;
     }
     const tab=event.target?.closest?.('[data-v281-stat-tab]');
@@ -320,7 +309,15 @@
   `;
   document.head.appendChild(style);
 
-  const observer=new MutationObserver(queueEnhance);
+  const observer=new MutationObserver(mutations=>{
+    if(!isTargetPage()) return;
+    const structural=mutations.some(mutation=>Array.from(mutation.addedNodes||[]).some(node=>{
+      if(node?.nodeType!==1) return false;
+      return node.matches?.('.v275-page,.v275-position-wrap,.v278-admin-position-stats')||
+        !!node.querySelector?.('.v275-position-wrap,.v278-admin-position-stats');
+    }));
+    if(structural) queueEnhance();
+  });
   observer.observe(document.documentElement,{subtree:true,childList:true});
   window.addEventListener('resize',queueEnhance,{passive:true});
   document.addEventListener('DOMContentLoaded',()=>setTimeout(enhance,80));
