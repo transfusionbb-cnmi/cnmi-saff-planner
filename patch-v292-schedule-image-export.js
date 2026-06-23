@@ -5,7 +5,7 @@
 */
 (function(){
   'use strict';
-  const VERSION_V292 = 'V292_SCHEDULE_IMAGE_EXPORT';
+  const VERSION_V292 = 'V295_SCHEDULE_IMAGE_EXPORT_BRANDED_HEADER';
 
   function safeHtml(v){
     try { return escapeHtml(v == null ? '' : String(v)); }
@@ -27,9 +27,7 @@
   }
   function fileName(){
     const month = activeScheduleMonth();
-    const viewMap = { day:'ดูตามวัน', person:'ดูตามคน', balance:'สรุปสมดุลเวร', table:'ตารางทั้งเดือน' };
-    const view = viewMap[activeScheduleView()] || activeScheduleView();
-    return `schedule_${month}_${view}.png`.replace(/[\\/:*?"<>|]+/g, '-');
+    return `schedule_${month}_ตารางทั้งเดือน.png`.replace(/[\/:*?"<>|]+/g, '-');
   }
   function fullMonthTitle(key){
     try {
@@ -38,6 +36,24 @@
       const d = new Date(y, m - 1, 1);
       return d.toLocaleDateString('th-TH', { month:'long', year:'numeric' });
     } catch (_) { return key || ''; }
+  }
+  function renderExportBrandHeader(key){
+    const monthLabel = safeHtml(fullMonthTitle(key) || key);
+    return `
+      <div class="schedule-brand-header">
+        <div class="schedule-brand-logo" aria-hidden="true">
+          <div class="schedule-brand-logo-circle">
+            <span class="schedule-brand-logo-main">BB</span>
+            <span class="schedule-brand-logo-sub">CNMI</span>
+          </div>
+        </div>
+        <div class="schedule-brand-copy">
+          <p class="schedule-brand-unit">เวชศาสตร์บริการโลหิต</p>
+          <h3 class="schedule-export-title">ตารางเวรประจำเดือน</h3>
+          <p class="schedule-export-subtitle">เดือน ${monthLabel}</p>
+        </div>
+      </div>
+    `;
   }
   function ensureHtml2Canvas(){
     if (typeof window.html2canvas === 'function') return Promise.resolve(window.html2canvas);
@@ -63,10 +79,30 @@
       table.style.maxWidth = 'none';
     });
   }
+  function getScheduleExportDataset(){
+    const key = activeScheduleMonth();
+    const onlyMine = !!state?.scheduleOnlyMine;
+    let staffList = scheduleStaffList();
+    let assignments = scheduleAssignmentsForMonth(key);
+    if (onlyMine) {
+      const sid = (typeof currentSid206 === 'function' ? currentSid206() : (typeof currentStaffId === 'function' ? currentStaffId() : state?.user?.staff_id));
+      staffList = staffList.filter(s => String(s.id) === String(sid));
+      assignments = assignments.filter(a => String(a.staff_id) === String(sid));
+    }
+    return { key, staffList, assignments };
+  }
+  function buildMonthlyGridMarkup(){
+    const { key, staffList, assignments } = getScheduleExportDataset();
+    if (!staffList.length) return `<div class="empty">ไม่มีรายชื่อเจ้าหน้าที่ที่เปิดใช้งาน</div>`;
+    const grid = renderGridView(staffList, assignments, key);
+    return `
+      <div class="schedule-export-clone schedule-export-sheet">
+        ${renderExportBrandHeader(key)}
+        <div class="schedule-export-grid-only">${grid}</div>
+      </div>
+    `;
+  }
   function buildCaptureNode(){
-    const source = document.getElementById('scheduleCaptureArea') || document.querySelector('.schedule-capture-area') || document.getElementById('scheduleTable');
-    if (!source) throw new Error('ไม่พบตารางที่ต้องการ Export');
-
     const sandbox = document.createElement('div');
     sandbox.setAttribute('data-v292-export-sandbox', 'true');
     sandbox.style.position = 'fixed';
@@ -78,8 +114,11 @@
     sandbox.style.width = 'max-content';
     sandbox.style.maxWidth = 'none';
 
-    const clone = source.cloneNode(true);
-    clone.classList.add('schedule-export-clone');
+    const holder = document.createElement('div');
+    holder.innerHTML = buildMonthlyGridMarkup().trim();
+    const clone = holder.firstElementChild;
+    if (!clone) throw new Error('ไม่พบตารางทั้งเดือนที่ต้องการ Export');
+
     clone.style.background = '#ffffff';
     clone.style.color = '#1f2937';
     clone.style.width = 'max-content';
@@ -118,7 +157,7 @@
       document.body.appendChild(link);
       link.click();
       link.remove();
-      toast('Export ตารางเป็นรูปภาพแล้ว');
+      toast('Export รูปภาพพร้อมหัวข้อเดือนและชื่อหน่วยงานแล้ว');
     } catch (err) {
       console.error(VERSION_V292, err);
       try {
@@ -161,10 +200,7 @@
           </div>
           <div id="scheduleCaptureArea" class="schedule-capture-area">
             ${renderScheduleTabs(active)}
-            <div class="schedule-export-header">
-              <h3 class="schedule-export-title">ตารางเวรประจำเดือน</h3>
-              <p class="schedule-export-subtitle">เดือน ${safeHtml(fullMonthTitle(key) || key)}</p>
-            </div>
+            ${renderExportBrandHeader(key)}
             <h3 class="print-only">ตารางเวรประจำเดือน ${safeHtml(key)}</h3>
             <div class="clean-schedule-content">${content}</div>
           </div>
@@ -190,11 +226,31 @@
     const style = document.createElement('style');
     style.textContent = `
       .schedule-capture-area{display:block;background:#fff;border-radius:18px;}
-      .schedule-export-header{display:flex;flex-direction:column;gap:4px;margin:6px 0 14px 0;}
-      .schedule-export-title{margin:0;font-size:1.15rem;color:#16324f;}
-      .schedule-export-subtitle{margin:0;color:#5b6b7f;font-size:.95rem;}
+      .schedule-brand-header{display:flex;align-items:center;gap:14px;margin:8px 0 16px 0;padding:10px 12px;border:1px solid #d7e5f6;border-radius:18px;background:linear-gradient(180deg,#f8fbff 0%,#ffffff 100%);}
+      .schedule-brand-logo{flex:0 0 auto;}
+      .schedule-brand-logo-circle{width:74px;height:74px;border-radius:999px;background:linear-gradient(135deg,#8fd0ff 0%,#4aa3ff 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;box-shadow:0 8px 18px rgba(74,163,255,.24);border:3px solid #ffffff;}
+      .schedule-brand-logo-main{font-size:24px;line-height:1;font-weight:800;letter-spacing:.5px;}
+      .schedule-brand-logo-sub{font-size:10px;line-height:1.1;font-weight:700;letter-spacing:1.2px;margin-top:4px;opacity:.96;}
+      .schedule-brand-copy{display:flex;flex-direction:column;gap:3px;min-width:0;}
+      .schedule-brand-unit{margin:0;font-size:.95rem;font-weight:700;color:#2563eb;letter-spacing:.2px;}
+      .schedule-export-title{margin:0;font-size:1.2rem;font-weight:800;color:#16324f;}
+      .schedule-export-subtitle{margin:0;color:#5b6b7f;font-size:.98rem;font-weight:600;}
+      .schedule-export-sheet,
+      .schedule-export-grid-only{display:block;background:#fff;width:max-content;max-width:none;}
       .schedule-export-clone .table-wrap,
-      .schedule-export-clone .clean-grid-wrap{overflow:visible !important;}
+      .schedule-export-clone .clean-grid-wrap{overflow:visible !important;max-width:none !important;width:max-content !important;height:auto !important;}
+      .schedule-export-clone table{width:max-content !important;max-width:none !important;table-layout:auto !important;}
+      .schedule-export-clone .clean-sticky-col{position:static !important;left:auto !important;z-index:auto !important;}
+      .schedule-export-clone .clean-staff-cell button{pointer-events:none !important;}
+      @media (max-width: 700px){
+        .schedule-brand-header{padding:10px;gap:10px;}
+        .schedule-brand-logo-circle{width:62px;height:62px;}
+        .schedule-brand-logo-main{font-size:20px;}
+        .schedule-brand-logo-sub{font-size:9px;}
+        .schedule-brand-unit{font-size:.88rem;}
+        .schedule-export-title{font-size:1.08rem;}
+        .schedule-export-subtitle{font-size:.9rem;}
+      }
     `;
     document.head.appendChild(style);
   } catch(_) {}
