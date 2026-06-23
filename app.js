@@ -1601,6 +1601,158 @@ function getAssignmentsForMonth(key) {
   const { start, end } = getMonthRange(key);
   return state.rosterAssignments.filter(x => x.duty_date >= start && x.duty_date <= end && allowedDutyCodesForDate(x.duty_date).includes(x.duty_code));
 }
+function summaryEligibleStaff() {
+  return orderedStaff(state.staff.filter(s => s?.is_active && s?.staff_type !== 'แพทย์'));
+}
+function tradeAppliedAt(r) {
+  return r?.updated_at || r?.completed_at || r?.confirmed_at || r?.created_at || '';
+}
+function getBaselineAssignmentsForMonth(key) {
+  const current = getAssignmentsForMonth(key).map(a => ({ ...a }));
+  const byId = Object.fromEntries(current.filter(a => a.id).map(a => [a.id, a]));
+  const ids = new Set(Object.keys(byId));
+  const relevantTrades = state.tradeRequests
+    .filter(r => r?.status === 'completed' && !isSelfPaidTrade(r) && (ids.has(String(r.from_assignment_id)) || ids.has(String(r.to_assignment_id || ''))))
+    .sort((a, b) => String(tradeAppliedAt(b)).localeCompare(String(tradeAppliedAt(a))));
+  relevantTrades.forEach(r => {
+    const from = byId[r.from_assignment_id];
+    const to = r.to_assignment_id ? byId[r.to_assignment_id] : null;
+    if (from && r.requester_id) from.staff_id = r.requester_id;
+    if (to && r.receiver_id) to.staff_id = r.receiver_id;
+  });
+  return current;
+}
+function monthKeysWithRosterData() {
+  return [...new Set(state.rosterAssignments.map(a => String(a.duty_date || '').slice(0,7)).filter(Boolean))].sort();
+}
+function round1(v) {
+  return Math.round((Number(v) || 0) * 10) / 10;
+}
+function holidayLikeDatesForMonth(key) {
+  const { start, end } = getMonthRange(key);
+  return datesBetween(start, end).filter(d => isWeekend(d) || isHolidayDate(d));
+}
+function calcDayOffStatsForMonth(key, assignments, staffRows=summaryEligibleStaff()) {
+  const holidayDates = holidayLikeDatesForMonth(key);
+  const workedMap = {};
+  assignments.forEach(a => {
+    if (!a?.staff_id) return;
+    if (!holidayDates.includes(a.duty_date)) return;
+    workedMap[a.staff_id] = workedMap[a.staff_id] || new Set();
+    workedMap[a.staff_id].add(a.duty_date);
+  });
+  const out = {};
+  staffRows.forEach(s => {
+    const available = holidayDates.filter(d => !isActiveLeaveOn(s.id, d)).length;
+    const worked = workedMap[s.id]?.size || 0;
+    out[s.id] = { available, worked, dayOffs: Math.max(0, available - worked) };
+  });
+  return out;
+}
+function calcMonthBalanceData(key) {
+  const displayStaff = summaryEligibleStaff();
+  const avgEligible = orderedStaff(state.staff.filter(s => isRosterEnabled(s)));
+  const currentAssignments = getAssignmentsForMonth(key).filter(x => x.staff_id);
+  const baseAssignments = getBaselineAssignmentsForMonth(key).filter(x => x.staff_id);
+  const currentStats = calcFairness(currentAssignments);
+  const baseStats = calcFairness(baseAssignments);
+  const currentDaysOff = calcDayOffStatsForMonth(key, currentAssignments, displayStaff);
+  const baseDaysOff = calcDayOffStatsForMonth(key, baseAssignments, displayStaff);
+  const carryDuty = {};
+  const carryDayOff = {};
+  monthKeysWithRosterData().filter(mk => mk < key).forEach(mk => {
+    const prevBaseAssignments = getBaselineAssignmentsForMonth(mk).filter(x => x.staff_id);
+    const prevBaseStats = calcFairness(prevBaseAssignments);
+    const prevBaseDaysOff = calcDayOffStatsForMonth(mk, prevBaseAssignments, displayStaff);
+    const groups = [...new Set(displayStaff.map(s => s.staff_type).filter(Boolean))];
+    groups.forEach(group => {
+      const avgIds = avgEligible.filter(s => s.staff_type === group).map(s => s.id);
+      const avgUnits = avgIds.length ? avgIds.reduce((sum, id) => sum + (prevBaseStats[id]?.units || 0), 0) / avgIds.length : 0;
+      const avgDayOffs = avgIds.length ? avgIds.reduce((sum, id) => sum + (prevBaseDaysOff[id]?.dayOffs || 0), 0) / avgIds.length : 0;
+      displayStaff.filter(s => s.staff_type === group).forEach(s => {
+        carryDuty[s.id] = round1((carryDuty[s.id] || 0) + ((prevBaseStats[s.id]?.units || 0) - avgUnits));
+        carryDayOff[s.id] = round1((carryDayOff[s.id] || 0) + ((prevBaseDaysOff[s.id]?.dayOffs || 0) - avgDayOffs));
+      });
+    });
+  });
+
+  const groups = [...new Set(displayStaff.map(s => s.staff_type).filter(Boolean))];
+  const groupRows = groups.map(group => {
+    const rows = displayStaff.filter(s => s.staff_type === group);
+    const avgIds = avgEligible.filter(s => s.staff_type === group).map(s => s.id);
+    const avgUnits = avgIds.length ? avgIds.reduce((sum, id) => sum + (baseStats[id]?.units || 0), 0) / avgIds.length : 0;
+    const avgBaseDayOffs = avgIds.length ? avgIds.reduce((sum, id) => sum + (baseDaysOff[id]?.dayOffs || 0), 0) / avgIds.length : 0;
+    return {
+      group,
+      avgUnits: round1(avgUnits),
+      avgDayOffs: round1(avgBaseDayOffs),
+      rows: rows.map(s => {
+        const current = currentStats[s.id] || {};
+        const base = baseStats[s.id] || {};
+        const quotaGap = round1((base.units || 0) - avgUnits);
+        const otCarry = round1(carryDuty[s.id] || 0);
+        const dutyAccum = round1(otCarry + quotaGap);
+        const currentDayOffThisMonth = round1(currentDaysOff[s.id]?.dayOffs || 0);
+        const baseDayOffGap = round1((baseDaysOff[s.id]?.dayOffs || 0) - avgBaseDayOffs);
+        const dayOffAccum = round1((carryDayOff[s.id] || 0) + baseDayOffGap);
+        let statusText = 'เวรเฉลี่ยสมดุล';
+        let statusCls = 'green';
+        if (!isRosterEnabled(s) && !(base.total || current.total)) {
+          statusText = 'ลา/งดจัดเวร';
+          statusCls = 'black';
+        } else if (dutyAccum > 0.5) {
+          statusText = 'เวรสะสมมากกว่าเฉลี่ย';
+          statusCls = 'orange';
+        } else if (dutyAccum < -0.5) {
+          statusText = 'เวรสะสมน้อยกว่าเฉลี่ย';
+          statusCls = 'blue';
+        }
+        return {
+          staff: s,
+          current,
+          base,
+          quotaGap,
+          otCarry,
+          dutyAccum,
+          currentDayOffThisMonth,
+          dayOffAccum,
+          statusText,
+          statusCls
+        };
+      })
+    };
+  });
+  return { key, groupRows };
+}
+function renderBalanceSummaryTable(data, opts={}) {
+  const wrapCls = opts.mobile ? 'schedule-balance-shell mobile-balance-shell' : 'schedule-balance-shell desktop-schedule-summary';
+  return `<div class="${wrapCls}">
+    <div class="notice soft-notice balance-summary-note"><b>สรุปสมดุลเวร V298</b><br>คอลัมน์ <b>Quota Gap</b>, <b>OT Balance ยกมา</b>, <b>เวรสะสม</b>, <b>วันหยุดสะสม</b> และจำนวนเวรรายประเภท ยึดตาม <b>ตารางตั้งต้นที่ Admin จัด</b> ก่อนมีการขาย/แลกเวร ส่วน <b>เวรรวม</b>, <b>หน่วยเวร</b>, <b>ชั่วโมงรวม</b>, <b>เงินประมาณ</b> และ <b>วันหยุดเดือนนี้</b> แสดงตามสถานะปัจจุบัน</div>
+    ${data.groupRows.map(group => `
+      <div class="balance-group-card">
+        <div class="section-title balance-group-head"><h3>กลุ่ม ${escapeHtml(group.group)}</h3><span class="badge blue">ค่าเฉลี่ย ${group.avgUnits.toFixed(1)} หน่วยเวร</span></div>
+        <div class="table-wrap balance-summary-wrap"><table class="balance-summary-table"><thead><tr>
+          <th>เจ้าหน้าที่</th><th>เวรรวม</th><th>หน่วยเวร</th><th>ชั่วโมงรวม</th><th>เงินประมาณ</th><th>Quota Gap</th><th>OT Balance ยกมา</th><th>เวรสะสม</th><th>วันหยุดเดือนนี้</th><th>วันหยุดสะสม</th><th>ชบด1</th><th>ชบด2</th><th>ชบด3</th><th>ช3A</th><th>ช3B</th><th>ช4</th><th>ช9</th><th>ดูเวร</th><th>สถานะ</th>
+        </tr></thead><tbody>
+          ${group.rows.map(row => `<tr>
+            <td>${staffPill(row.staff)}</td>
+            <td>${row.current.total || 0}</td>
+            <td>${(row.current.units || 0).toFixed(1)}</td>
+            <td>${(row.current.hours || 0).toFixed(1)}</td>
+            <td>${(row.current.pay || 0).toLocaleString()}</td>
+            <td class="${row.quotaGap > 0 ? 'pos' : row.quotaGap < 0 ? 'neg' : ''}">${row.quotaGap.toFixed(1)}</td>
+            <td class="${row.otCarry > 0 ? 'pos' : row.otCarry < 0 ? 'neg' : ''}">${row.otCarry.toFixed(1)}</td>
+            <td class="${row.dutyAccum > 0 ? 'pos' : row.dutyAccum < 0 ? 'neg' : ''}">${row.dutyAccum.toFixed(1)}</td>
+            <td>${row.currentDayOffThisMonth.toFixed(0)}</td>
+            <td class="${row.dayOffAccum > 0 ? 'pos' : row.dayOffAccum < 0 ? 'neg' : ''}">${row.dayOffAccum.toFixed(1)}</td>
+            <td>${row.base.chbd1 || 0}</td><td>${row.base.chbd2 || 0}</td><td>${row.base.chbd3 || 0}</td><td>${row.base.ch3a || 0}</td><td>${row.base.ch3b || 0}</td><td>${row.base.ch4 || 0}</td><td>${row.base.ch9 || 0}</td>
+            <td><button class="tiny-btn" data-staff-stat="${row.staff.id}" type="button">ดูเวร</button></td>
+            <td>${badge(row.statusText, row.statusCls)}</td>
+          </tr>`).join('')}
+        </tbody></table></div>
+      </div>`).join('')}
+  </div>`;
+}
 function generateEmptyAssignments(key) {
   const { y, m } = getMonthRange(key);
   const last = new Date(y, m, 0).getDate();
@@ -1662,13 +1814,13 @@ function renderRosterMobileGrid(assignments, y, m, last) {
   }).join('')}</div>`;
 }
 function showFairness() {
-  const assignments = getAssignmentsForMonth(state.monthKey).filter(x => x.staff_id);
+  const assignments = getBaselineAssignmentsForMonth(state.monthKey).filter(x => x.staff_id);
   const stats = calcFairness(assignments);
   const hours = Object.values(stats).map(x => x.hours || 0);
   const pays = Object.values(stats).map(x => x.pay || 0);
   const diff = hours.length ? Math.max(...hours) - Math.min(...hours) : 0;
   const payDiff = pays.length ? Math.max(...pays) - Math.min(...pays) : 0;
-  showModal(`<h2>ตรวจสมดุลการกระจายเวร ${state.monthKey}</h2><p class="hint">คิดตามเวรตั้งต้น: ชบด วันธรรมดา 16 ชม., ชบด เสาร์/อาทิตย์/นักขัต 24 ชม., ช9 8 ชม., ช3A/ช3B คิดตั้งต้น 8 ชม. ส่วนช4 และชั่วโมงปั่นเลือดเพิ่มให้ยืนยันเวลาแล้วเทียบ LIS ก่อน</p><p class="hint">ส่วนต่างชั่วโมง ${diff.toFixed(1)} ชม. • ส่วนต่างเงินโดยประมาณ ${payDiff.toLocaleString()} บาท</p><div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>ชม.รวม</th><th>เงินประมาณ</th><th>หน่วยเวร</th><th>ชบด</th><th>ช9</th><th>ช3A/B</th><th>ช4</th><th>จันทร์</th><th>ศุกร์</th><th>วันหยุด/นักขัต</th></tr></thead><tbody>
+  showModal(`<h2>ตรวจสมดุลการกระจายเวร ${state.monthKey}</h2><p class="hint">คำนวณจากตารางตั้งต้นของ Admin ก่อนมีการขาย/แลกเวร</p><p class="hint">คิดตามเวรตั้งต้น: ชบด วันธรรมดา 16 ชม., ชบด เสาร์/อาทิตย์/นักขัต 24 ชม., ช9 8 ชม., ช3A/ช3B คิดตั้งต้น 8 ชม. ส่วนช4 และชั่วโมงปั่นเลือดเพิ่มให้ยืนยันเวลาแล้วเทียบ LIS ก่อน</p><p class="hint">ส่วนต่างชั่วโมง ${diff.toFixed(1)} ชม. • ส่วนต่างเงินโดยประมาณ ${payDiff.toLocaleString()} บาท</p><div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>ชม.รวม</th><th>เงินประมาณ</th><th>หน่วยเวร</th><th>ชบด</th><th>ช9</th><th>ช3A/B</th><th>ช4</th><th>จันทร์</th><th>ศุกร์</th><th>วันหยุด/นักขัต</th></tr></thead><tbody>
     ${orderedStaff(state.staff.filter(s=>isRosterEnabled(s))).map(s => { const r = stats[s.id] || {}; return `<tr><td>${staffPill(s)}</td><td>${(r.hours||0).toFixed(1)}</td><td>${(r.pay||0).toLocaleString()}</td><td>${(r.units||0).toFixed(1)}</td><td>${r.chbd||0}</td><td>${r.ch9||0}</td><td>${r.ch3||0}</td><td>${r.ch4||0}</td><td>${r.mon||0}</td><td>${r.fri||0}</td><td>${r.weekend||0}</td></tr>`; }).join('')}
   </tbody></table></div>`);
 }
@@ -1676,7 +1828,7 @@ function calcFairness(assignments) {
   const stats = {};
   assignments.forEach(a => {
     if (!a.staff_id) return;
-    if (!stats[a.staff_id]) stats[a.staff_id] = { total:0, units:0, mon:0, fri:0, weekend:0, weekday:0, hours:0, pay:0, chbd:0, ch9:0, ch3:0, ch4:0, weekCounts:{} };
+    if (!stats[a.staff_id]) stats[a.staff_id] = { total:0, units:0, mon:0, fri:0, weekend:0, weekday:0, hours:0, pay:0, chbd:0, ch9:0, ch3:0, ch4:0, chbd1:0, chbd2:0, chbd3:0, ch3a:0, ch3b:0, weekCounts:{} };
     const dow = parseDate(a.duty_date).getDay();
     const m = dutyMetrics(a);
     stats[a.staff_id].total++;
@@ -1687,6 +1839,11 @@ function calcFairness(assignments) {
     if (String(a.duty_code || '').startsWith('ช9')) stats[a.staff_id].ch9++;
     if (['ช3A','ช3B'].includes(a.duty_code)) stats[a.staff_id].ch3++;
     if (['ช4A','ช4B'].includes(a.duty_code)) stats[a.staff_id].ch4++;
+    if (a.duty_code === 'ชบด1') stats[a.staff_id].chbd1++;
+    if (a.duty_code === 'ชบด2') stats[a.staff_id].chbd2++;
+    if (a.duty_code === 'ชบด3') stats[a.staff_id].chbd3++;
+    if (a.duty_code === 'ช3A') stats[a.staff_id].ch3a++;
+    if (a.duty_code === 'ช3B') stats[a.staff_id].ch3b++;
     const wk = weekKeyOf(a.duty_date);
     stats[a.staff_id].weekCounts[wk] = (stats[a.staff_id].weekCounts[wk] || 0) + 1;
     if (dow === 1) stats[a.staff_id].mon++;
@@ -1718,8 +1875,8 @@ function renderMonthlySchedulePage() {
     <div class="mobile-schedule-tabs no-print">
       ${mobileScheduleTab('day', 'ดูตามวัน')}
       ${mobileScheduleTab('person', 'ดูตามคน')}
-      ${mobileScheduleTab('ot', 'สรุป OT')}
-      ${mobileScheduleTab('table', 'ตาราง')}
+      ${mobileScheduleTab('ot', 'สรุปสมดุลเวร')}
+      ${mobileScheduleTab('table', 'ตารางทั้งเดือน')}
     </div>
     <h3 class="print-only">ตารางเวรประจำเดือน ${state.monthKey}</h3>
     ${renderScheduleSummary(assignments)}${renderReadOnlySchedule(assignments)}${renderDutyTradePanel(assignments)}
@@ -1729,10 +1886,9 @@ function mobileScheduleTab(id, label) {
   return `<button class="${state.scheduleMobileView === id ? 'primary-btn' : 'ghost-btn'}" data-schedule-mobile-view="${id}">${label}</button>`;
 }
 function renderScheduleSummary(assignments) {
-  const stats = calcFairness(assignments.filter(x => x.staff_id));
-  const active = orderedStaff(state.staff.filter(s => isRosterEnabled(s)));
-  if (!active.length) return '';
-  return `<div class="schedule-summary desktop-schedule-summary">${active.map(s => { const r = stats[s.id] || {}; return `<div class="summary-chip" style="--staff-bg:${staffColor(s)};--staff-fg:${textColorFor(staffColor(s))}"><b>${escapeHtml(s.nickname || s.full_name)}</b><span>${(r.units||0).toFixed(1)} หน่วย • ${(r.hours||0).toFixed(0)} ชม. • ${(r.pay||0).toLocaleString()} บ.</span></div>`; }).join('')}</div>`;
+  const data = calcMonthBalanceData(state.monthKey);
+  if (!data.groupRows.some(g => g.rows.length)) return '';
+  return renderBalanceSummaryTable(data);
 }
 function canRequestTrade(slot) {
   if (!slot?.id || !slot.staff_id) return false;
@@ -1812,12 +1968,8 @@ function renderMobileScheduleByPerson(assignments) {
   }).join('')}</div>`;
 }
 function renderMobileScheduleOt(assignments) {
-  const stats = calcFairness(assignments.filter(x => x.staff_id));
-  const active = orderedStaff(state.staff.filter(s => isRosterEnabled(s)));
-  return `<div class="mobile-ot-summary-list">${active.map(s => {
-    const r = stats[s.id] || {};
-    return `<button class="ot-summary-card" style="--staff-bg:${staffColor(s)};--staff-fg:${textColorFor(staffColor(s))}" data-staff-stat="${s.id}" type="button"><b>${escapeHtml(s.nickname || s.full_name)}</b><span>${(r.units||0).toFixed(1)} หน่วย</span><span>${(r.hours||0).toFixed(0)} ชม.</span><span>${(r.pay||0).toLocaleString()} บ.</span></button>`;
-  }).join('')}</div>`;
+  const data = calcMonthBalanceData(state.monthKey);
+  return renderBalanceSummaryTable(data, { mobile:true });
 }
 function renderSchedulePersonMatrix(assignments) {
   const { y, m } = getMonthRange(state.monthKey);

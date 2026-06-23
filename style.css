@@ -1120,3 +1120,25 @@ body.cnmi-sidebar-hidden .main-panel{grid-column:1 / -1!important;width:100%!imp
   .position-slot-details-table th,
   .position-slot-details-table td { font-size: 11px; }
 }
+
+
+/* V298 duty balance summary */
+.schedule-balance-shell { display:grid; gap:16px; margin:12px 0 16px; }
+.balance-summary-note { line-height:1.55; }
+.balance-group-card { border:1px solid var(--line); border-radius:22px; padding:14px; background:#fff; }
+.balance-group-head { margin-bottom:10px; }
+.balance-summary-wrap { overflow:auto; }
+.balance-summary-table { min-width:1700px; }
+.balance-summary-table th, .balance-summary-table td { text-align:center; white-space:nowrap; }
+.balance-summary-table th:first-child, .balance-summary-table td:first-child { text-align:left; position:sticky; left:0; z-index:2; background:#fff; }
+.balance-summary-table thead th:first-child { z-index:3; background:#f4f8fb; }
+.balance-summary-table td.pos { color:#b05a00; font-weight:800; }
+.balance-summary-table td.neg { color:#0d5fb8; font-weight:800; }
+.mobile-balance-shell .balance-group-card { padding:12px; }
+.mobile-balance-shell .balance-summary-wrap { border-radius:18px; }
+@media (max-width: 820px) {
+  .mobile-balance-shell { display:grid; gap:14px; }
+  .mobile-balance-shell .balance-summary-note { font-size:14px; }
+  .mobile-balance-shell .balance-summary-wrap { max-height:72vh; }
+  .mobile-balance-shell .balance-summary-table { min-width:1520px; }
+}
