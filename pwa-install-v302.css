@@ -1,0 +1,77 @@
+/* CNMI Staff Planner install UI — V302 */
+.pwa-install-btn {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #99cef3;
+  border-radius: 16px;
+  padding: 11px 14px;
+  background: #eef8ff;
+  color: #175b8d;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.pwa-install-btn:hover { background: #dff1ff; }
+.pwa-install-btn:disabled { opacity: .65; cursor: wait; }
+.pwa-install-btn.hidden { display: none !important; }
+.pwa-install-btn--auth { margin-top: 14px; }
+.pwa-install-note {
+  margin: 8px 0 0;
+  color: #6c7d91;
+  font-size: 13px;
+  text-align: center;
+}
+.pwa-install-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20050;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(20, 35, 52, .48);
+  backdrop-filter: blur(3px);
+}
+.pwa-install-modal.hidden { display: none !important; }
+.pwa-install-dialog {
+  width: min(440px, 100%);
+  max-height: 86vh;
+  overflow: auto;
+  border-radius: 26px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(20, 35, 52, .30);
+  padding: 24px;
+  position: relative;
+}
+.pwa-install-dialog h3 { margin: 0 42px 10px 0; font-size: 22px; }
+.pwa-install-dialog p { margin: 8px 0; line-height: 1.6; color: #53657a; }
+.pwa-install-dialog ol { margin: 12px 0 0; padding-left: 24px; line-height: 1.8; }
+.pwa-install-dialog strong { color: #203245; }
+.pwa-install-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 13px;
+  background: #f1f5f8;
+  color: #203245;
+  font-size: 24px;
+  cursor: pointer;
+}
+.pwa-install-status {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #eef8ff;
+  color: #315f80;
+  font-size: 14px;
+  line-height: 1.55;
+}
+@media (display-mode: standalone) {
+  .pwa-install-btn, .pwa-install-note { display: none !important; }
+}
