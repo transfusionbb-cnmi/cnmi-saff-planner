@@ -122,7 +122,7 @@ const DEFAULT_STAFF_COLORS = {
   'อาร์ม': '#b8d3ff',
   'test': '#e8edf3'
 };
-const STAFF_DISPLAY_ORDER = ['มัส','มาย','มายด์','หนิง','หญิง','พลอย','อัน','ต้า','ปอ','กิ๊บ','กิ๊ฟ','กิฟ','ไนซ์','บอล','แตง','แก๊ส','เฟื่อง'];
+const STAFF_DISPLAY_ORDER = ['มัส','มาย','มายด์','หนิง','หญิง','พลอย','อัน','ต้า','ปอ','กิ๊ฟ','กิ๊บ','กิฟ','ไนซ์','บอล','แตง','แก๊ส','เฟื่อง'];
 function staffOrderIndex(staff) {
   const nick = String(staff?.nickname || '').trim();
   const i = STAFF_DISPLAY_ORDER.indexOf(nick);
@@ -546,14 +546,16 @@ function shouldAttachNoCacheHeadersV199(input) {
 })();
 
 /* =========================================================
-   V200 Auto Logout + Force Clear Session
-   - Auto logout when the browser is idle for 30 minutes.
-   - Provide a Force Logout/Clear Session button on the Login screen.
-   - Browser-side only: localStorage/sessionStorage cleanup; no database/schema changes.
+   V304 Persistent Login + Manual Logout
+   - Keep Supabase session in localStorage and refresh it automatically.
+   - Never log the user out because of inactivity, app close, mobile sleep or page refresh.
+   - Logout remains available only from the user's Log Out / Force Clear button.
+   - Security exceptions remain: invalid/revoked session and Admin-disabled account.
+   - Legacy V200 function names are retained so older patches remain compatible.
    ========================================================= */
-const CNMI_SESSION_CLEAN_VERSION_V200 = 'V200_IDLE_FORCE_LOGOUT';
-const CNMI_IDLE_TIMEOUT_MS_V200 = 30 * 60 * 1000;
-const CNMI_IDLE_EVENTS_V200 = ['mousemove','mousedown','keydown','scroll','touchstart','touchmove','pointerdown','visibilitychange'];
+const CNMI_SESSION_CLEAN_VERSION_V200 = 'V304_PERSISTENT_SESSION_NO_IDLE_LOGOUT';
+const CNMI_IDLE_TIMEOUT_MS_V200 = 0; // V304: disabled; compatibility constant only.
+const CNMI_IDLE_EVENTS_V200 = [];   // V304: no activity listeners are installed.
 let cnmiIdleTimerV200 = null;
 let cnmiIdleInstalledV200 = false;
 let cnmiForceRedirectingV200 = false;
@@ -583,7 +585,12 @@ function redirectToLoginV200(reason='') {
   try { $('authView')?.classList?.remove('hidden'); } catch (_) {}
   try { $('appView')?.classList?.add('hidden'); } catch (_) {}
   try { history.replaceState(null, '', appBaseUrl()); } catch (_) {}
-  try { showToast(reason === 'idle-timeout' ? 'ไม่ได้ใช้งานเกิน 30 นาที ระบบออกจากระบบและล้าง Session แล้ว กรุณาเข้าสู่ระบบใหม่' : 'ล้าง Session ใน Browser แล้ว กรุณาเข้าสู่ระบบใหม่', { tone:'error' }); } catch (_) {}
+  try {
+    const message = reason === 'normal-logout-button'
+      ? 'ออกจากระบบแล้ว'
+      : 'ล้าง Session ใน Browser แล้ว กรุณาเข้าสู่ระบบใหม่';
+    showToast(message, { tone: reason === 'normal-logout-button' ? 'success' : 'error' });
+  } catch (_) {}
   // Full reload after storage cleanup prevents old in-memory Supabase/App state from staying alive in the tab.
   setTimeout(() => { try { window.location.replace(appBaseUrl()); } catch (_) {} }, 350);
 }
@@ -604,22 +611,18 @@ window.forceBrowserLogoutV200 = forceBrowserLogoutV200;
 window.clearBrowserAuthSessionV200 = clearBrowserAuthSessionV200;
 
 function resetIdleTimerV200() {
+  // V304: clear any timer left by an older cached tab, then remain disabled.
   try { if (cnmiIdleTimerV200) clearTimeout(cnmiIdleTimerV200); } catch (_) {}
-  cnmiIdleTimerV200 = setTimeout(async () => {
-    if (currentUrlHasActiveAuthLinkV199() || isPasswordRecoveryUrl() || isPasswordSetupForced()) return resetIdleTimerV200();
-    if (!isAppSessionActiveV200()) return resetIdleTimerV200();
-    await forceBrowserLogoutV200('idle-timeout');
-  }, CNMI_IDLE_TIMEOUT_MS_V200);
+  cnmiIdleTimerV200 = null;
 }
 
 function installIdleTimeoutV200() {
+  // V304: intentionally no inactivity timer. Session persists until manual logout,
+  // account deactivation, token revocation or browser/app data removal.
   if (cnmiIdleInstalledV200) return;
   cnmiIdleInstalledV200 = true;
-  const onActivity = () => resetIdleTimerV200();
-  CNMI_IDLE_EVENTS_V200.forEach(evt => {
-    try { document.addEventListener(evt, onActivity, { passive:true, capture:true }); } catch (_) {}
-  });
   resetIdleTimerV200();
+  console.info(`${CNMI_SESSION_CLEAN_VERSION_V200}: inactivity logout disabled`);
 }
 
 function ensureForceLogoutButtonV200() {
