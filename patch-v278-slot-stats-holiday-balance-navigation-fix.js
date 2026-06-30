@@ -4,7 +4,7 @@
 */
 (function(){
   'use strict';
-  const VERSION = 'V278_SLOT_STATS_HOLIDAY_BALANCE_NAVIGATION_FIX';
+  const VERSION = 'V307_ADMIN_POSITION_STATS_ACTIVE_STAFF_FIX';
   if (window.__CNMI_V278_SLOT_STATS_HOLIDAY_BALANCE_NAVIGATION_FIX__) return;
   window.__CNMI_V278_SLOT_STATS_HOLIDAY_BALANCE_NAVIGATION_FIX__ = true;
 
@@ -74,7 +74,17 @@
     try { return orderedStaff(rows); }
     catch (_) { return rows.slice().sort((a,b)=>staffName(a).localeCompare(staffName(b),'th')); }
   }
-  function positionStaff(){ return ordered((S()?.staff||[]).filter(isNormalPositionPerson)); }
+  // V307: ตารางสถิติเป็นประวัติการทำตำแหน่ง จึงต้องแสดงเจ้าหน้าที่ที่ยัง active ทุกคน
+  // แม้ daily_position_enabled หรือ position_training_status ในฐานข้อมูลยังเป็นค่าเดิมจากช่วงน้องใหม่
+  // ไม่เช่นนั้นเจ้าหน้าที่ เช่น "บอล" จะหายจากสถิติทั้งที่เป็นบุคลากรปัจจุบัน
+  function positionStaff(){
+    return ordered((S()?.staff||[]).filter(person=>{
+      if(!isActivePerson(person)) return false;
+      if(String(person?.staff_type||'').trim()==='แพทย์') return false;
+      if(person?.maternity_status) return false;
+      return true;
+    }));
+  }
   function rosterStaff(){ return ordered((S()?.staff||[]).filter(isRosterEnabled)); }
   function groupLabel(person){ return String(person?.staff_type||'').trim()==='เคิก' ? 'เคิก' : 'MT'; }
 
