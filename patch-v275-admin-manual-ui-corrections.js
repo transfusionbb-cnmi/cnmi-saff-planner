@@ -93,10 +93,39 @@
     const p=typeof personOrId==='object'?personOrId:(S()?.staff||[]).find(x=>normId(x.id)===normId(personOrId));
     return p?(p.nickname||p.full_name||p.email||'-'):'-';
   }
+  function normName(value){ return String(value || '').trim().toLowerCase().replace(/\s+/g,' '); }
+  function findStaffByName(name){
+    const key=normName(name);
+    if(!key) return null;
+    return allActiveStaff().find(person=>normName(person?.nickname)===key || normName(person?.full_name)===key) || null;
+  }
   function staffColorSafe(person){ try { return staffColor(person); } catch (_) { return person?.color||'#e2e8f0'; } }
   function textColorSafe(color){ try { return textColorFor(color); } catch (_) { return '#0f172a'; } }
-  function normalPositionStaff(){
+  function activeTraineeKeysForMonth(key){
+    const monthKey=/^\d{4}-\d{2}$/.test(String(key||''))?String(key):(S()?.positionMonthKey||S()?.positionMonthViewKey||S()?.monthKey||new Date().toISOString().slice(0,7));
+    const first=`${monthKey}-01`,last=monthDates(monthKey).slice(-1)[0],ids=new Set(),names=new Set();
+    const collect=row=>{
+      if(!row || row.active===false) return;
+      const staffId=normId(row.trainee_staff_id);
+      const label=staffId ? staffName(staffId) : (row.trainee_name || '');
+      const linked=staffId ? ((S()?.staff||[]).find(p=>normId(p?.id)===staffId) || findStaffByName(label)) : findStaffByName(label);
+      if(staffId) ids.add(staffId);
+      if(linked?.id) ids.add(normId(linked.id));
+      if(label) names.add(normName(label));
+      if(linked?.nickname) names.add(normName(linked.nickname));
+      if(linked?.full_name) names.add(normName(linked.full_name));
+    };
+    (Array.isArray(S()?.traineeDirectoryV273)?S().traineeDirectoryV273:[]).forEach(collect);
+    (Array.isArray(S()?.trainingAssignmentsV271)?S().trainingAssignmentsV271:[])
+      .filter(r=>r&&r.active!==false&&normDate(r.start_date)<=last&&normDate(r.end_date)>=first)
+      .forEach(collect);
+    return { ids, names };
+  }
+  function normalPositionStaff(key){
+    const traineeKeys=activeTraineeKeysForMonth(key);
     return allActiveStaff().filter(p=>{
+      const pid=normId(p?.id), nick=normName(p?.nickname), full=normName(p?.full_name);
+      if (traineeKeys.ids.has(pid) || (nick && traineeKeys.names.has(nick)) || (full && traineeKeys.names.has(full))) return false;
       if (String(p?.staff_type||'').trim()==='แพทย์') return false;
       if (p?.maternity_status) return false;
       if (explicitFalse(p?.daily_position_enabled)) return false;
@@ -216,9 +245,37 @@
   function assignmentFor(identity,date){return trainingRows().find(r=>identityOf(r)===identity&&activeTraining(r,date))||null;}
   function traineeRowsForMonth(key){
     const first=`${key}-01`,last=monthDates(key).slice(-1)[0],map=new Map();
-    directoryRows().filter(r=>r.active!==false).forEach(r=>{const id=identityOf(r);if(id&&id!=='name:')map.set(id,{identity:id,label:traineeLabel(r),type:r.trainee_type||'intern',staffId:r.trainee_staff_id||null,row:r});});
-    trainingRows().filter(r=>r.active!==false&&normDate(r.start_date)<=last&&normDate(r.end_date)>=first).forEach(r=>{const id=identityOf(r);if(id&&id!=='name:'&&!map.has(id))map.set(id,{identity:id,label:traineeLabel(r),type:r.trainee_type||'intern',staffId:r.trainee_staff_id||null,row:r});});
-    return Array.from(map.values()).sort((a,b)=>a.label.localeCompare(b.label,'th'));
+    const upsert=item=>{
+      if(!item) return;
+      const linked=item.staffId ? ((S()?.staff||[]).find(p=>normId(p?.id)===normId(item.staffId)) || findStaffByName(item.label)) : findStaffByName(item.label);
+      if(linked?.id && !item.staffId) item.staffId=linked.id;
+      if(linked){
+        item.linkedStaffId=linked.id;
+        item.label=item.label || staffName(linked);
+      }
+      const keyPart=item.staffId ? `staff:${normId(item.staffId)}` : `name:${normName(item.label)}`;
+      if(!keyPart || keyPart==='name:') return;
+      const existing=map.get(keyPart);
+      if(existing){
+        existing.row = existing.row || item.row;
+        existing.staffId = existing.staffId || item.staffId || linked?.id || null;
+        existing.linkedStaffId = existing.linkedStaffId || linked?.id || existing.staffId || null;
+        existing.label = existing.label || item.label;
+        if(existing.type !== 'new_staff' && item.type === 'new_staff') existing.type = item.type;
+        return;
+      }
+      map.set(keyPart,{...item,identity:keyPart,staffId:item.staffId || linked?.id || null,linkedStaffId:linked?.id || item.staffId || null,label:item.label || staffName(linked) || '-'});
+    };
+    directoryRows().filter(r=>r.active!==false).forEach(r=>upsert({identity:identityOf(r),label:traineeLabel(r),type:r.trainee_type||'intern',staffId:r.trainee_staff_id||null,row:r}));
+    trainingRows().filter(r=>r.active!==false&&normDate(r.start_date)<=last&&normDate(r.end_date)>=first).forEach(r=>upsert({identity:identityOf(r),label:traineeLabel(r),type:r.trainee_type||'intern',staffId:r.trainee_staff_id||null,row:r}));
+    const all=allActiveStaff();
+    return Array.from(map.values()).sort((a,b)=>{
+      const aLinked=a.linkedStaffId ? all.findIndex(p=>normId(p.id)===normId(a.linkedStaffId)) : -1;
+      const bLinked=b.linkedStaffId ? all.findIndex(p=>normId(p.id)===normId(b.linkedStaffId)) : -1;
+      const ar=aLinked>=0 ? aLinked : 10000;
+      const br=bLinked>=0 ? bLinked : 10000;
+      return ar-br || String(a.label||'').localeCompare(String(b.label||''),'th');
+    });
   }
   function mentorOptions(selected,excludeId){return `<option value="">เลือกพี่เลี้ยง</option>${normalPositionStaff().filter(p=>normId(p.id)!==normId(excludeId)).map(p=>`<option value="${esc(p.id)}" ${normId(selected)===normId(p.id)?'selected':''}>${esc(staffName(p))}</option>`).join('')}`;}
   function traineeSummary(item,key){const names=new Set();monthDates(key).forEach(d=>{const a=assignmentFor(item.identity,d);if(a?.mentor_staff_id)names.add(staffName(a.mentor_staff_id));});return `<div class="v275-trainee-summary"><b>${esc(item.type==='intern'?'Intern':'น้องใหม่')} · ไม่นับ Slot</b><span>${names.size?`พี่เลี้ยง: ${esc(Array.from(names).join(', '))}`:'ยังไม่กำหนดพี่เลี้ยง'}</span></div>`;}
@@ -226,7 +283,7 @@
   /* ----- slot settings ----- */
   function slotSetting(date){return(S()?.manualDaySlotSettingsV273||[]).find(r=>normDate(r?.work_date)===normDate(date))||null;}
   function actualPositionCount(rows,date){
-    const allowed=new Set(normalPositionStaff().map(p=>normId(p.id)));
+    const allowed=new Set(normalPositionStaff(date.slice(0,7)).map(p=>normId(p.id)));
     return new Set(rows.filter(r=>normDate(r?.work_date)===normDate(date)&&r.staff_id&&allowed.has(normId(r.staff_id))&&r.position_code).map(r=>normId(r.staff_id))).size;
   }
   function ensureSlotLoad(key){
@@ -265,13 +322,27 @@
     return `<td class="v275-position-day trainee ${bad?'bad':''}"><div class="v275-mentor-cell" data-v275-mentor-cell data-date="${esc(date)}" data-identity="${esc(item.identity)}" data-type="${esc(item.type)}" data-label="${esc(item.label)}" data-trainee-staff-id="${esc(item.staffId||'')}"><select data-v275-mentor-select>${mentorOptions(mentorId,item.staffId)}</select><span>${bad?'กรุณาเลือกพี่เลี้ยงแทน':(mcode||'เลือกพี่เลี้ยงแทนตำแหน่ง')}</span><small>ไม่นับ Slot</small><small data-v275-status></small></div></td>`;
   }
   function positionMatrix(key,rows,editable){
-    const dates=monthDates(key),regular=normalPositionStaff(),trainees=traineeRowsForMonth(key),b=fiscalBounds(key),yearRows=fiscalCache.get(b.cacheKey)||(S()?.positions||[]).filter(r=>normDate(r?.work_date)>=b.start&&normDate(r?.work_date)<=b.end);
-    const regularHtml=regular.map(p=>`<tr><th class="v275-sticky-name" style="--staff-bg:${esc(staffColorSafe(p))};--staff-fg:${esc(textColorSafe(staffColorSafe(p)))}"><b>${esc(staffName(p))}</b></th><td class="v275-sticky-summary">${summaryHtml(p,rows,yearRows)}</td>${dates.map(d=>regularPositionCell(p,d,rows,editable)).join('')}</tr>`).join('');
-    const traineeHtml=trainees.map(item=>`<tr class="v275-trainee-row"><th class="v275-sticky-name trainee-name"><b>${esc(item.label)}</b><small>${esc(item.type==='intern'?'Intern':'น้องใหม่')}</small></th><td class="v275-sticky-summary">${traineeSummary(item,key)}</td>${dates.map(d=>traineeCell(item,d,rows,editable)).join('')}</tr>`).join('');
-    return `<div class="v275-position-wrap"><table class="v275-position-table"><thead><tr><th class="v275-sticky-name">เจ้าหน้าที่</th><th class="v275-sticky-summary">สรุปตำแหน่ง</th>${dates.map(dateHead).join('')}</tr></thead><tbody><tr class="v275-count-row"><th class="v275-sticky-name">จำนวนคน</th><td class="v275-sticky-summary"><b>คน/Slot</b><small>${editable?'กรอกเป้าหมายเอง':'จำนวนจริง/เป้าหมาย'}</small></td>${dates.map(d=>countCell(d,rows,editable)).join('')}</tr>${regularHtml}${traineeHtml}</tbody></table></div>`;
+    const dates=monthDates(key),regular=normalPositionStaff(key),trainees=traineeRowsForMonth(key),b=fiscalBounds(key),yearRows=fiscalCache.get(b.cacheKey)||(S()?.positions||[]).filter(r=>normDate(r?.work_date)>=b.start&&normDate(r?.work_date)<=b.end);
+    const staffOrder=new Map(allActiveStaff().map((p,index)=>[normId(p.id),index]));
+    const displayRows=[
+      ...regular.map((person,index)=>({kind:'regular',person,rank:staffOrder.get(normId(person.id))??(5000+index),label:staffName(person)})),
+      ...trainees.map((item,index)=>{const linkedId=item.linkedStaffId||item.staffId||'';return {kind:'trainee',item,rank:linkedId?(staffOrder.get(normId(linkedId))??(6000+index)):(10000+index),label:item.label||''};})
+    ].sort((a,b)=>a.rank-b.rank||String(a.label).localeCompare(String(b.label),'th'));
+    const bodyHtml=displayRows.map(entry=>{
+      if(entry.kind==='regular'){
+        const p=entry.person;
+        return `<tr><th class="v275-sticky-name" style="--staff-bg:${esc(staffColorSafe(p))};--staff-fg:${esc(textColorSafe(staffColorSafe(p)))}"><b>${esc(staffName(p))}</b></th><td class="v275-sticky-summary">${summaryHtml(p,rows,yearRows)}</td>${dates.map(d=>regularPositionCell(p,d,rows,editable)).join('')}</tr>`;
+      }
+      const item=entry.item;
+      const linked=item.staffId?(S()?.staff||[]).find(p=>normId(p?.id)===normId(item.staffId)):null;
+      const color=linked?staffColorSafe(linked):'';
+      const style=linked?` style="--staff-bg:${esc(color)};--staff-fg:${esc(textColorSafe(color))}"`:'';
+      return `<tr class="v275-trainee-row"><th class="v275-sticky-name trainee-name"${style}><b>${esc(item.label)}</b><small>${esc(item.type==='intern'?'Intern':'น้องใหม่')}</small></th><td class="v275-sticky-summary">${traineeSummary(item,key)}</td>${dates.map(d=>traineeCell(item,d,rows,editable)).join('')}</tr>`;
+    }).join('');
+    return `<div class="v275-position-wrap"><table class="v275-position-table"><thead><tr><th class="v275-sticky-name">เจ้าหน้าที่</th><th class="v275-sticky-summary">สรุปตำแหน่ง</th>${dates.map(dateHead).join('')}</tr></thead><tbody><tr class="v275-count-row"><th class="v275-sticky-name">จำนวนคน</th><td class="v275-sticky-summary"><b>คน/Slot</b><small>${editable?'กรอกเป้าหมายเอง':'จำนวนจริง/เป้าหมาย'}</small></td>${dates.map(d=>countCell(d,rows,editable)).join('')}</tr>${bodyHtml}</tbody></table></div>`;
   }
   function positionStatsForAdmin(key,rows){
-    const b=fiscalBounds(key),yearRows=fiscalCache.get(b.cacheKey)||(S()?.positions||[]).filter(r=>normDate(r?.work_date)>=b.start&&normDate(r?.work_date)<=b.end),data=normalPositionStaff().map(p=>({p,...positionSummary(p,rows,yearRows)}));
+    const b=fiscalBounds(key),yearRows=fiscalCache.get(b.cacheKey)||(S()?.positions||[]).filter(r=>normDate(r?.work_date)>=b.start&&normDate(r?.work_date)<=b.end),data=normalPositionStaff(key).map(p=>({p,...positionSummary(p,rows,yearRows)}));
     return `<div class="card v275-admin-position-stats"><div class="section-title"><div><h3>สถิติตำแหน่งสำหรับ Admin</h3><p class="hint">Staff จะดูสรุปจากคอลัมน์ที่ 2 จึงไม่แสดงตารางนี้ในหน้า Staff</p></div></div><div class="table-wrap"><table><thead><tr><th>เจ้าหน้าที่</th><th>เดือนนี้</th><th>BB</th><th>Donor</th><th>ออกหน่วย</th><th>ตำแหน่งที่ทำ</th><th>สะสมปีงบ</th></tr></thead><tbody>${data.map(r=>`<tr><td><b>${esc(staffName(r.p))}</b></td><td>${r.total}</td><td>${r.bb}</td><td>${r.donor}</td><td>${r.outing}</td><td>${esc(r.top||'-')}</td><td>${r.yearTotal}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
   function schedulePositionLoads(key){ensureSlotLoad(key);scheduleFiscal(key);if(!S()?.traineeDirectoryLoadedV273&&DB()){DB().from('manual_trainee_directory').select('*').order('created_at',{ascending:false}).then(res=>{if(!res.error&&S()){S().traineeDirectoryV273=res.data||[];S().traineeDirectoryLoadedV273=true;if(['positionMonth','positionMonthView'].includes(S()?.page))rerender(snapshot('.v275-position-wrap'));}});}if(!S()?.trainingAssignmentsLoadedAtV271)window.cnmiV271?.loadTrainingAssignments?.({force:true}).then(()=>{if(['positionMonth','positionMonthView'].includes(S()?.page))rerender(snapshot('.v275-position-wrap'));});}
