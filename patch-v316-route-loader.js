@@ -4,7 +4,7 @@
 */
 (function(){
   'use strict';
-  const VERSION='V316_ROUTE_AWARE_LOADER';
+  const VERSION='V317_ROUTE_AWARE_LOADER';
   if(window.__CNMI_V316_ROUTE_LOADER__) return;
   window.__CNMI_V316_ROUTE_LOADER__=true;
 
@@ -79,7 +79,7 @@
     const st=appState();
     if(page==='positionMonth') return st?.positionMonthKey||st?.monthKey;
     if(page==='positionMonthView') return st?.positionMonthViewKey||st?.monthKey;
-    if(page==='ot') return st?.otApprovalMonthFilter||st?.monthKey;
+    if(page==='ot') return st?.otSourceMonthV241||st?.otMoneyMonthV241||st?.otApprovalMonthFilter||st?.monthKey;
     return st?.monthKey;
   }
   function setSync(text){
@@ -281,8 +281,9 @@
         await group([qPositions(r,force),qDayStatus(r,force),qLeaves(r,force),qActivities(r,force),qHolidays(r,force),qIncharges(r,force),qRoster(r,force)]);
         await qPositionConfig(force);
       }else if(p==='ot'){
-        const r=recentMonths(isAdminSafe()?24:12,6);
-        await group([qOt(r,force),qRoster(mr,force),qAttendance(mr,force),qHolidays(mr,force),qIncharges(mr,force),qShiftConfirmations(mr,force)]);
+        // V317: OT page reads only the selected source month. Export history uses its own
+        // staff+month query after both filters are selected, so no multi-year preload is needed.
+        await group([qOt(mr,force),qRoster(mr,force),qAttendance(mr,force),qHolidays(mr,force),qIncharges(mr,force),qShiftConfirmations(mr,force)]);
       }else if(p==='audit'){
         await qAudit(force);
       }else if(p==='hr'||p==='hrSummary'){
@@ -339,7 +340,7 @@
 
   const previousChange=window.handleChange||(typeof handleChange==='function'?handleChange:null);
   if(typeof previousChange==='function'){
-    const reloadIds=new Set(['rosterMonthInput','scheduleMonthInput','positionDateInput','positionMonthInput','positionMonthViewInput','otApprovalMonthFilter','auditDateInput']);
+    const reloadIds=new Set(['rosterMonthInput','scheduleMonthInput','positionDateInput','positionMonthInput','positionMonthViewInput','otApprovalMonthFilter','otMoneyMonthV241','otSourceMonthV241','auditDateInput']);
     const wrappedChange=async function handleChangeV316(event){
       const id=String(event.target?.id||'');
       const result=previousChange.apply(this,arguments);

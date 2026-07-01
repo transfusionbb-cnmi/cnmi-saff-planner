@@ -186,9 +186,9 @@
       const registration = await navigator.serviceWorker.register(workerUrl.href, { scope: scriptBaseUrl.pathname });
       registrationReady = true;
       registration.update().catch(() => {});
-      console.info('[PWA V316] Service Worker registered:', registration.scope);
+      console.info('[PWA V317] Service Worker registered:', registration.scope);
     } catch (error) {
-      console.warn('[PWA V316] Service Worker registration failed:', error);
+      console.warn('[PWA V317] Service Worker registration failed:', error);
     }
   }
 
