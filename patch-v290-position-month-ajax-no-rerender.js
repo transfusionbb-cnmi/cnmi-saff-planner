@@ -352,10 +352,11 @@
     if(!summary)return;
     const identity=String(cell.dataset?.identity||'');
     const month=normDate(cell.dataset?.date).slice(0,7);
+    const monthEnd=(()=>{const [y,m]=month.split('-').map(Number);return new Date(Date.UTC(y,m,0)).toISOString().slice(0,10);})();
     const names=new Set();
     (S()?.trainingAssignmentsV271||[]).forEach(item=>{
       if(trainingIdentity(item)!==identity||item?.active===false)return;
-      if(normDate(item?.end_date)<`${month}-01`||normDate(item?.start_date)>`${month}-31`)return;
+      if(normDate(item?.end_date)<`${month}-01`||normDate(item?.start_date)>monthEnd)return;
       if(item?.mentor_staff_id)names.add(staffName(item.mentor_staff_id));
     });
     const span=summary.querySelector('span');

@@ -8404,7 +8404,8 @@ function bindGlobalEvents() {
     try { return getMonthRange(key); }
     catch (_) {
       const [yy, mm] = String(key || monthKey(new Date())).split('-').map(Number);
-      return { y: yy, m: mm, start: `${yy}-${pad(mm)}-01`, end: `${yy}-${pad(mm)}-31` };
+      const lastDay = new Date(yy, mm, 0).getDate();
+      return { y: yy, m: mm, start: `${yy}-${pad(mm)}-01`, end: `${yy}-${pad(mm)}-${pad(lastDay)}` };
     }
   }
   function dedupeByV174(rows, keyFn){
@@ -13199,7 +13200,7 @@ function bindGlobalEvents() {
       catch (_) { return `${month209()}-01`; }
     })();
     const end = (() => {
-      try { const d = new Date(); d.setMonth(d.getMonth() + 14); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-31`; }
+      try { const d = new Date(); d.setMonth(d.getMonth() + 14); const lastDay = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(lastDay)}`; }
       catch (_) { return `${Number(month209().slice(0,4))+1}-12-31`; }
     })();
     try {

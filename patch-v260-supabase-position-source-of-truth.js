@@ -587,7 +587,7 @@
   setTimeout(injectPositionSourceControls, 500);
   setTimeout(() => {
     const st = appState();
-    if (!st?.profile || typeof sb === 'undefined' || !sb) return;
+    if (!st?.profile || !['positionManagement','eligibility','positions','positionMonth','positionMonthView','scheduler','internManagement'].includes(String(st.page || ''))) return;
     Promise.allSettled([
       refreshPermissionsFromDatabase({ render:false, silent:true }),
       refreshSlotTemplatesFromDatabase({ render:false, silent:true })

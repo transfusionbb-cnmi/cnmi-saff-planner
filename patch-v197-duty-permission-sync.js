@@ -525,6 +525,8 @@
   document.head.appendChild(style);
 
   document.addEventListener('DOMContentLoaded', function(){
-    window.setTimeout(() => refreshDutyEligibilityFromDb({ toast:false }), 300);
+    window.setTimeout(() => {
+      if (state?.page === 'scheduler' || state?.page === 'dutyEligibilityV107') refreshDutyEligibilityFromDb({ toast:false });
+    }, 300);
   });
 })();

@@ -597,7 +597,7 @@
   `;
   document.head.appendChild(style);
 
-  setTimeout(() => loadConfigs226(false).then(() => { if (state?.page === 'positionManagement') renderPositionManagement226(); }), 160);
+  setTimeout(() => { if (state?.page === 'positionManagement') loadConfigs226(false).then(() => { if (state?.page === 'positionManagement') renderPositionManagement226(); }); }, 160);
   window.cnmiV227 = { loadConfigs226, currentConfigs226, buildWeeklyRotationPlan226, renderPositionManagement226, renderPositionsPage226, outingTemplateSlots, displayZone, slotCountedWorkingStaffToday, isTraineeExcludedFromSlot };
   window.cnmiV226 = window.cnmiV227;
   console.info(`${VERSION} loaded`);
