@@ -1,11 +1,11 @@
-/* CNMI Staff Planner PWA service worker — V309 */
+/* CNMI Staff Planner PWA service worker — V311 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v309`;
+const CACHE_NAME = `${CACHE_PREFIX}v311`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css',
   './pwa-install-v303.css', './pwa-install-v303.js',
   './patch-v227-manual-as-blood-bank-zone.js',
-  './patch-v309-popup-interaction-cleanup.js',
+  './patch-v311-mobile-popup-daily-summary-fix.js',
   './patch-v275-admin-manual-ui-corrections.js',
   './patch-v278-slot-stats-holiday-balance-navigation-fix.js',
   './patch-v305-mobile-app-scroll-and-position-description.js',
