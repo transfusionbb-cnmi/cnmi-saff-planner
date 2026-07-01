@@ -1,5 +1,6 @@
 /* =========================
    V227 Outing Template + Compact Month Position + Manual-as-Blood-Bank
+   V308: Separate total staff present from staff counted toward Slot (trainee/Intern excluded).
    - Outing-date template can contain Outing / Blood Bank / Donor Room slots; Manual is counted/displayed as Blood Bank.
    - Outing days use the outing-date template only, not weekly rotation.
    - Outing slots are assigned from activity participants; non-outing slots are assigned from staff not joining the outing.
@@ -323,6 +324,26 @@
     try { return dailyWorkingStaff(norm(date)) || []; }
     catch (_) { return orderStaff((state.staff || []).filter(st => { try { return isDailyPositionEnabled(st) && !isActiveLeaveOn(st.id, norm(date)); } catch (__){ return st?.id && st?.is_active !== false; } })); }
   }
+  function isTraineeExcludedFromSlot(person,date){
+    const d=norm(date), id=safeStaffId(person?.id);
+    if(!id) return false;
+    try { if(window.cnmiV271?.excludeFromDaySlot?.(person,d)) return true; } catch (_) {}
+    try { if(window.cnmiV271?.isTrainingPersonOnDate?.(id,d)) return true; } catch (_) {}
+    try {
+      const rows=Array.isArray(state?.trainingAssignmentsV271)?state.trainingAssignmentsV271:[];
+      if(rows.some(row=>row?.active!==false&&safeStaffId(row?.trainee_staff_id)===id&&norm(row?.start_date)<=d&&d<=norm(row?.end_date))) return true;
+    } catch (_) {}
+    // รองรับข้อมูลน้องใหม่รูปแบบเดิมก่อน V271 กรณียังไม่มีข้อมูลช่วงวันที่โหลดเข้ามา
+    try {
+      const rows=Array.isArray(state?.trainingAssignmentsV271)?state.trainingAssignmentsV271:[];
+      if(!rows.length && (person?.is_trainee===true || /น้องใหม่|trainee|intern|probation/i.test(String(person?.position_training_status||'')))) return true;
+    } catch (_) {}
+    return false;
+  }
+  function slotCountedWorkingStaffToday(date){
+    const d=norm(date);
+    return workingStaffToday(d).filter(person=>!isTraineeExcludedFromSlot(person,d));
+  }
   function bucketForCount(n){ const x = Math.max(8, Math.min(14, Number(n) || 14)); return DAY_SETS.reduce((best, v) => Math.abs(v - x) < Math.abs(best - x) ? v : best, 14); }
   function daySlotsForCount(count){ const cfg = currentConfigs226(); const n = bucketForCount(count); return sanitizeRows(cfg.day[n] || cfg.day[String(n)] || [], 'day'); }
   function outingTemplateSlots(){ return sanitizeRows(currentConfigs226().outing || [], 'outing'); }
@@ -446,7 +467,7 @@
   function expectedSlotsForMonthDate(date){ if (hasOutingSafe(date)) return outingTemplateSlots(); return daySlotsForCount(staffForMonthlyTemplate().length); }
   function countCell(date, assigned){
     const d = norm(date); if (isNoPosition(d)) return `<th class="count-role-cell no-position-day">ไม่จัด</th>`;
-    const actual = hasOutingSafe(d) ? outingIdSet(d).size : workingStaffToday(d).length; const slots = expectedSlotsForMonthDate(d); const diff = actual - slots.length; const text = diff === 0 ? 'พอดี' : (diff > 0 ? `เกิน ${diff}` : `ขาด ${Math.abs(diff)}`); const title = hasOutingSafe(d) ? `คนเข้าร่วมออกหน่วย ${actual} คน | Slot ออกหน่วย ${slots.length}` : `เหลือจริง ${actual} คน | Slot ${slots.length}`;
+    const actual = hasOutingSafe(d) ? outingIdSet(d).size : slotCountedWorkingStaffToday(d).length; const slots = expectedSlotsForMonthDate(d); const diff = actual - slots.length; const text = diff === 0 ? 'พอดี' : (diff > 0 ? `เกิน ${diff}` : `ขาด ${Math.abs(diff)}`); const title = hasOutingSafe(d) ? `คนเข้าร่วมออกหน่วย ${actual} คน | Slot ออกหน่วย ${slots.length}` : `คนที่นับ Slot ${actual} คน | Slot ${slots.length}`;
     return `<th class="count-role-cell ${diff<0?'has-missing':diff>0?'has-extra':'complete'}" title="${esc(title)}"><b>${actual}/${slots.length}</b><br><small>${hasOutingSafe(d)?'ออกหน่วย':'วันนี้'}</small><br><small>${esc(text)}</small></th>`;
   }
   function missingCell(date, assigned){
@@ -488,8 +509,8 @@
 
   const LS_DAILY_SLOT_KEY = 'cnmi_v225_daily_slot_set_by_date';
   function dailySlotStore(){ try { return JSON.parse(localStorage.getItem(LS_DAILY_SLOT_KEY) || '{}') || {}; } catch (_) { return {}; } }
-  function setDailySlotSet(date, setNo){ const data = dailySlotStore(); data[norm(date)] = Number(setNo) || bucketForCount(workingStaffToday(date).length); try { localStorage.setItem(LS_DAILY_SLOT_KEY, JSON.stringify(data)); } catch (_) {} }
-  function dailySlotSet(date){ const data = dailySlotStore(); return Number(data[norm(date)] || bucketForCount(workingStaffToday(date).length)); }
+  function setDailySlotSet(date, setNo){ const data = dailySlotStore(); data[norm(date)] = Number(setNo) || bucketForCount(slotCountedWorkingStaffToday(date).length); try { localStorage.setItem(LS_DAILY_SLOT_KEY, JSON.stringify(data)); } catch (_) {} }
+  function dailySlotSet(date){ const data = dailySlotStore(); return Number(data[norm(date)] || bucketForCount(slotCountedWorkingStaffToday(date).length)); }
   function dailyBaseSlots(date){ return hasOutingSafe(date) ? outingTemplateSlots() : daySlotsForCount(dailySlotSet(date)); }
   function combineDailyRows226(date){
     const d = norm(date); const planRows = (() => { try { return sortPositionRows((state.positions || []).filter(x => norm(x.work_date) === d)); } catch (_) { return (state.positions || []).filter(x => norm(x.work_date) === d); } })(); const planByCode = new Map(); planRows.forEach(r => { const c = baseCode(r.position_code || r.code || ''); if (c && !planByCode.has(c)) planByCode.set(c, r); });
@@ -506,8 +527,24 @@
   function leaveTextForStaff(staffId, date){ try { const row = activeLeaveRecordOn(staffId, norm(date)); if (!row) return ''; if (typeof leaveDisplayType === 'function') return leaveDisplayType(row); return String(row.type || row.leave_type || 'ลา'); } catch (_) { return ''; } }
   function renderDailySelect226(row, idx, date, layout){ const code = row.position_code || row.code || 'รอตรวจสอบ'; const zone = zoneOf(row); const breakTime = row.break_time || '-'; const rule = row.main_rule || ''; const job = row.job_desc || ''; return `<select class="v225-position-select" data-position-row="${esc(idx)}" data-position-code="${esc(code)}" data-position-zone="${esc(zone)}" data-position-break="${esc(breakTime)}" data-position-rule="${esc(rule)}" data-position-job="${esc(job)}" data-position-layout-item="${esc(layout || '')}"><option value="">เลือกคน/ว่าง</option>${staffOptionsDaily226({ ...row, code, position_code:code, zone, break_time:breakTime, main_rule:rule, job_desc:job }, row.staff_id, date)}</select>`; }
   function renderDailyComparePanel226(date, rows){
-    const d = norm(date); const working = workingStaffToday(d); const planStaffIds = new Set((state.positions || []).filter(r => norm(r.work_date) === d && r.staff_id).map(r => safeStaffId(r.staff_id))); const planCount = planStaffIds.size; const slotCount = rows.filter(r => r._source !== 'extra-plan').length; const participants = outingIdSet(d); const compareCount = hasOutingSafe(d) ? participants.size : working.length; const diff = compareCount - slotCount; const missingStaff = Array.from(planStaffIds).filter(id => !working.some(st => safeStaffId(st.id) === id)); const setNo = dailySlotSet(d); const setOptions = DAY_SETS.map(n => `<option value="${n}" ${n===setNo?'selected':''}>${n} Slot</option>`).join('');
-    return `<div class="v225-daily-compare-panel v226-daily-compare-panel"><div class="v225-compare-cards"><div><b>${working.length}</b><span>คนเหลือจริงวันนี้</span></div><div><b>${hasOutingSafe(d)?participants.size:planCount}</b><span>${hasOutingSafe(d)?'คนเข้าร่วมออกหน่วย':'คนในแผนตั้งต้น'}</span></div><div><b>${slotCount}</b><span>${hasOutingSafe(d)?'Slot ชุดออกหน่วย':'Slot วันนี้'}</span></div><div class="${diff<0?'warn':diff>0?'info':'ok'}"><b>${diff===0?'พอดี':(diff>0?`เกิน ${diff}`:`ขาด ${Math.abs(diff)}`)}</b><span>${hasOutingSafe(d)?'เทียบคนเข้าร่วมกับ Slot':'เทียบคนจริงกับ Slot'}</span></div></div>${hasOutingSafe(d)?'<div class="notice soft-notice compact"><b>วันนี้เป็นวันออกหน่วย:</b> ใช้ชุด Slot วันที่ออกหน่วยเท่านั้น ไม่ใช้แผนหมุนรายสัปดาห์</div>':`<div class="v225-daily-slot-toolbar"><label>ชุด Slot วันนี้ <select data-v226-daily-slot-set="${esc(d)}">${setOptions}</select></label><span class="hint">ระบบเลือกจากคนเหลือจริงให้อัตโนมัติ แต่ปรับเป็น 8-14 Slot ได้</span></div>`}${missingStaff.length ? `<div class="notice compact warn-notice">คนในแผนตั้งต้นที่ไม่อยู่วันนี้: ${missingStaff.map(id => staffPillSafe(id)).join(' ')}</div>` : ''}</div>`;
+    const d=norm(date);
+    const working=workingStaffToday(d);
+    const countedWorking=slotCountedWorkingStaffToday(d);
+    const excludedCount=Math.max(0,working.length-countedWorking.length);
+    const planStaffIds=new Set((state.positions||[]).filter(r=>norm(r.work_date)===d&&r.staff_id).map(r=>safeStaffId(r.staff_id)));
+    const planCount=planStaffIds.size;
+    const slotCount=rows.filter(r=>r._source!=='extra-plan').length;
+    const participants=outingIdSet(d);
+    const outing=hasOutingSafe(d);
+    const compareCount=outing?participants.size:countedWorking.length;
+    const diff=compareCount-slotCount;
+    const missingStaff=Array.from(planStaffIds).filter(id=>!working.some(st=>safeStaffId(st.id)===id));
+    const setNo=dailySlotSet(d);
+    const setOptions=DAY_SETS.map(n=>`<option value="${n}" ${n===setNo?'selected':''}>${n} Slot</option>`).join('');
+    if(outing){
+      return `<div class="v225-daily-compare-panel v226-daily-compare-panel"><div class="v225-compare-cards"><div><b>${working.length}</b><span>คนเหลือจริงวันนี้</span></div><div><b>${participants.size}</b><span>คนเข้าร่วมออกหน่วย</span></div><div><b>${slotCount}</b><span>Slot ชุดออกหน่วย</span></div><div class="${diff<0?'warn':diff>0?'info':'ok'}"><b>${diff===0?'พอดี':(diff>0?`เกิน ${diff}`:`ขาด ${Math.abs(diff)}`)}</b><span>เทียบคนเข้าร่วมกับ Slot</span></div></div><div class="notice soft-notice compact"><b>วันนี้เป็นวันออกหน่วย:</b> ใช้ชุด Slot วันที่ออกหน่วยเท่านั้น ไม่ใช้แผนหมุนรายสัปดาห์</div>${missingStaff.length?`<div class="notice compact warn-notice">คนในแผนตั้งต้นที่ไม่อยู่วันนี้: ${missingStaff.map(id=>staffPillSafe(id)).join(' ')}</div>`:''}</div>`;
+    }
+    return `<div class="v225-daily-compare-panel v226-daily-compare-panel v308-slot-count-panel"><div class="v225-compare-cards v308-five-cards"><div><b>${working.length}</b><span>คนอยู่จริงทั้งหมด</span></div><div><b>${countedWorking.length}</b><span>คนที่นับเป็น Slot</span></div><div><b>${planCount}</b><span>คนในแผนตั้งต้น</span></div><div><b>${slotCount}</b><span>Slot วันนี้</span></div><div class="${diff<0?'warn':diff>0?'info':'ok'}"><b>${diff===0?'พอดี':(diff>0?`เกิน ${diff}`:`ขาด ${Math.abs(diff)}`)}</b><span>เทียบคนที่นับ Slot</span></div></div>${excludedCount?`<div class="notice soft-notice compact v308-trainee-note"><b>น้องใหม่/Intern ${excludedCount} คน:</b> แสดงเป็นคนที่อยู่จริง แต่ไม่นำมาคำนวณ Slot</div>`:''}<div class="v225-daily-slot-toolbar"><label>ชุด Slot วันนี้ <select data-v226-daily-slot-set="${esc(d)}">${setOptions}</select></label><span class="hint">ระบบเลือกจากจำนวนคนที่นับเป็น Slot โดยอัตโนมัติ และปรับเป็น 8-14 Slot ได้</span></div>${missingStaff.length?`<div class="notice compact warn-notice">คนในแผนตั้งต้นที่ไม่อยู่วันนี้: ${missingStaff.map(id=>staffPillSafe(id)).join(' ')}</div>`:''}</div>`;
   }
   function renderPositionsPage226(){
     try {
@@ -554,12 +591,14 @@
     .v226-position-matrix thead .v225-summary-col{background:#f8fafc!important}.v226-position-matrix tbody .v225-summary-col{background:#fff!important}.v226-position-matrix .summary-action-cell{box-shadow:8px 0 18px rgba(15,35,52,.08)!important}
     .v226-month-position-matrix table th,.v226-month-position-matrix table td{padding:4px 6px!important;line-height:1.15!important;vertical-align:middle!important}.v226-month-position-matrix tbody tr{height:42px!important}.v226-month-position-matrix .matrix-staff-name{min-height:34px!important;gap:0!important}.v226-month-position-matrix .matrix-staff-name b{font-size:13px!important}.v226-month-position-matrix .matrix-staff-name small{font-size:10px!important}.v226-month-position-matrix .month-position-select{min-height:32px!important;height:32px!important;padding:4px 24px 4px 8px!important;font-size:12px!important;border-radius:10px!important}.v226-month-position-matrix .cell-note{font-size:10px!important;margin-top:1px!important}.v226-month-position-matrix .date-head{font-size:11px!important}.v226-month-position-matrix .date-head b{font-size:12px!important}.v226-month-position-matrix .date-head small{font-size:10px!important;color:#b45309}.v226-month-position-matrix .count-role-cell,.v226-month-position-matrix .missing-role-cell{font-size:10px!important;line-height:1.15!important}.v226-month-position-matrix .count-role-cell b{font-size:12px!important}.v226-month-position-matrix .missing-role-cell span{display:block;font-size:10px;white-space:nowrap}.v226-month-position-matrix .compact-staff-summary{padding:4px 7px!important;font-size:11px!important}
     .v226-position-template-page .notice{margin:8px 0}.v226-slot-modal textarea{min-height:140px}.v226-daily-compare-panel .notice{margin-top:10px}
-    @media(max-width:760px){.v226-month-position-matrix tbody tr{height:38px!important}.v226-month-position-matrix table th,.v226-month-position-matrix table td{padding:3px 5px!important}.v226-month-position-matrix .v225-staff-col{min-width:112px!important;max-width:112px!important}.v226-month-position-matrix .v225-summary-col{left:112px!important;min-width:70px!important;max-width:70px!important}}
+    .v308-five-cards{grid-template-columns:repeat(5,minmax(105px,1fr))!important}.v308-trainee-note{border-color:#fed7aa!important;background:#fff7ed!important;color:#9a3412!important}
+    @media(max-width:980px){.v308-five-cards{grid-template-columns:repeat(3,minmax(105px,1fr))!important}}
+    @media(max-width:760px){.v226-month-position-matrix tbody tr{height:38px!important}.v226-month-position-matrix table th,.v226-month-position-matrix table td{padding:3px 5px!important}.v226-month-position-matrix .v225-staff-col{min-width:112px!important;max-width:112px!important}.v226-month-position-matrix .v225-summary-col{left:112px!important;min-width:70px!important;max-width:70px!important}.v308-five-cards{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
   `;
   document.head.appendChild(style);
 
   setTimeout(() => loadConfigs226(false).then(() => { if (state?.page === 'positionManagement') renderPositionManagement226(); }), 160);
-  window.cnmiV227 = { loadConfigs226, currentConfigs226, buildWeeklyRotationPlan226, renderPositionManagement226, renderPositionsPage226, outingTemplateSlots, displayZone };
+  window.cnmiV227 = { loadConfigs226, currentConfigs226, buildWeeklyRotationPlan226, renderPositionManagement226, renderPositionsPage226, outingTemplateSlots, displayZone, slotCountedWorkingStaffToday, isTraineeExcludedFromSlot };
   window.cnmiV226 = window.cnmiV227;
   console.info(`${VERSION} loaded`);
 })();
