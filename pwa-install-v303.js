@@ -182,13 +182,13 @@
   async function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
     try {
-      const workerUrl = new URL('sw.js?v=320', scriptBaseUrl);
+      const workerUrl = new URL('sw.js?v=321', scriptBaseUrl);
       const registration = await navigator.serviceWorker.register(workerUrl.href, { scope: scriptBaseUrl.pathname });
       registrationReady = true;
       registration.update().catch(() => {});
-      console.info('[PWA V320] Service Worker registered:', registration.scope);
+      console.info('[PWA V321] Service Worker registered:', registration.scope);
     } catch (error) {
-      console.warn('[PWA V320] Service Worker registration failed:', error);
+      console.warn('[PWA V321] Service Worker registration failed:', error);
     }
   }
 
