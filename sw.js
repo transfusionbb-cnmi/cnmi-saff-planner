@@ -11,7 +11,8 @@ const APP_SHELL = [
   './patch-v318-hr-carry-year-month-filter.js',
   './patch-v319-fiscal-year-unlock.js',
   './patch-v321-daily-role-options.js',
-  './patch-v323-daily-baseline-compare.js',
+  './patch-v322-daily-baseline-compare.js',
+  './patch-v323-popup-job-stability.js',
   './patch-v227-manual-as-blood-bank-zone.js',
   './patch-v313-app-count-filter-pwa-trade-fix.js',
   './patch-v314-admin-ot-calendar-ch4-fix.js',
@@ -24,7 +25,16 @@ const APP_SHELL = [
   './apple-touch-icon.png', './favicon-32x32.png', './favicon-16x16.png'
 ];
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil((async()=>{
+    const cache=await caches.open(CACHE_NAME);
+    /* Cache files independently: one missing legacy file must not block the new PWA version. */
+    await Promise.allSettled(APP_SHELL.map(async url=>{
+      const request=new Request(url,{cache:'reload'});
+      const response=await fetch(request);
+      if(response?.ok) await cache.put(request,response.clone());
+    }));
+    await self.skipWaiting();
+  })());
 });
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map(key => caches.delete(key)))).then(() => self.clients.claim()));

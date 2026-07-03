@@ -10,7 +10,7 @@
 (function(){
   'use strict';
 
-  const VERSION='V311_MOBILE_POPUP_DAILY_SUMMARY_FIX';
+  const VERSION='V323_POPUP_DAILY_DETAIL_STABILITY';
   if(window.__CNMI_V311_MOBILE_POPUP_DAILY_SUMMARY_FIX__) return;
   window.__CNMI_V311_MOBILE_POPUP_DAILY_SUMMARY_FIX__=true;
 
@@ -288,6 +288,7 @@
     }
     lastAction=action.key;
     lastActionAt=now;
+    window.__CNMI_LAST_POPUP_ACTION__={key:action.key,at:now};
     stop(event);
     if(action.type==='calendar') openCalendar(action.node.getAttribute('data-day-detail'));
     else if(action.type==='position') openPosition(action.node);
@@ -329,6 +330,18 @@
   /* Desktop fallback without relying on the older click chain. */
   document.addEventListener('mousedown',event=>{
     if(event.button!==0) return;
+    const action=actionFor(event.target);
+    if(action) runAction(event,action);
+  },true);
+
+  /* PWA/browser fallback: some WebKit builds do not dispatch the older chain consistently. */
+  document.addEventListener('pointerup',event=>{
+    if(event.pointerType==='mouse') return;
+    const action=actionFor(event.target);
+    if(action) runAction(event,action);
+  },true);
+
+  document.addEventListener('click',event=>{
     const action=actionFor(event.target);
     if(action) runAction(event,action);
   },true);
@@ -391,24 +404,42 @@
     const diff=counted-slotCount;
 
     cards.className='v225-compare-cards v311-summary-cards';
-    cards.innerHTML=`<div><b>${total}</b><span>คนอยู่จริงทั้งหมด</span></div><div><b>${counted}/${slotCount}</b><span>คน/Slot วันนี้</span></div><div class="${diff<0?'warn':diff>0?'info':'ok'}"><b>${diff===0?'พอดี':diff>0?`เกิน ${diff}`:`ขาด ${Math.abs(diff)}`}</b><span>สถานะกำลังคน</span></div>`;
+    const nextHtml=`<div><b>${total}</b><span>คนอยู่จริงทั้งหมด</span></div><div><b>${counted}/${slotCount}</b><span>คน/Slot วันนี้</span></div><div class="${diff<0?'warn':diff>0?'info':'ok'}"><b>${diff===0?'พอดี':diff>0?`เกิน ${diff}`:`ขาด ${Math.abs(diff)}`}</b><span>สถานะกำลังคน</span></div>`;
+    if(cards.innerHTML!==nextHtml) cards.innerHTML=nextHtml;
+  }
+
+  function dailyJobText(card,row){
+    const select=card?.querySelector?.('select[data-position-row],select[data-position-job]');
+    const code=String(row?.position_code || row?.code || select?.dataset?.positionCode || '').trim();
+    const direct=String(row?.job_desc || row?.description || select?.dataset?.positionJob || '').trim();
+    if(direct) return direct;
+    const master=findPositionByCode(code)||{};
+    return String(master?.job_desc || master?.description || '').trim() || 'ยังไม่ได้ระบุรายละเอียดหน้าที่';
   }
 
   function keepDailyDutyText(root=document){
     const page=root.querySelector?.('.v225-positions-page,.v226-positions-page');
     if(!page) return;
     const rows=dailyRows();
-    const cards=Array.from(page.querySelectorAll('.position-mobile-card,.v225-position-card'));
+    const cards=Array.from(page.querySelectorAll('.v225-mobile-position-list > .position-mobile-card,.v225-mobile-position-list > .v225-position-card'));
     cards.forEach((card,index)=>{
       const row=rows[index]||{};
-      const job=String(row?.job_desc || row?.description || '').trim() || 'ยังไม่ได้ระบุรายละเอียดหน้าที่';
-      card.querySelectorAll('.v296-position-duty-preview,.v311-position-duty-preview').forEach(node=>node.remove());
-      const preview=document.createElement('div');
-      preview.className='v311-position-duty-preview';
-      preview.innerHTML=`<b>หน้าที่:</b><span>${esc(job)}</span>`;
-      const actions=card.querySelector('.actions');
-      if(actions) actions.insertAdjacentElement('beforebegin',preview);
-      else card.appendChild(preview);
+      const job=dailyJobText(card,row);
+      let preview=card.querySelector(':scope > .v311-position-duty-preview');
+      const duplicate=card.querySelector(':scope > .v296-position-duty-preview');
+      if(duplicate) duplicate.remove();
+      if(!preview){
+        preview=document.createElement('div');
+        preview.className='v311-position-duty-preview';
+      }
+      const html=`<b>หน้าที่:</b><span>${esc(job)}</span>`;
+      if(preview.innerHTML!==html) preview.innerHTML=html;
+      const baseline=card.querySelector(':scope > .v322-baseline-box');
+      const label=card.querySelector(':scope > label');
+      const actions=card.querySelector(':scope > .actions');
+      const anchor=baseline || label || actions;
+      if(anchor && preview.nextElementSibling!==anchor) card.insertBefore(preview,anchor);
+      else if(!anchor && preview.parentElement!==card) card.appendChild(preview);
     });
     page.querySelectorAll('[data-v296-position-detail],[data-v226-position-detail],[data-v225-position-detail],[data-position-detail-v219]').forEach(button=>{
       const actions=button.closest('.actions');
@@ -460,11 +491,18 @@
   `;
   document.head.appendChild(style);
 
-  const observer=new MutationObserver(queueEnhance);
-  observer.observe(document.documentElement,{childList:true,subtree:true});
-  document.addEventListener('DOMContentLoaded',queueEnhance,{once:true});
+  function installObserver(){
+    const target=document.getElementById('pageContent') || document.body || document.documentElement;
+    if(target && !target.__v323PopupDailyObserver){
+      const observer=new MutationObserver(queueEnhance);
+      observer.observe(target,{childList:true,subtree:true});
+      target.__v323PopupDailyObserver=observer;
+    }
+    queueEnhance();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',installObserver,{once:true});
+  else installObserver();
   window.addEventListener('pageshow',queueEnhance);
-  queueEnhance();
 
   window.cnmiV311={enhance,openCalendar,openTrade,openPosition,repairDailySummary,keepDailyDutyText,removeObsoleteCh4};
   console.info(`[${VERSION}] loaded`);
