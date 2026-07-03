@@ -50,11 +50,20 @@
     const status=text(person.position_training_status||person.training_status||person.staff_status);
     return /น้องใหม่|ผู้ฝึก|intern|trainee/i.test(status);
   }
-  function isOnLeave(staffId,date){
-    if(!staffId||!date)return false;
-    try{if(typeof isActiveLeaveOn==='function')return !!isActiveLeaveOn(staffId,date);}catch(_){}
-    try{if(typeof window.isActiveLeaveOn==='function')return !!window.isActiveLeaveOn(staffId,date);}catch(_){}
-    return false;
+  function activeLeave(staffId,date){
+    if(!staffId||!date)return null;
+    try{if(typeof activeLeaveRecordOn==='function')return activeLeaveRecordOn(staffId,date)||null;}catch(_){}
+    try{if(typeof window.activeLeaveRecordOn==='function')return window.activeLeaveRecordOn(staffId,date)||null;}catch(_){}
+    return null;
+  }
+  function leaveType(row){
+    try{if(typeof leaveDisplayType==='function')return text(leaveDisplayType(row));}catch(_){}
+    try{if(typeof window.leaveDisplayType==='function')return text(window.leaveDisplayType(row));}catch(_){}
+    return text(row?.type||row?.leave_type||row?.reason_type||'ลาอื่นๆ').split(':::')[0].trim();
+  }
+  function leaveBadgeText(row){
+    if(!row)return '';
+    return leaveType(row)==='ไม่รับเวร'?'ไม่รับเวรวันนี้':'ลาวันนี้';
   }
   function currentDate(){
     return text(document.getElementById('positionDateInput')?.value||appState()?.positionDate).slice(0,10);
@@ -73,7 +82,9 @@
   function badgeText(staffId,date){
     const notes=[];
     if(isTrainee(staffId))notes.push('น้องใหม่/ผู้ฝึก • ไม่นับ Slot');
-    if(isOnLeave(staffId,date))notes.push('ลาวันนี้');
+    const leave=activeLeave(staffId,date);
+    const leaveNote=leaveBadgeText(leave);
+    if(leaveNote)notes.push(leaveNote);
     return notes.join(' • ');
   }
   function makeBaselineBox(row,date){

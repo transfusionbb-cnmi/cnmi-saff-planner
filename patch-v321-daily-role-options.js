@@ -63,15 +63,31 @@
     const st = appState();
     return text(document.getElementById('positionDateInput')?.value || st.positionDate || '').slice(0,10);
   }
-  function isOnLeave(staffId, date){
-    if (!staffId || !date) return false;
+  function activeLeave(staffId, date){
+    if (!staffId || !date) return null;
     try {
-      if (typeof isActiveLeaveOn === 'function') return !!isActiveLeaveOn(staffId, date);
+      if (typeof activeLeaveRecordOn === 'function') return activeLeaveRecordOn(staffId, date) || null;
     } catch (_) {}
     try {
-      if (typeof window.isActiveLeaveOn === 'function') return !!window.isActiveLeaveOn(staffId, date);
+      if (typeof window.activeLeaveRecordOn === 'function') return window.activeLeaveRecordOn(staffId, date) || null;
     } catch (_) {}
-    return false;
+    return null;
+  }
+  function leaveType(row){
+    try {
+      if (typeof leaveDisplayType === 'function') return text(leaveDisplayType(row));
+    } catch (_) {}
+    try {
+      if (typeof window.leaveDisplayType === 'function') return text(window.leaveDisplayType(row));
+    } catch (_) {}
+    return text(row?.type || row?.leave_type || row?.reason_type || 'ลาอื่นๆ').split(':::')[0].trim();
+  }
+  function isNoDutyRow(row){
+    return leaveType(row) === 'ไม่รับเวร';
+  }
+  function leaveBadgeText(row){
+    if (!row) return '';
+    return isNoDutyRow(row) ? 'ไม่รับเวรวันนี้' : 'ลาวันนี้';
   }
   function compareStaff(a, b){
     try {
@@ -85,8 +101,9 @@
   function optionFor(staff, selectedId, date){
     const option = document.createElement('option');
     option.value = idOf(staff.id);
-    const leave = isOnLeave(staff.id, date);
-    option.textContent = `${fullLabel(staff)}${leave ? ' ⚠ ลาวันนี้' : ''}`;
+    const leave = activeLeave(staff.id, date);
+    const badge = leaveBadgeText(leave);
+    option.textContent = `${fullLabel(staff)}${badge ? ` ⚠ ${badge}` : ''}`;
     option.selected = idOf(staff.id) === selectedId;
     if (leave && !option.selected) option.disabled = true;
     return option;
