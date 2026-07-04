@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ลงชื่อช่วยห้องบริจาคโลหิต | CNMI</title>
+  <meta name="description" content="ลงชื่อคนนอกหน่วยมาช่วยห้องบริจาคโลหิต วันเสาร์–อาทิตย์ 09:00–17:00 น.">
+  <meta name="theme-color" content="#80caff">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="donor-helper-public-v324.css?v=324">
+</head>
+<body>
+  <header class="public-header">
+    <div class="brand-wrap">
+      <img src="app-icon-1024.png?v=299" alt="CNMI Staff Planner">
+      <div>
+        <strong>ห้องบริจาคโลหิต CNMI</strong>
+        <span>ลงชื่อคนมาช่วย 09:00–17:00 น.</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="public-shell">
+    <section class="hero-card">
+      <div>
+        <span class="eyebrow">สำหรับคนนอกหน่วย</span>
+        <h1>ลงชื่อมาช่วยห้องบริจาคโลหิต</h1>
+        <p>วันเสาร์–อาทิตย์ วันละ 3 ตำแหน่ง: คนเจาะ 2 คน และ Clerk 1 คน</p>
+      </div>
+      <div class="rules-box">
+        <b>กติกาสำคัญ</b>
+        <span>เปิดลงชื่อวันที่ 21 ของเดือนก่อนหน้า</span>
+        <span>ลงชื่อแล้วลบเองไม่ได้</span>
+        <span>หากต้องการยกเลิก ต้องส่งคำขอยกเลิกและแจ้งในกลุ่มกลาง</span>
+      </div>
+    </section>
+
+    <section class="toolbar-card">
+      <label>เลือกเดือน
+        <input id="helperMonth" type="month">
+      </label>
+      <button id="refreshBtn" class="secondary-btn" type="button">รีเฟรชรายชื่อ</button>
+      <div id="summaryBadges" class="summary-badges"></div>
+    </section>
+
+    <div id="setupMessage" class="message error hidden"></div>
+    <div id="loadingMessage" class="loading-card">กำลังโหลดตาราง…</div>
+    <section id="scheduleGrid" class="schedule-grid" aria-live="polite"></section>
+
+    <section class="info-card">
+      <h2>การยกเลิก</h2>
+      <p>หลังลงชื่อ ระบบจะจำสิทธิ์จัดการรายการไว้ในอุปกรณ์นี้ หากจำเป็นต้องยกเลิก ให้กด “ขอยกเลิก” ระบุเหตุผล และแจ้งในกลุ่มกลาง ชื่อจะยังคงอยู่จนกว่า Admin จะตรวจสอบและยืนยัน จึงไม่มีการลบชื่อเงียบ ๆ ใกล้วันทำงาน</p>
+    </section>
+  </main>
+
+  <div id="helperModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button id="modalClose" class="modal-close" type="button" aria-label="ปิด">×</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js?v=298"></script>
+  <script src="donor-helper-public-v324.js?v=324"></script>
+</body>
+</html>

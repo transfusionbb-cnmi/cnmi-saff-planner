@@ -1,6 +1,6 @@
-/* CNMI Staff Planner PWA service worker — V323 */
+/* CNMI Staff Planner PWA service worker — V324 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v323`;
+const CACHE_NAME = `${CACHE_PREFIX}v324`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
   './pwa-install-v303.css', './pwa-install-v303.js',
@@ -13,6 +13,11 @@ const APP_SHELL = [
   './patch-v321-daily-role-options.js',
   './patch-v322-daily-baseline-compare.js',
   './patch-v323-popup-job-stability.js',
+  './patch-v324-donor-helper-booking.js',
+  './donor-helper-v324.css',
+  './donor-helper.html',
+  './donor-helper-public-v324.js',
+  './donor-helper-public-v324.css',
   './patch-v227-manual-as-blood-bank-zone.js',
   './patch-v313-app-count-filter-pwa-trade-fix.js',
   './patch-v314-admin-ot-calendar-ch4-fix.js',
@@ -46,10 +51,12 @@ self.addEventListener('fetch', event => {
   if(url.origin!==self.location.origin) return;
   if(url.pathname.endsWith('/config.js')||url.pathname.endsWith('config.js')) return;
   if(request.mode==='navigate'){
+    const isHelperPage=url.pathname.endsWith('/donor-helper.html')||url.pathname.endsWith('donor-helper.html');
+    const fallback=isHelperPage?'./donor-helper.html':'./index.html';
     event.respondWith(fetch(request).then(response=>{
-      if(response?.ok){const copy=response.clone();caches.open(CACHE_NAME).then(cache=>cache.put('./index.html',copy));}
+      if(response?.ok){const copy=response.clone();caches.open(CACHE_NAME).then(cache=>cache.put(fallback,copy));}
       return response;
-    }).catch(async()=>await caches.match(request,{ignoreSearch:true})||await caches.match('./index.html',{ignoreSearch:true})||Response.error()));
+    }).catch(async()=>await caches.match(request,{ignoreSearch:true})||await caches.match(fallback,{ignoreSearch:true})||Response.error()));
     return;
   }
   const cacheableDestinations=new Set(['script','style','image','font','manifest']);
