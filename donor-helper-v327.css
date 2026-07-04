@@ -1,0 +1,78 @@
+/* CNMI Staff Planner V326 — Donor helper module */
+.donor-helper-page-v324{display:grid;gap:16px}
+.donor-helper-hero{display:flex;align-items:center;justify-content:space-between;gap:18px;background:linear-gradient(135deg,#eef9ff,#f9fdff)}
+.donor-helper-hero h3{margin:4px 0 6px;font-size:1.25rem}
+.donor-helper-hero p{margin:0;color:var(--muted,#64748b)}
+.donor-helper-kicker{display:inline-flex;font-weight:700;color:#0f6c9d;background:#dff3ff;border-radius:999px;padding:5px 10px;font-size:.82rem}
+.donor-helper-hero-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.donor-helper-link-btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.donor-helper-ot-note{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.donor-helper-toolbar{display:flex;align-items:end;gap:12px;flex-wrap:wrap}
+.donor-helper-toolbar label{min-width:190px}
+.donor-helper-counts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-right:auto}
+.donor-helper-weekend-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.donor-helper-day-card{padding:14px}
+.donor-helper-day-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #e5eef5}
+.donor-helper-day-head>div{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.donor-helper-day-head span:first-child{color:#64748b}
+.donor-helper-day-head b{font-size:1.05rem}
+.donor-helper-slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.donor-helper-slot{min-height:132px;border:1px solid #dbe7f0;border-radius:14px;padding:11px;background:#fff;display:flex;flex-direction:column;gap:5px}
+.donor-helper-slot.empty{border-style:dashed;background:#fbfdff;align-items:flex-start;justify-content:center}
+.donor-helper-slot.status-confirmed{border-color:#bfe7ca;background:#f5fff8}
+.donor-helper-slot.status-cancel_requested{border-color:#ffd69b;background:#fffaf0}
+.donor-helper-slot.status-completed{border-color:#b8ddff;background:#f5fbff}
+.donor-helper-slot.status-no_show{border-color:#ffc5c5;background:#fff7f7}
+.donor-helper-slot-name{font-weight:700}
+.donor-helper-empty-text{color:#94a3b8}
+.donor-helper-slot-head{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.donor-helper-slot-head>span:first-child{font-weight:700;color:#334155}
+.donor-helper-person{font-weight:700;font-size:1rem;color:#0f172a}
+.donor-helper-unit,.donor-helper-phone{font-size:.88rem;color:#64748b}
+.donor-helper-cancel-reason{margin-top:3px;padding:7px 8px;border-radius:9px;background:#fff1d6;font-size:.84rem;color:#7c4a03}
+.compact-actions{margin-top:auto;gap:5px;flex-wrap:wrap}
+.compact-actions .tiny-btn{font-size:.75rem;padding:5px 7px}
+.donor-helper-history{margin-top:2px}
+.donor-helper-error{border-color:#ffb4b4;background:#fff5f5}
+.donor-helper-loading{text-align:center;color:#64748b}
+@media (max-width:1100px){
+  .donor-helper-weekend-grid{grid-template-columns:1fr}
+}
+@media (max-width:820px){
+  .donor-helper-hero{align-items:stretch;flex-direction:column}
+  .donor-helper-hero-actions{justify-content:stretch}
+  .donor-helper-hero-actions>*{flex:1 1 180px}
+  .donor-helper-toolbar{align-items:stretch}
+  .donor-helper-toolbar label{min-width:0;flex:1 1 190px}
+  .donor-helper-slots{grid-template-columns:1fr}
+  .donor-helper-slot{min-height:0}
+  .donor-helper-day-head{align-items:flex-start}
+}
+
+.donor-helper-unit-select{width:100%;min-height:42px;border:1px solid #cbdbe7;border-radius:10px;padding:9px 11px;background:#fff;color:#0f172a;font:inherit}
+
+/* V327 — internal booking / duty and holiday guards */
+.donor-helper-page-v327 .donor-helper-my-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px 16px;background:#f8fcff}
+.donor-helper-page-v327 .donor-helper-my-profile>div{display:grid;gap:3px}
+.donor-helper-page-v327 .donor-helper-my-profile span{font-size:.8rem}
+.donor-helper-page-v327 .donor-helper-my-profile b{font-size:.95rem}
+.donor-helper-empty-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.donor-helper-empty-reason{font-size:.8rem;color:#64748b;margin-top:4px}
+.donor-helper-self-btn{background:#1677a8;color:#fff;border-color:#1677a8}
+.donor-helper-self-btn.blocked{background:#fff4e5;color:#8a4d00;border-color:#f2c477}
+.donor-helper-slot.mine{box-shadow:inset 0 0 0 2px #8b5cf6}
+.donor-helper-mine-label{align-self:flex-start;font-size:.75rem;font-weight:700;color:#6b21a8;background:#f3e8ff;padding:4px 7px;border-radius:999px}
+.donor-helper-day-closed{border-color:#ffc7c7;background:#fffafa}
+.donor-helper-holiday-banner,.donor-helper-duty-warning{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border-radius:11px;margin:-2px 0 10px;font-size:.84rem}
+.donor-helper-holiday-banner{background:#fff0f0;color:#991b1b;border:1px solid #ffcaca}
+.donor-helper-duty-warning{background:#fff8e8;color:#7c4a03;border:1px solid #f5d69b}
+.donor-helper-slot.holiday-closed{background:#f8f8f8;border-color:#d7dde3;color:#64748b}
+.donor-helper-confirm-profile{display:grid;gap:8px;padding:12px;border:1px solid #dce8f0;border-radius:12px;background:#f8fbfd}
+.donor-helper-confirm-profile>div{display:grid;grid-template-columns:95px 1fr;gap:8px}
+.donor-helper-confirm-profile span{color:#64748b}
+.donor-helper-ack{display:flex!important;grid-template-columns:auto 1fr!important;align-items:flex-start;gap:8px!important;font-weight:500!important}
+.donor-helper-ack input{width:auto!important;margin-top:4px}
+@media(max-width:820px){
+  .donor-helper-page-v327 .donor-helper-my-profile{grid-template-columns:1fr}
+  .donor-helper-confirm-profile>div{grid-template-columns:1fr;gap:2px}
+}
