@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V324 — คนมาช่วยห้องบริจาคโลหิต
+/* CNMI Staff Planner V325 — คนมาช่วยห้องบริจาคโลหิต + นำเข้ารายชื่อเดิม
    - คนในหน่วยดูตารางจาก App Staff Planner
    - คนนอกหน่วยลงชื่อผ่าน donor-helper.html
    - ผู้ลงชื่อขอยกเลิกได้ แต่ลบชื่อ/คืนช่องเองไม่ได้
@@ -6,10 +6,10 @@
 */
 (function(){
   'use strict';
-  const VERSION = 'V324_DONOR_HELPER_BOOKING';
+  const VERSION = 'V325_DONOR_HELPER_BOOKING';
   const PAGE_ID = 'donorHelpers';
-  if (window.__CNMI_V324_DONOR_HELPER_BOOKING__) return;
-  window.__CNMI_V324_DONOR_HELPER_BOOKING__ = true;
+  if (window.__CNMI_V325_DONOR_HELPER_BOOKING__) return;
+  window.__CNMI_V325_DONOR_HELPER_BOOKING__ = true;
 
   function appState(){ try { return state; } catch (_) { return window.state || null; } }
   function db(){ try { return sb; } catch (_) { return window.sb || null; } }
@@ -69,7 +69,7 @@
   function statusText(status){
     return ({
       confirmed:'ยืนยันแล้ว',
-      cancel_requested:'ขอยกเลิก — รอ Admin',
+      cancel_requested:'ขอยกเลิก — รออนุมัติ',
       cancelled:'ยกเลิกแล้ว',
       completed:'มาปฏิบัติงานแล้ว',
       no_show:'ไม่มาตามนัด'

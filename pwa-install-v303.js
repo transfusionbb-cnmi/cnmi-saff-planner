@@ -182,7 +182,7 @@
   async function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
     try {
-      const workerUrl = new URL('sw.js?v=324', scriptBaseUrl);
+      const workerUrl = new URL('sw.js?v=325', scriptBaseUrl);
       const registration = await navigator.serviceWorker.register(workerUrl.href, { scope: scriptBaseUrl.pathname });
       registrationReady = true;
       registration.update().catch(() => {});

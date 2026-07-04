@@ -1,7 +1,7 @@
-/* CNMI Donor Helper Public V324 */
+/* CNMI Donor Helper Public V325 — existing signup import */
 (function(){
   'use strict';
-  const VERSION = 'V324_DONOR_HELPER_PUBLIC';
+  const VERSION = 'V325_DONOR_HELPER_PUBLIC';
   const CFG = window.CNMI_CONFIG || {};
   const STORAGE_KEY = 'cnmi_donor_helper_manage_tokens_v324';
   let client = null;
@@ -45,7 +45,7 @@
   }
   function slotKey(date,type,no){ return `${date}|${type}|${no}`; }
   function slotLabel(type,no){ return type==='clerk' ? 'Clerk' : `คนเจาะ ${no}`; }
-  function statusText(status){ return ({confirmed:'ยืนยันแล้ว',cancel_requested:'ขอยกเลิก — รอ Admin',completed:'มาปฏิบัติงานแล้ว',no_show:'ไม่มาตามนัด'})[status]||status||'-'; }
+  function statusText(status){ return ({confirmed:'ยืนยันแล้ว',cancel_requested:'ขอยกเลิก — รอหัวหน้าหน่วยอนุมัติ',completed:'มาปฏิบัติงานแล้ว',no_show:'ไม่มาตามนัด'})[status]||status||'-'; }
   function statusBadge(status){ return ({confirmed:'green',cancel_requested:'orange',completed:'blue',no_show:'red'})[status]||'gray'; }
   function configReady(){ return !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && window.supabase); }
   function messageFromError(error){
@@ -102,7 +102,7 @@
       <div class="slot-name">${esc(row.helper_name||'-')}</div>
       <div class="slot-unit">${esc(row.unit_name||'-')}</div>
       ${mine?'<span class="my-item">รายการของฉันบนอุปกรณ์นี้</span>':''}
-      ${row.status==='cancel_requested'?'<div class="slot-note">ชื่อยังคงอยู่จนกว่า Admin จะยืนยันการยกเลิก</div>':''}
+      ${row.status==='cancel_requested'?'<div class="slot-note">ชื่อยังคงอยู่จนกว่าหัวหน้าหน่วย/Admin จะยืนยันการยกเลิก</div>':''}
       <div class="slot-actions">${mine&&row.status==='confirmed'&&date>=todayKey()?`<button class="danger-btn" type="button" data-cancel="${esc(row.id)}">ขอยกเลิก</button>`:''}</div>
     </div>`;
   }
@@ -144,12 +144,12 @@
         <label>ชื่อ-สกุล <input name="helper_name" required maxlength="120" autocomplete="name"></label>
         <label>หน่วยงาน <input name="unit_name" required maxlength="160"></label>
         <label class="wide">เบอร์โทร (ถ้ามี) <input name="phone" inputmode="tel" maxlength="30" autocomplete="tel"></label>
-        <label class="wide ack-box"><input type="checkbox" name="ack" required><span>ยืนยันว่าจะมาช่วยตามวันที่เลือก และรับทราบว่าหากต้องยกเลิกต้องแจ้งในกลุ่มกลาง ชื่อจะไม่หายจนกว่า Admin จะยืนยัน</span></label>
+        <label class="wide ack-box"><input type="checkbox" name="ack" required><span>ยืนยันว่าจะมาช่วยตามวันที่เลือก และรับทราบว่าหากต้องยกเลิกต้องกดขอยกเลิก ระบุเหตุผล และแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต เพื่ออนุมัติการยกเลิก ชื่อจะไม่หายจนกว่า Admin จะยืนยัน</span></label>
         <div class="form-actions"><button class="ghost-btn" type="button" data-close-modal>ยกเลิก</button><button class="primary-btn" type="submit">ยืนยันลงชื่อ</button></div>
       </form>`);
   }
   function groupMessage(row,reason){
-    return `ขอแจ้งยกเลิกการมาช่วยห้องบริจาคโลหิต\nชื่อ: ${row.helper_name||'-'}\nหน่วยงาน: ${row.unit_name||'-'}\nวันที่: ${thaiDate(row.work_date)}\nตำแหน่ง: ${slotLabel(row.slot_type,row.slot_no)}\nเหตุผล: ${reason||'-'}`;
+    return `ขออนุมัติยกเลิกการมาช่วยห้องบริจาคโลหิต\nชื่อ: ${row.helper_name||'-'}\nหน่วยงาน: ${row.unit_name||'-'}\nวันที่: ${thaiDate(row.work_date)}\nตำแหน่ง: ${slotLabel(row.slot_type,row.slot_no)}\nเหตุผล: ${reason||'-'}`;
   }
   function showCancel(id){
     const row=rows.find(item=>String(item.id)===String(id));
@@ -159,7 +159,7 @@
       <form id="cancelForm" class="form-grid">
         <input type="hidden" name="signup_id" value="${esc(row.id)}">
         <label class="wide">เหตุผล <textarea name="reason" rows="3" minlength="3" required placeholder="ระบุเหตุผลเพื่อให้หน่วยงานจัดคนแทนได้"></textarea></label>
-        <label class="wide ack-box"><input type="checkbox" name="ack" required><span>รับทราบว่าต้องแจ้งในกลุ่มกลาง และชื่อจะยังคงอยู่จนกว่า Admin จะยืนยันการยกเลิก</span></label>
+        <label class="wide ack-box"><input type="checkbox" name="ack" required><span>รับทราบว่าต้องแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต เพื่ออนุมัติการยกเลิก และชื่อจะยังคงอยู่จนกว่า Admin จะยืนยัน</span></label>
         <div class="form-actions"><button class="ghost-btn" type="button" data-close-modal>กลับ</button><button class="danger-btn" type="submit">ส่งคำขอยกเลิก</button></div>
       </form>`);
   }
@@ -185,7 +185,7 @@
       if(result.error)throw result.error;
       const text=groupMessage(row,reason);
       closeModal();await loadMonth();
-      showModal(`<h2>ส่งคำขอยกเลิกแล้ว</h2><p>ชื่อยังคงอยู่ในตารางจนกว่า Admin จะยืนยัน กรุณาคัดลอกข้อความด้านล่างไปแจ้งในกลุ่มกลาง</p><div id="groupCopyText" class="copy-box">${esc(text)}</div><div class="form-actions"><button class="primary-btn" type="button" data-copy-group>คัดลอกข้อความ</button><button class="ghost-btn" type="button" data-close-modal>ปิด</button></div>`);
+      showModal(`<h2>ส่งคำขอยกเลิกแล้ว</h2><p>ชื่อยังคงอยู่ในตารางจนกว่า Admin จะยืนยัน กรุณาคัดลอกข้อความด้านล่างและส่งให้หัวหน้าหน่วยเวชศาสตร์บริการโลหิต เพื่ออนุมัติการยกเลิก</p><div id="groupCopyText" class="copy-box">${esc(text)}</div><div class="form-actions"><button class="primary-btn" type="button" data-copy-group>คัดลอกข้อความ</button><button class="ghost-btn" type="button" data-close-modal>ปิด</button></div>`);
     }catch(error){showToast(messageFromError(error));button.disabled=false;button.textContent='ส่งคำขอยกเลิก';}
   }
   async function copyGroup(){
