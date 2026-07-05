@@ -1,7 +1,7 @@
 /* CNMI Donor Helper Public V327 — 7-unit dropdown + holiday guard */
 (function(){
   'use strict';
-  const VERSION = 'V327_DONOR_HELPER_PUBLIC_HOLIDAY_GUARD';
+  const VERSION = 'V329_DONOR_HELPER_CANCEL_CONTACT_TOP';
   const CFG = window.CNMI_CONFIG || {};
   const STORAGE_KEY = 'cnmi_donor_helper_manage_tokens_v324';
   const UNIT_OPTIONS = [
@@ -108,9 +108,15 @@
     return rows.filter(row=>String(row.status||'')==='cancelled' && String(row.work_date).slice(0,10)===date && row.slot_type===type && Number(row.slot_no)===Number(no))
       .sort((a,b)=>String(b.cancelled_at||b.updated_at||b.created_at||'').localeCompare(String(a.cancelled_at||a.updated_at||a.created_at||'')))[0] || null;
   }
-  function contactHtml(){
+  function cancelContactText(){
     const label=contactInfo&&contactInfo.incharge_label;
-    return `<div class="contact-card"><b>ผู้ติดต่อกรณีขอยกเลิก</b><br>${label?`อินชาร์จเดือนนี้: ${esc(label)}`:'กรุณาแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต'}</div>`;
+    return label
+      ? `หากต้องการยกเลิก ต้องกดขอยกเลิก ระบุเหตุผล และแจ้งอินชาร์จเดือนนี้: ${label} หรือหัวหน้าหน่วยเวชศาสตร์บริการโลหิต เพื่ออนุมัติการยกเลิก`
+      : 'หากต้องการยกเลิก ต้องกดขอยกเลิก ระบุเหตุผล และแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต เพื่ออนุมัติการยกเลิก';
+  }
+  function updateCancelContactRule(){
+    const node=$('cancelContactRule');
+    if(node) node.textContent=cancelContactText();
   }
   function blockedMap(){
     const map=new Map();
@@ -153,9 +159,9 @@
     let filled=0;
     openDates.forEach(date=>[['phlebotomist',1],['phlebotomist',2],['clerk',1]].forEach(([type,no])=>{if(map.has(slotKey(date,type,no)))filled++;}));
     $('summaryBadges').innerHTML=`<span class="badge blue">${esc(monthLabel(currentMonth))}</span><span class="badge green">ลงชื่อแล้ว ${filled}/${openDates.length*3} ช่อง</span>${blocked.size?`<span class="badge red">ปิดวันหยุด ${blocked.size} วัน</span>`:''}`;
-    const existing=document.getElementById('contactCardV328');
-    if(existing) existing.outerHTML=contactHtml();
-    else $('summaryBadges').insertAdjacentHTML('afterend', `<div id="contactCardV328">${contactHtml()}</div>`);
+    const oldContact=document.getElementById('contactCardV328');
+    if(oldContact) oldContact.remove();
+    updateCancelContactRule();
     $('scheduleGrid').innerHTML=dates.map(date=>{
       const d=new Date(`${date}T12:00:00`), holiday=blocked.get(date);
       return `<article class="day-card ${holiday?'day-card-closed':''}">
