@@ -150,7 +150,7 @@
   function rowById(id){return rows().find(row=>String(row.id)===String(id));}
   function cancelHistoryFor(date,type,no){return rows().filter(row=>String(row.status||'')==='cancelled'&&dateKey(row.work_date)===date&&row.slot_type===type&&Number(row.slot_no)===Number(no)).sort((a,b)=>String(b.cancelled_at||b.updated_at||b.created_at||'').localeCompare(String(a.cancelled_at||a.updated_at||a.created_at||'')))[0]||null;}
   function cancelHistoryHtml(row){if(!row)return'';return `<div class="donor-helper-slot-history"><b>เคยลงชื่อ:</b> ${esc(row.helper_name||'-')}<br><b>ยกเลิกโดย:</b> ${esc(row.cancelled_by_label||'หัวหน้าหน่วยเวชศาสตร์บริการโลหิต/อินชาร์จ')}<br><b>เหตุผล:</b> ${esc(row.cancel_reason||'-')}<br><b>วันที่-เวลา:</b> ${esc(thaiDateTime(row.cancelled_at||row.updated_at))}</div>`;}
-  function contactNotice(){const c=payload().contact||{};return `<div class="notice soft-notice donor-helper-contact-note"><b>ผู้ติดต่อกรณีขอยกเลิก:</b> ${c.incharge_label?`อินชาร์จเดือนนี้: ${esc(c.incharge_label)}`:'กรุณาแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต'}</div>`;}
+  function contactNotice(){const c=payload().contact||{};return `<div class="notice soft-notice donor-helper-contact-note"><b>ผู้ติดต่อกรณีขอยกเลิก:</b> ${c.incharge_label?`อินชาร์จเดือนนี้: ${esc(c.incharge_label)} หรือหัวหน้าหน่วย`:'กรุณาแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต'}</div>`;}
 
   function emptyActions(date,type,no,isBlocked,myDuty){
     const isPast=date<today(),isOpen=today()>=openDateFor(date),own=myActiveOn(date);
@@ -198,11 +198,20 @@
     </div>`;
   }
 
+  function historyActions(row){
+    if(!admin())return'';
+    const status=String(row.status||'');
+    const buttons=[];
+    buttons.push(`<button class="tiny-btn" type="button" data-v327-edit="${esc(row.id)}">แก้ไขข้อมูล</button>`);
+    if(['cancel_requested','cancelled','no_show'].includes(status))buttons.push(`<button class="tiny-btn" type="button" data-v327-edit-reason="${esc(row.id)}">แก้ไขเหตุผล</button>`);
+    if(['cancelled','no_show','completed'].includes(status))buttons.push(`<button class="tiny-btn danger-ghost" type="button" data-v327-status="${esc(row.id)}|confirmed">คืนสถานะยืนยัน</button>`);
+    return buttons.join(' ');
+  }
   function historyTable(){
     if(!admin())return'';
     const history=rows().filter(row=>['cancelled','no_show','completed','cancel_requested'].includes(row.status)).sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
     if(!history.length)return'';
-    return `<div class="card donor-helper-history"><div class="section-title"><h3>ประวัติและรายการที่ต้องติดตาม</h3><span class="badge black">${history.length} รายการ</span></div><div class="table-wrap"><table><thead><tr><th>วันที่</th><th>ตำแหน่ง</th><th>ชื่อ / หน่วยงาน</th><th>สถานะ</th><th>เหตุผล/เวลา</th></tr></thead><tbody>${history.map(row=>`<tr><td>${esc(thaiDate(row.work_date))}</td><td>${esc(slotLabel(row.slot_type,row.slot_no))}</td><td><b>${esc(row.helper_name||'-')}</b><br><span class="muted">${esc(row.unit_name||'-')}</span></td><td><span class="badge ${esc(statusClass(row.status))}">${esc(statusText(row.status))}</span></td><td>${row.cancel_reason?esc(row.cancel_reason):'-'}<br><span class="muted">อัปเดต ${esc(thaiDateTime(row.updated_at||row.created_at))}</span></td></tr>`).join('')}</tbody></table></div></div>`;
+    return `<div class="card donor-helper-history"><div class="section-title"><h3>ประวัติและรายการที่ต้องติดตาม</h3><span class="badge black">${history.length} รายการ</span></div><div class="table-wrap"><table><thead><tr><th>วันที่</th><th>ตำแหน่ง</th><th>ชื่อ / หน่วยงาน</th><th>สถานะ</th><th>เหตุผล/เวลา</th><th>จัดการ</th></tr></thead><tbody>${history.map(row=>`<tr><td>${esc(thaiDate(row.work_date))}</td><td>${esc(slotLabel(row.slot_type,row.slot_no))}</td><td><b>${esc(row.helper_name||'-')}</b><br><span class="muted">${esc(row.unit_name||'-')}</span></td><td><span class="badge ${esc(statusClass(row.status))}">${esc(statusText(row.status))}</span></td><td>${row.cancel_reason?esc(row.cancel_reason):'-'}<br><span class="muted">อัปเดต ${esc(thaiDateTime(row.updated_at||row.created_at))}</span></td><td><div class="donor-helper-row-actions">${historyActions(row)}</div></td></tr>`).join('')}</tbody></table></div></div>`;
   }
 
   function renderPageHtml(){
@@ -265,6 +274,11 @@
     const html=`<h2>แก้ไขข้อมูลผู้มาช่วย</h2><p class="muted">${esc(thaiDate(row.work_date))} • ${esc(slotLabel(row.slot_type,row.slot_no))}</p><form id="donorHelperAdminEditFormV327" class="form-grid"><input type="hidden" name="signup_id" value="${esc(row.id)}"><label>ชื่อ-สกุล <input name="helper_name" value="${esc(row.helper_name||'')}" required maxlength="120"></label><label>หน่วยงาน <select name="unit_name" required>${unitOptions(row.unit_name||'')}</select>${row.unit_name&&!isAllowedUnit(row.unit_name)?`<span class="muted">ข้อมูลเดิม: ${esc(row.unit_name)} — กรุณาเลือกใหม่</span>`:''}</label><label class="wide">เบอร์โทร (ถ้ามี) <input name="phone" value="${esc(row.phone||'')}" inputmode="tel" maxlength="30"></label><button class="primary-btn wide" type="submit">บันทึกการแก้ไข</button></form>`;
     try{showModal(html,{small:true});}catch(_){toast('เปิดแบบฟอร์มไม่สำเร็จ','error');}
   }
+  function showEditReason(id){
+    const row=rowById(id);if(!row)return toast('ไม่พบรายการ','error');
+    const html=`<h2>แก้ไขเหตุผล/หมายเหตุ</h2><p class="muted">${esc(row.helper_name||'-')} • ${esc(thaiDate(row.work_date))} • ${esc(slotLabel(row.slot_type,row.slot_no))}</p><form id="donorHelperAdminReasonFormV327" class="form-grid"><input type="hidden" name="signup_id" value="${esc(row.id)}"><input type="hidden" name="status" value="${esc(row.status||'confirmed')}"><label class="wide">เหตุผล/หมายเหตุ <textarea name="reason" rows="4" maxlength="500" placeholder="แก้ไขเหตุผลหรือหมายเหตุ">${esc(row.cancel_reason||'')}</textarea></label><div class="notice soft-notice wide">ใช้แก้ไขกรณีพิมพ์ผิดหรือกดผิด โดยใช้สิทธิ์ Admin/อินชาร์จเดิม</div><div class="wide form-actions"><button class="ghost-btn" type="button" data-v327-close>กลับ</button><button class="primary-btn" type="submit">บันทึกเหตุผล</button></div></form>`;
+    try{showModal(html,{small:true});}catch(_){toast('เปิดแบบฟอร์มไม่สำเร็จ','error');}
+  }
   async function confirmAction(message,title='ยืนยันรายการ'){try{if(typeof confirmDialog==='function')return await confirmDialog(message,title);}catch(_){}return window.confirm(message);}
   async function updateStatus(id,next){
     const row=rowById(id);if(!row)return toast('ไม่พบรายการ','error');
@@ -282,12 +296,13 @@
   },true);
 
   document.addEventListener('click',event=>{
-    const target=event.target?.closest?.('[data-v327-self-book],[data-v327-self-cancel],[data-v327-admin-add],[data-v327-edit],[data-v327-status],[data-v327-refresh],[data-v327-copy-link],[data-v327-go-ot],[data-v327-close]');
+    const target=event.target?.closest?.('[data-v327-self-book],[data-v327-self-cancel],[data-v327-admin-add],[data-v327-edit],[data-v327-edit-reason],[data-v327-status],[data-v327-refresh],[data-v327-copy-link],[data-v327-go-ot],[data-v327-close]');
     if(!target)return;event.preventDefault();event.stopPropagation();
     if(target.hasAttribute('data-v327-self-book'))return showSelfModal(target.getAttribute('data-v327-self-book'));
     if(target.hasAttribute('data-v327-self-cancel'))return showCancelModal(target.getAttribute('data-v327-self-cancel'));
     if(target.hasAttribute('data-v327-admin-add'))return showAdminAdd(target.getAttribute('data-v327-admin-add'));
     if(target.hasAttribute('data-v327-edit'))return showAdminEdit(target.getAttribute('data-v327-edit'));
+    if(target.hasAttribute('data-v327-edit-reason'))return showEditReason(target.getAttribute('data-v327-edit-reason'));
     if(target.hasAttribute('data-v327-status')){const [id,status]=String(target.getAttribute('data-v327-status')||'').split('|');return void updateStatus(id,status);}
     if(target.hasAttribute('data-v327-refresh'))return void loadMonth(S()?.donorHelperMonthV327,{force:true});
     if(target.hasAttribute('data-v327-copy-link'))return void copyLink();
@@ -296,7 +311,7 @@
   },true);
 
   document.addEventListener('submit',async event=>{
-    const form=event.target;if(!form||!['donorHelperSelfFormV327','donorHelperSelfCancelFormV327','donorHelperAdminAddFormV327','donorHelperAdminEditFormV327'].includes(form.id))return;
+    const form=event.target;if(!form||!['donorHelperSelfFormV327','donorHelperSelfCancelFormV327','donorHelperAdminAddFormV327','donorHelperAdminEditFormV327','donorHelperAdminReasonFormV327'].includes(form.id))return;
     event.preventDefault();event.stopPropagation();const fd=new FormData(form),button=form.querySelector('button[type="submit"]');if(button)button.disabled=true;
     try{
       if(form.id==='donorHelperSelfFormV327'){
@@ -310,10 +325,14 @@
         if(!admin())throw new Error('Permission denied');const unit=String(fd.get('unit_name')||'').trim();if(!isAllowedUnit(unit))throw new Error('กรุณาเลือกหน่วยงานจากรายการ');
         const result=await DB().rpc('admin_add_donor_helper_v324',{p_work_date:fd.get('work_date'),p_slot_type:fd.get('slot_type'),p_slot_no:Number(fd.get('slot_no')),p_helper_name:String(fd.get('helper_name')||'').trim(),p_unit_name:unit,p_phone:String(fd.get('phone')||'').trim()||null});if(result.error)throw result.error;
         try{closeModal();}catch(_){}await loadMonth(S().donorHelperMonthV327,{force:true});toast('เพิ่มชื่อแล้ว');
-      }else{
+      }else if(form.id==='donorHelperAdminEditFormV327'){
         if(!admin())throw new Error('Permission denied');const unit=String(fd.get('unit_name')||'').trim();if(!isAllowedUnit(unit))throw new Error('กรุณาเลือกหน่วยงานจากรายการ');
         const result=await DB().rpc('admin_edit_donor_helper_v324',{p_signup_id:fd.get('signup_id'),p_helper_name:String(fd.get('helper_name')||'').trim(),p_unit_name:unit,p_phone:String(fd.get('phone')||'').trim()||null});if(result.error)throw result.error;
         try{closeModal();}catch(_){}await loadMonth(S().donorHelperMonthV327,{force:true});toast('แก้ไขข้อมูลแล้ว');
+      }else if(form.id==='donorHelperAdminReasonFormV327'){
+        if(!admin())throw new Error('Permission denied');
+        const result=await DB().rpc('admin_update_donor_helper_status_v324',{p_signup_id:fd.get('signup_id'),p_status:String(fd.get('status')||'cancelled'),p_note:String(fd.get('reason')||'').trim()||null});if(result.error)throw result.error;
+        try{closeModal();}catch(_){}await loadMonth(S().donorHelperMonthV327,{force:true});toast('บันทึกเหตุผลแล้ว');
       }
     }catch(error){toast(errorText(error),'error');if(button)button.disabled=false;}
   },true);
