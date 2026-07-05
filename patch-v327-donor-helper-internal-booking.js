@@ -71,7 +71,7 @@
   }
   function slotKey(date,type,no){return `${date}|${type}|${no}`;}
   function slotLabel(type,no){return type==='clerk'?'Clerk':`คนเจาะ ${no}`;}
-  function statusText(status){return ({confirmed:'ยืนยันแล้ว',cancel_requested:'ขอยกเลิก — รออนุมัติ',cancelled:'ยกเลิกแล้ว',completed:'มาปฏิบัติงานแล้ว',no_show:'ไม่มาตามนัด'})[status]||status||'-';}
+  function statusText(status){return ({confirmed:'ยืนยันแล้ว',cancel_requested:'ขอยกเลิก — รออนุมัติ',cancelled:'ยกเลิกแล้ว',completed:'มาปฏิบัติงานแล้ว',no_show:'ไม่มาตามนัด (No Show)'})[status]||status||'-';}
   function statusClass(status){return ({confirmed:'green',cancel_requested:'orange',cancelled:'black',completed:'blue',no_show:'red'})[status]||'black';}
   function isAllowedUnit(value){return UNIT_OPTIONS.includes(String(value||'').trim());}
   function unitOptions(selected=''){
@@ -109,7 +109,7 @@
   const initial=S();
   if(initial){
     initial.donorHelperMonthV327=initial.donorHelperMonthV327||initial.donorHelperMonthV324||monthNow();
-    initial.donorHelperPayloadV327=initial.donorHelperPayloadV327||{rows:[],blocked_dates:[],my_duties:[],my_profile:null};
+    initial.donorHelperPayloadV327=initial.donorHelperPayloadV327||{rows:[],blocked_dates:[],my_duties:[],my_profile:null,contact:null};
     initial.donorHelperLoadedMonthV327=initial.donorHelperLoadedMonthV327||'';
     initial.donorHelperLoadingV327=false;
     initial.donorHelperErrorV327='';
@@ -129,17 +129,18 @@
         rows:Array.isArray(payload.rows)?payload.rows:[],
         blocked_dates:Array.isArray(payload.blocked_dates)?payload.blocked_dates:[],
         my_duties:Array.isArray(payload.my_duties)?payload.my_duties:[],
-        my_profile:payload.my_profile||null
+        my_profile:payload.my_profile||null,
+        contact:payload.contact||null
       };
       st.donorHelperLoadedMonthV327=key;
     }catch(error){
       console.warn(`[${VERSION}] load month failed`,error);
-      st.donorHelperPayloadV327={rows:[],blocked_dates:[],my_duties:[],my_profile:null};
+      st.donorHelperPayloadV327={rows:[],blocked_dates:[],my_duties:[],my_profile:null,contact:null};
       st.donorHelperLoadedMonthV327='';st.donorHelperErrorV327=errorText(error);
     }finally{st.donorHelperLoadingV327=false;if(st.page===PAGE_ID)rerender();}
   }
 
-  function payload(){return S()?.donorHelperPayloadV327||{rows:[],blocked_dates:[],my_duties:[],my_profile:null};}
+  function payload(){return S()?.donorHelperPayloadV327||{rows:[],blocked_dates:[],my_duties:[],my_profile:null,contact:null};}
   function rows(){return payload().rows||[];}
   function activeRows(){return rows().filter(row=>row.status!=='cancelled');}
   function activeMap(){const map=new Map();activeRows().forEach(row=>map.set(slotKey(dateKey(row.work_date),row.slot_type,Number(row.slot_no)),row));return map;}
@@ -147,6 +148,9 @@
   function dutyMap(){const map=new Map();(payload().my_duties||[]).forEach(row=>map.set(dateKey(row.work_date),Array.isArray(row.duty_codes)?row.duty_codes:[]));return map;}
   function myActiveOn(date){return activeRows().find(row=>row.is_mine&&dateKey(row.work_date)===date);}
   function rowById(id){return rows().find(row=>String(row.id)===String(id));}
+  function cancelHistoryFor(date,type,no){return rows().filter(row=>String(row.status||'')==='cancelled'&&dateKey(row.work_date)===date&&row.slot_type===type&&Number(row.slot_no)===Number(no)).sort((a,b)=>String(b.cancelled_at||b.updated_at||b.created_at||'').localeCompare(String(a.cancelled_at||a.updated_at||a.created_at||'')))[0]||null;}
+  function cancelHistoryHtml(row){if(!row)return'';return `<div class="donor-helper-slot-history"><b>เคยลงชื่อ:</b> ${esc(row.helper_name||'-')}<br><b>ยกเลิกโดย:</b> ${esc(row.cancelled_by_label||'หัวหน้าหน่วยเวชศาสตร์บริการโลหิต/อินชาร์จ')}<br><b>เหตุผล:</b> ${esc(row.cancel_reason||'-')}<br><b>วันที่-เวลา:</b> ${esc(thaiDateTime(row.cancelled_at||row.updated_at))}</div>`;}
+  function contactNotice(){const c=payload().contact||{};return `<div class="notice soft-notice donor-helper-contact-note"><b>ผู้ติดต่อกรณีขอยกเลิก:</b> ${c.incharge_label?`อินชาร์จเดือนนี้: ${esc(c.incharge_label)}`:'กรุณาแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต'}</div>`;}
 
   function emptyActions(date,type,no,isBlocked,myDuty){
     const isPast=date<today(),isOpen=today()>=openDateFor(date),own=myActiveOn(date);
@@ -167,6 +171,7 @@
       return `<div class="donor-helper-slot empty ${isBlocked?'holiday-closed':''}">
         <div class="donor-helper-slot-name">${esc(label)}</div>
         <div class="donor-helper-empty-text">${isBlocked?'ปิดรับลงชื่อ':myDuty?'วันนี้คุณอยู่เวร — ต้องขายเวรก่อน':'ยังว่าง'}</div>
+        ${cancelHistoryHtml(cancelHistoryFor(date,type,no))}
         ${emptyActions(date,type,no,isBlocked,myDuty)}
       </div>`;
     }
@@ -177,9 +182,9 @@
     }
     if(admin()){
       if(status==='cancel_requested'){
-        actions+=`<button class="tiny-btn danger" type="button" data-v327-status="${esc(row.id)}|cancelled">ยืนยันยกเลิก</button><button class="tiny-btn" type="button" data-v327-status="${esc(row.id)}|confirmed">ไม่อนุมัติการยกเลิก</button>`;
+        actions+=`<button class="tiny-btn danger" type="button" data-v327-status="${esc(row.id)}|cancelled">ยกเลิกตามคำขอ</button><button class="tiny-btn" type="button" data-v327-status="${esc(row.id)}|confirmed">ไม่อนุมัติการยกเลิก</button>`;
       }else if(status==='confirmed'){
-        actions+=`<button class="tiny-btn" type="button" data-v327-edit="${esc(row.id)}">แก้ข้อมูล</button><button class="tiny-btn" type="button" data-v327-status="${esc(row.id)}|completed">มาปฏิบัติงานแล้ว</button><button class="tiny-btn danger" type="button" data-v327-status="${esc(row.id)}|no_show">ไม่มาตามนัด</button><button class="tiny-btn danger-ghost" type="button" data-v327-status="${esc(row.id)}|cancelled">Admin ยกเลิก</button>`;
+        actions+=`<button class="tiny-btn" type="button" data-v327-edit="${esc(row.id)}">แก้ข้อมูล</button><button class="tiny-btn" type="button" data-v327-status="${esc(row.id)}|completed">มาปฏิบัติงานแล้ว</button><button class="tiny-btn danger" type="button" data-v327-status="${esc(row.id)}|no_show">ไม่มาตามนัด (No Show)</button><button class="tiny-btn danger-ghost" type="button" data-v327-status="${esc(row.id)}|cancelled">ยกเลิกตามคำขอ</button>`;
       }
     }
     return `<div class="donor-helper-slot occupied status-${esc(status)} ${mine?'mine':''}">
@@ -207,6 +212,7 @@
     const profile=payload().my_profile||{};
     return `<div class="donor-helper-page-v324 donor-helper-page-v327">
       <div class="card donor-helper-hero"><div><span class="donor-helper-kicker">ห้องบริจาคโลหิต • 09:00–17:00 น.</span><h3>ตารางผู้มาช่วย ${esc(monthLabel(month))}</h3><p>คนเจาะ 2 คน และ Clerk 1 คนต่อวัน • เปิดลงชื่อวันที่ 21 ของเดือนก่อนหน้า</p></div><div class="donor-helper-hero-actions"><a class="primary-btn donor-helper-link-btn" href="${esc(publicUrl())}" target="_blank" rel="noopener">เปิดหน้าลงชื่อคนนอกหน่วย</a><button class="ghost-btn" type="button" data-v327-copy-link>คัดลอกลิงก์</button></div></div>
+      ${contactNotice()}
       <div class="notice soft-notice donor-helper-ot-note"><b>คนในหน่วย:</b> กด “ลงชื่อของฉัน” ในช่องที่ว่าง ระบบเติมชื่อ เบอร์โทร และหน่วยเวชศาสตร์บริการโลหิตให้อัตโนมัติ หลังลงชื่อแล้วให้ขอ OT ที่ <b>ส่วนที่ 2</b> เหมือนเดิม ระบบนี้ไม่สร้าง OT อัตโนมัติ <button class="tiny-btn" type="button" data-v327-go-ot>ไปส่วนขอ OT</button></div>
       ${profile.full_name?`<div class="card donor-helper-my-profile"><div><span class="muted">ข้อมูลที่ใช้ลงชื่ออัตโนมัติ</span><b>${esc(profile.full_name)}</b></div><div><span class="muted">หน่วยงาน</span><b>${esc(profile.unit_name||INTERNAL_UNIT)}</b></div><div><span class="muted">เบอร์โทร</span><b>${esc(profile.phone||'ยังไม่มีในข้อมูลส่วนตัว')}</b></div></div>`:''}
       <div class="card donor-helper-toolbar"><label>เลือกเดือน <input id="donorHelperMonthInputV327" type="month" value="${esc(month)}"></label><div class="donor-helper-counts"><span class="badge blue">ลงชื่อแล้ว ${filled}/${openDates.length*3} ช่อง</span><span class="badge black">เปิดรับ ${openDates.length} วัน</span>${blocked.size?`<span class="badge orange">ปิดวันหยุด ${blocked.size} วัน</span>`:''}</div><button class="ghost-btn" type="button" data-v327-refresh>รีเฟรชรายชื่อ</button></div>
@@ -245,7 +251,7 @@
 
   function showCancelModal(id){
     const row=rowById(id);if(!row||!row.is_mine)return toast('ไม่พบสิทธิ์จัดการรายการนี้','error');
-    const html=`<h2>ขอยกเลิกการมาช่วย</h2><p class="muted">${esc(row.helper_name)} • ${esc(thaiDate(row.work_date))} • ${esc(slotLabel(row.slot_type,row.slot_no))}</p><form id="donorHelperSelfCancelFormV327" class="form-grid"><input type="hidden" name="signup_id" value="${esc(row.id)}"><label class="wide">เหตุผล <textarea name="reason" rows="3" minlength="3" required placeholder="ระบุเหตุผลเพื่อให้หน่วยงานจัดคนแทนได้"></textarea></label><label class="wide donor-helper-ack"><input type="checkbox" name="ack" required><span>รับทราบว่าต้องแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิตเพื่ออนุมัติ และชื่อจะยังคงอยู่จนกว่า Admin จะยืนยัน</span></label><div class="wide form-actions"><button class="ghost-btn" type="button" data-v327-close>กลับ</button><button class="danger-btn" type="submit">ส่งคำขอยกเลิก</button></div></form>`;
+    const html=`<h2>ขอยกเลิกการมาช่วย</h2><p class="muted">${esc(row.helper_name)} • ${esc(thaiDate(row.work_date))} • ${esc(slotLabel(row.slot_type,row.slot_no))}</p><form id="donorHelperSelfCancelFormV327" class="form-grid"><input type="hidden" name="signup_id" value="${esc(row.id)}"><label class="wide">เหตุผล <textarea name="reason" rows="3" minlength="3" required placeholder="ระบุเหตุผลเพื่อให้หน่วยงานจัดคนแทนได้"></textarea></label><label class="wide donor-helper-ack"><input type="checkbox" name="ack" required><span>รับทราบว่าต้องแจ้งอินชาร์จเดือนนี้หรือหัวหน้าหน่วยเวชศาสตร์บริการโลหิตเพื่ออนุมัติ และชื่อจะยังคงอยู่จนกว่า Admin จะยืนยัน</span></label><div class="wide form-actions"><button class="ghost-btn" type="button" data-v327-close>กลับ</button><button class="danger-btn" type="submit">ส่งคำขอยกเลิก</button></div></form>`;
     try{showModal(html,{small:true});}catch(_){toast('เปิดหน้าต่างขอยกเลิกไม่สำเร็จ','error');}
   }
 
@@ -261,10 +267,10 @@
   }
   async function confirmAction(message,title='ยืนยันรายการ'){try{if(typeof confirmDialog==='function')return await confirmDialog(message,title);}catch(_){}return window.confirm(message);}
   async function updateStatus(id,next){
-    if(!admin())return toast('เฉพาะ Admin เท่านั้น','error');const row=rowById(id);if(!row)return toast('ไม่พบรายการ','error');
-    const prompts={cancelled:`ยืนยันยกเลิกชื่อ ${row.helper_name} ใช่หรือไม่? ประวัติจะยังคงอยู่`,confirmed:`ไม่อนุมัติคำขอยกเลิกของ ${row.helper_name} และคงชื่อไว้ใช่หรือไม่?`,completed:`ยืนยันว่า ${row.helper_name} มาปฏิบัติงานแล้วใช่หรือไม่?`,no_show:`ยืนยันบันทึกว่า ${row.helper_name} ไม่มาตามนัดใช่หรือไม่?`};
+    const row=rowById(id);if(!row)return toast('ไม่พบรายการ','error');
+    const prompts={cancelled:`ยืนยัน “ยกเลิกตามคำขอ” ของ ${row.helper_name} ใช่หรือไม่? ประวัติจะยังคงอยู่`,confirmed:`ไม่อนุมัติคำขอยกเลิกของ ${row.helper_name} และคงชื่อไว้ใช่หรือไม่?`,completed:`ยืนยันว่า ${row.helper_name} มาปฏิบัติงานแล้วใช่หรือไม่?`,no_show:`ยืนยันบันทึกว่า ${row.helper_name} ไม่มาตามนัด (No Show) ใช่หรือไม่?`};
     if(!await confirmAction(prompts[next]||'ยืนยันเปลี่ยนสถานะหรือไม่?'))return;
-    let note=null;if(next==='cancelled'&&row.status!=='cancel_requested')note=window.prompt('เหตุผลที่ Admin ยกเลิก (ถ้ามี)','')||null;
+    let note=null;if(next==='cancelled')note=window.prompt('เหตุผลที่ยกเลิกตามคำขอ',row.cancel_reason||'')||row.cancel_reason||null;
     try{const result=await DB().rpc('admin_update_donor_helper_status_v324',{p_signup_id:id,p_status:next,p_note:note});if(result.error)throw result.error;await loadMonth(S().donorHelperMonthV327,{force:true});toast('บันทึกสถานะแล้ว');}catch(error){toast(errorText(error),'error');}
   }
   async function copyLink(){const link=publicUrl();try{await navigator.clipboard.writeText(link);toast('คัดลอกลิงก์แล้ว');}catch(_){window.prompt('คัดลอกลิงก์นี้',link);}}

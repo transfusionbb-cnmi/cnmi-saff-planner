@@ -76,3 +76,7 @@
   .donor-helper-page-v327 .donor-helper-my-profile{grid-template-columns:1fr}
   .donor-helper-confirm-profile>div{grid-template-columns:1fr;gap:2px}
 }
+
+/* V328 donor helper cancel clarity */
+.contact-card, .slot-cancel-history, .donor-helper-slot-history{margin-top:10px;padding:10px 12px;border:1px solid #fde68a;background:#fffbeb;border-radius:14px;color:#7c4a03;font-size:.92rem;line-height:1.55}
+.slot-cancel-history b,.donor-helper-slot-history b{color:#78350f}

@@ -16,6 +16,7 @@
   let client = null;
   let rows = [];
   let blockedDates = [];
+  let contactInfo = null;
   let currentMonth = defaultMonth();
   let loading = false;
 
@@ -39,6 +40,11 @@
     const d = new Date(`${String(value).slice(0,10)}T12:00:00`);
     return Number.isNaN(d.getTime()) ? String(value || '-') : d.toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric' });
   }
+  function thaiDateTime(value){
+    if(!value) return '-';
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? String(value || '-') : d.toLocaleString('th-TH', { dateStyle:'medium', timeStyle:'short' });
+  }
   function monthLabel(month){
     const [y,m] = String(month).split('-').map(Number);
     const d = new Date(y,m-1,1);
@@ -61,8 +67,8 @@
   }
   function slotKey(date,type,no){ return `${date}|${type}|${no}`; }
   function slotLabel(type,no){ return type==='clerk' ? 'Clerk' : `คนเจาะ ${no}`; }
-  function statusText(status){ return ({confirmed:'ยืนยันแล้ว',cancel_requested:'ขอยกเลิก — รอหัวหน้าหน่วยอนุมัติ',completed:'มาปฏิบัติงานแล้ว',no_show:'ไม่มาตามนัด'})[status]||status||'-'; }
-  function statusBadge(status){ return ({confirmed:'green',cancel_requested:'orange',completed:'blue',no_show:'red'})[status]||'gray'; }
+  function statusText(status){ return ({confirmed:'ยืนยันแล้ว',cancel_requested:'ขอยกเลิก — รอหัวหน้าหน่วยอนุมัติ',cancelled:'ยกเลิกแล้ว',completed:'มาปฏิบัติงานแล้ว',no_show:'ไม่มาตามนัด (No Show)'})[status]||status||'-'; }
+  function statusBadge(status){ return ({confirmed:'green',cancel_requested:'orange',cancelled:'gray',completed:'blue',no_show:'red'})[status]||'gray'; }
   function configReady(){ return !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && window.supabase); }
   function messageFromError(error){
     const raw=String(error?.message||error||'ดำเนินการไม่สำเร็จ');
@@ -92,10 +98,19 @@
     if(!text){node.classList.add('hidden');node.textContent='';return;}
     node.textContent=text;node.classList.remove('hidden');
   }
+  function activeRows(){ return rows.filter(row=>String(row.status||'') !== 'cancelled'); }
   function activeMap(){
     const map=new Map();
-    rows.forEach(row=>map.set(slotKey(String(row.work_date).slice(0,10),row.slot_type,Number(row.slot_no)),row));
+    activeRows().forEach(row=>map.set(slotKey(String(row.work_date).slice(0,10),row.slot_type,Number(row.slot_no)),row));
     return map;
+  }
+  function cancelHistoryFor(date,type,no){
+    return rows.filter(row=>String(row.status||'')==='cancelled' && String(row.work_date).slice(0,10)===date && row.slot_type===type && Number(row.slot_no)===Number(no))
+      .sort((a,b)=>String(b.cancelled_at||b.updated_at||b.created_at||'').localeCompare(String(a.cancelled_at||a.updated_at||a.created_at||'')))[0] || null;
+  }
+  function contactHtml(){
+    const label=contactInfo&&contactInfo.incharge_label;
+    return `<div class="contact-card"><b>ผู้ติดต่อกรณีขอยกเลิก</b><br>${label?`อินชาร์จเดือนนี้: ${esc(label)}`:'กรุณาแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต'}</div>`;
   }
   function blockedMap(){
     const map=new Map();
@@ -114,9 +129,11 @@
       let reason='';
       if(past) reason='เลยวันทำงานแล้ว';
       else if(!open) reason=`เปิดลงชื่อ ${thaiDate(openDateFor(date))}`;
+      const history=cancelHistoryFor(date,type,no);
       return `<div class="slot-card empty">
         <div class="slot-label">${esc(label)}</div>
         <div class="slot-unit">${reason||'ยังว่าง'}</div>
+        ${history?`<div class="slot-cancel-history"><b>เคยลงชื่อ:</b> ${esc(history.helper_name||'-')}<br><b>ยกเลิกโดย:</b> ${esc(history.cancelled_by_label||'หัวหน้าหน่วยเวชศาสตร์บริการโลหิต/อินชาร์จ')}<br><b>เหตุผล:</b> ${esc(history.cancel_reason||'-')}<br><b>วันที่-เวลา:</b> ${esc(thaiDateTime(history.cancelled_at||history.updated_at))}</div>`:''}
         <div class="slot-actions">${!past&&open?`<button class="primary-btn" type="button" data-signup="${esc(`${date}|${type}|${no}`)}">ลงชื่อ</button>`:''}</div>
       </div>`;
     }
@@ -126,7 +143,7 @@
       <div class="slot-name">${esc(row.helper_name||'-')}</div>
       <div class="slot-unit">${esc(row.unit_name||'-')}</div>
       ${mine?'<span class="my-item">รายการของฉันบนอุปกรณ์นี้</span>':''}
-      ${row.status==='cancel_requested'?'<div class="slot-note">ชื่อยังคงอยู่จนกว่าหัวหน้าหน่วย/Admin จะยืนยันการยกเลิก</div>':''}
+      ${row.status==='cancel_requested'?'<div class="slot-note">ชื่อยังคงอยู่จนกว่าหัวหน้าหน่วย/อินชาร์จจะยืนยันการยกเลิก</div>':''}
       <div class="slot-actions">${mine&&row.status==='confirmed'&&date>=todayKey()?`<button class="danger-btn" type="button" data-cancel="${esc(row.id)}">ขอยกเลิก</button>`:''}</div>
     </div>`;
   }
@@ -136,6 +153,9 @@
     let filled=0;
     openDates.forEach(date=>[['phlebotomist',1],['phlebotomist',2],['clerk',1]].forEach(([type,no])=>{if(map.has(slotKey(date,type,no)))filled++;}));
     $('summaryBadges').innerHTML=`<span class="badge blue">${esc(monthLabel(currentMonth))}</span><span class="badge green">ลงชื่อแล้ว ${filled}/${openDates.length*3} ช่อง</span>${blocked.size?`<span class="badge red">ปิดวันหยุด ${blocked.size} วัน</span>`:''}`;
+    const existing=document.getElementById('contactCardV328');
+    if(existing) existing.outerHTML=contactHtml();
+    else $('summaryBadges').insertAdjacentHTML('afterend', `<div id="contactCardV328">${contactHtml()}</div>`);
     $('scheduleGrid').innerHTML=dates.map(date=>{
       const d=new Date(`${date}T12:00:00`), holiday=blocked.get(date);
       return `<article class="day-card ${holiday?'day-card-closed':''}">
@@ -158,9 +178,10 @@
       const payload=typeof result.data==='string'?JSON.parse(result.data||'{}'):(result.data||{});
       rows=Array.isArray(payload.rows)?payload.rows:[];
       blockedDates=Array.isArray(payload.blocked_dates)?payload.blocked_dates:[];
+      contactInfo=payload.contact||null;
       render();
     }catch(error){
-      console.warn(`[${VERSION}] load failed`,error);rows=[];blockedDates=[];render();setError(messageFromError(error));
+      console.warn(`[${VERSION}] load failed`,error);rows=[];blockedDates=[];contactInfo=null;render();setError(messageFromError(error));
     }finally{loading=false;$('loadingMessage').classList.add('hidden');}
   }
   function showSignup(payload){
@@ -172,7 +193,7 @@
         <label>ชื่อ-สกุล <input name="helper_name" required maxlength="120" autocomplete="name"></label>
         <label>หน่วยงาน <select class="donor-helper-unit-select" name="unit_name" required>${unitSelectOptions()}</select></label>
         <label class="wide">เบอร์โทร (ถ้ามี) <input name="phone" inputmode="tel" maxlength="30" autocomplete="tel"></label>
-        <label class="wide ack-box"><input type="checkbox" name="ack" required><span>ยืนยันว่าจะมาช่วยตามวันที่เลือก และรับทราบว่าหากต้องยกเลิกต้องกดขอยกเลิก ระบุเหตุผล และแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต เพื่ออนุมัติการยกเลิก ชื่อจะไม่หายจนกว่า Admin จะยืนยัน</span></label>
+        <label class="wide ack-box"><input type="checkbox" name="ack" required><span>ยืนยันว่าจะมาช่วยตามวันที่เลือก และรับทราบว่าหากต้องยกเลิกต้องกดขอยกเลิก ระบุเหตุผล และแจ้งอินชาร์จเดือนนี้หรือหัวหน้าหน่วยเวชศาสตร์บริการโลหิต เพื่ออนุมัติการยกเลิก ชื่อจะไม่หายจนกว่า Admin จะยืนยัน</span></label>
         <div class="form-actions"><button class="ghost-btn" type="button" data-close-modal>ยกเลิก</button><button class="primary-btn" type="submit">ยืนยันลงชื่อ</button></div>
       </form>`);
   }
@@ -187,7 +208,7 @@
       <form id="cancelForm" class="form-grid">
         <input type="hidden" name="signup_id" value="${esc(row.id)}">
         <label class="wide">เหตุผล <textarea name="reason" rows="3" minlength="3" required placeholder="ระบุเหตุผลเพื่อให้หน่วยงานจัดคนแทนได้"></textarea></label>
-        <label class="wide ack-box"><input type="checkbox" name="ack" required><span>รับทราบว่าต้องแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต เพื่ออนุมัติการยกเลิก และชื่อจะยังคงอยู่จนกว่า Admin จะยืนยัน</span></label>
+        <label class="wide ack-box"><input type="checkbox" name="ack" required><span>รับทราบว่าต้องแจ้งอินชาร์จเดือนนี้หรือหัวหน้าหน่วยเวชศาสตร์บริการโลหิต เพื่ออนุมัติการยกเลิก และชื่อจะยังคงอยู่จนกว่า Admin จะยืนยัน</span></label>
         <div class="form-actions"><button class="ghost-btn" type="button" data-close-modal>กลับ</button><button class="danger-btn" type="submit">ส่งคำขอยกเลิก</button></div>
       </form>`);
   }
