@@ -3778,8 +3778,3 @@ thead .v179-sticky-first-col {
     --v268-day-col-width: 92px;
   }
 }
-
-/* V324 donor helper cancel clarity */
-.v324-donor-contact{margin:12px 16px;padding:12px 14px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;border-radius:16px;font-size:15px;line-height:1.45}
-.v324-cancel-history{margin-top:10px;padding:10px 12px;border:1px dashed #f59e0b;background:#fffbeb;color:#7c2d12;border-radius:14px;font-size:14px;line-height:1.45}
-.v324-cancel-history div+div{margin-top:4px}
