@@ -232,25 +232,58 @@
   function findPositionByCode(code){
     const value=String(code||'').trim();
     const st=appState();
-    const lists=[st?.positionMasters,st?.dailyPositionMasters,st?.positions];
-    for(const list of lists){
+    if(!value) return {};
+
+    const sameCode=row=>String(row?.code || row?.position_code || '').trim()===value;
+    const hasUsefulDetail=row=>!!String(
+      row?.job_desc || row?.description || row?.main_rule || row?.break_time || row?.zone || ''
+    ).trim();
+    const mergeUseful=(fallback,preferred)=>{
+      const result={...(fallback||{})};
+      Object.entries(preferred||{}).forEach(([key,val])=>{
+        if(val!==null && val!==undefined && String(val).trim()!=='') result[key]=val;
+      });
+      return result;
+    };
+
+    /* Monthly cells can point to generated slot codes such as BB-Manual 3.
+       daily_positions rows only contain the assignment and must not hide the
+       slot template that contains zone, break, rule and job description. */
+    let master=null;
+    for(const list of [st?.positionMasters,st?.dailyPositionMasters]){
       if(!Array.isArray(list)) continue;
-      const found=list.find(row=>String(row?.code || row?.position_code || '').trim()===value);
-      if(found) return found;
+      const found=list.find(sameCode);
+      if(found){
+        master=master || found;
+        if(hasUsefulDetail(found)) break;
+      }
     }
+
+    let template=null;
+    try{
+      const monthKey=String(st?.positionMonthKey || st?.positionMonthViewKey || st?.monthKey || '').slice(0,7);
+      const referenceDate=/^\d{4}-\d{2}$/.test(monthKey) ? `${monthKey}-01` : undefined;
+      const fn=window.positionTemplateByCode;
+      if(typeof fn==='function') template=fn(value,referenceDate)||null;
+    }catch(_){}
+
+    if(master || template) return mergeUseful(template,master);
+
     try{
       const fn=window.positionByCode;
       if(typeof fn==='function'){
         const found=fn(value);
-        if(found) return found;
+        if(found && hasUsefulDetail(found)) return found;
       }
     }catch(_){}
     try{
       const list=window.DEFAULT_DAILY_POSITIONS || (typeof DEFAULT_DAILY_POSITIONS!=='undefined' ? DEFAULT_DAILY_POSITIONS : []);
-      const found=(Array.isArray(list)?list:[]).find(row=>String(row?.code||'').trim()===value);
+      const found=(Array.isArray(list)?list:[]).find(sameCode);
       if(found) return found;
     }catch(_){}
-    return {};
+
+    const assignment=Array.isArray(st?.positions) ? st.positions.find(sameCode) : null;
+    return assignment || {};
   }
 
   function openPosition(button){
