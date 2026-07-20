@@ -5,7 +5,7 @@
 */
 (function(){
   'use strict';
-  const VERSION_V292 = 'V295_SCHEDULE_IMAGE_EXPORT_BRANDED_HEADER';
+  const VERSION_V292 = 'V341_SCHEDULE_IMAGE_FULL_MONTH_WIDTH_FIX';
 
   function safeHtml(v){
     try { return escapeHtml(v == null ? '' : String(v)); }
@@ -109,16 +109,19 @@
     sandbox.style.left = '-100000px';
     sandbox.style.top = '0';
     sandbox.style.zIndex = '-1';
-    sandbox.style.padding = '24px';
+    sandbox.style.padding = '0';
     sandbox.style.background = '#ffffff';
     sandbox.style.width = 'max-content';
     sandbox.style.maxWidth = 'none';
+    sandbox.style.overflow = 'visible';
 
     const holder = document.createElement('div');
     holder.innerHTML = buildMonthlyGridMarkup().trim();
     const clone = holder.firstElementChild;
     if (!clone) throw new Error('ไม่พบตารางทั้งเดือนที่ต้องการ Export');
 
+    clone.setAttribute('data-v341-export-target', 'true');
+    clone.classList.add('v341-export-fixed-grid');
     clone.style.background = '#ffffff';
     clone.style.color = '#1f2937';
     clone.style.width = 'max-content';
@@ -132,12 +135,78 @@
     document.body.appendChild(sandbox);
     return { sandbox, target: clone };
   }
+  function nextTwoFrames(){
+    return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }
+  function expectedDaysInActiveMonth(){
+    const [y, m] = String(activeScheduleMonth() || '').split('-').map(Number);
+    if (!y || !m) return 31;
+    return new Date(y, m, 0).getDate();
+  }
+  async function settleFullMonthWidth(target){
+    try { if (document.fonts?.ready) await document.fonts.ready; } catch (_) {}
+    await nextTwoFrames();
+
+    const table = target.querySelector('#scheduleTable') || target.querySelector('table');
+    if (!table) throw new Error('ไม่พบตารางเวรสำหรับ Export');
+    const headCells = Array.from(table.querySelectorAll('thead tr:first-child > th'));
+    const expectedDays = expectedDaysInActiveMonth();
+    if (headCells.length < expectedDays + 1) {
+      throw new Error(`ตารางเดือนนี้สร้างได้เพียง ${Math.max(0, headCells.length - 1)} วัน จาก ${expectedDays} วัน กรุณารีเฟรชแล้ว Export ใหม่`);
+    }
+
+    const dayWidth = 52;
+    const firstCell = headCells[0];
+    const firstWidth = Math.max(74, Math.ceil(firstCell?.scrollWidth || firstCell?.getBoundingClientRect?.().width || 74));
+    const rows = Array.from(table.rows || []);
+    rows.forEach(row => {
+      Array.from(row.cells || []).forEach((cell, index) => {
+        const px = index === 0 ? firstWidth : dayWidth;
+        cell.style.setProperty('width', `${px}px`, 'important');
+        cell.style.setProperty('min-width', `${px}px`, 'important');
+        cell.style.setProperty('max-width', `${px}px`, 'important');
+        cell.style.setProperty('box-sizing', 'border-box', 'important');
+      });
+    });
+
+    const tableWidth = firstWidth + (expectedDays * dayWidth) + 2;
+    table.style.setProperty('width', `${tableWidth}px`, 'important');
+    table.style.setProperty('min-width', `${tableWidth}px`, 'important');
+    table.style.setProperty('max-width', `${tableWidth}px`, 'important');
+    table.style.setProperty('table-layout', 'fixed', 'important');
+
+    target.querySelectorAll('.table-wrap,.clean-grid-wrap,.schedule-export-grid-only').forEach(el => {
+      el.style.setProperty('width', `${tableWidth}px`, 'important');
+      el.style.setProperty('min-width', `${tableWidth}px`, 'important');
+      el.style.setProperty('max-width', `${tableWidth}px`, 'important');
+      el.style.setProperty('overflow', 'visible', 'important');
+    });
+    target.style.setProperty('width', `${tableWidth}px`, 'important');
+    target.style.setProperty('min-width', `${tableWidth}px`, 'important');
+    target.style.setProperty('max-width', `${tableWidth}px`, 'important');
+    const brand = target.querySelector('.schedule-brand-header');
+    if (brand) {
+      brand.style.setProperty('width', `${tableWidth}px`, 'important');
+      brand.style.setProperty('box-sizing', 'border-box', 'important');
+    }
+
+    await nextTwoFrames();
+    return {
+      tableWidth,
+      captureWidth: Math.max(tableWidth + 4, target.scrollWidth, target.offsetWidth),
+      captureHeight: Math.max(target.scrollHeight, target.offsetHeight, 600)
+    };
+  }
   async function exportTableToImage(){
+    let sandbox = null;
     try {
       const html2canvas = await ensureHtml2Canvas();
-      const { sandbox, target } = buildCaptureNode();
-      const width = Math.max(target.scrollWidth, target.offsetWidth, 1200);
-      const height = Math.max(target.scrollHeight, target.offsetHeight, 600);
+      const built = buildCaptureNode();
+      sandbox = built.sandbox;
+      const target = built.target;
+      const layout = await settleFullMonthWidth(target);
+      const width = Math.ceil(layout.captureWidth);
+      const height = Math.ceil(layout.captureHeight);
       const canvas = await html2canvas(target, {
         backgroundColor: '#ffffff',
         scale: 2,
@@ -145,24 +214,42 @@
         logging: false,
         width,
         height,
-        windowWidth: width,
-        windowHeight: height,
+        windowWidth: Math.max(width, 1600),
+        windowHeight: Math.max(height, 900),
         scrollX: 0,
-        scrollY: 0
+        scrollY: 0,
+        onclone: clonedDoc => {
+          try {
+            const clonedTarget = clonedDoc.querySelector('[data-v341-export-target="true"]');
+            if (!clonedTarget) return;
+            clonedTarget.style.setProperty('width', `${layout.tableWidth}px`, 'important');
+            clonedTarget.style.setProperty('min-width', `${layout.tableWidth}px`, 'important');
+            clonedTarget.style.setProperty('max-width', `${layout.tableWidth}px`, 'important');
+            clonedTarget.style.setProperty('overflow', 'visible', 'important');
+            clonedTarget.querySelectorAll('.table-wrap,.clean-grid-wrap,.schedule-export-grid-only,table').forEach(el => {
+              el.style.setProperty('width', `${layout.tableWidth}px`, 'important');
+              el.style.setProperty('min-width', `${layout.tableWidth}px`, 'important');
+              el.style.setProperty('max-width', `${layout.tableWidth}px`, 'important');
+              el.style.setProperty('overflow', 'visible', 'important');
+            });
+          } catch (_) {}
+        }
       });
       sandbox.remove();
+      sandbox = null;
       const link = document.createElement('a');
       link.href = canvas.toDataURL('image/png');
       link.download = fileName();
       document.body.appendChild(link);
       link.click();
       link.remove();
-      toast('Export รูปภาพพร้อมหัวข้อเดือนและชื่อหน่วยงานแล้ว');
+      toast('Export รูปภาพครบทุกวันของเดือนแล้ว');
     } catch (err) {
       console.error(VERSION_V292, err);
       try {
-        const sandbox = document.querySelector('[data-v292-export-sandbox="true"]');
-        if (sandbox) sandbox.remove();
+        if (sandbox?.isConnected) sandbox.remove();
+        const oldSandbox = document.querySelector('[data-v292-export-sandbox="true"]');
+        if (oldSandbox) oldSandbox.remove();
       } catch(_) {}
       toast(err?.message || 'Export รูปภาพไม่สำเร็จ', 'error');
     }
@@ -242,6 +329,10 @@
       .schedule-export-clone table{width:max-content !important;max-width:none !important;table-layout:auto !important;}
       .schedule-export-clone .clean-sticky-col{position:static !important;left:auto !important;z-index:auto !important;}
       .schedule-export-clone .clean-staff-cell button{pointer-events:none !important;}
+      .v341-export-fixed-grid .clean-schedule-grid th:not(.clean-sticky-col),
+      .v341-export-fixed-grid .clean-schedule-grid td{width:52px!important;min-width:52px!important;max-width:52px!important;box-sizing:border-box!important;}
+      .v341-export-fixed-grid .clean-schedule-grid .clean-sticky-col{position:static!important;left:auto!important;z-index:auto!important;white-space:nowrap!important;}
+      .v341-export-fixed-grid .schedule-brand-header{margin-left:0!important;margin-right:0!important;}
       @media (max-width: 700px){
         .schedule-brand-header{padding:10px;gap:10px;}
         .schedule-brand-logo-circle{width:62px;height:62px;}
