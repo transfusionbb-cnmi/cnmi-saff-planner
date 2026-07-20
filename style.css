@@ -3778,3 +3778,20 @@ thead .v179-sticky-first-col {
     --v268-day-col-width: 92px;
   }
 }
+
+
+/* V342: external app switcher — Inventory */
+.inventory-app-link{
+  display:flex;align-items:center;gap:10px;text-decoration:none;color:#0f4f4a;
+  background:linear-gradient(135deg,#e5f7f4,#ffffff);border:1px solid #b9e5df;
+  border-radius:16px;padding:10px 12px;min-height:50px;box-shadow:0 6px 16px rgba(15,118,110,.08);
+}
+.inventory-app-link:hover{background:#fff;transform:translateY(-1px)}
+.inventory-app-link-icon{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:#0f766e;color:#fff;font-size:18px;flex:0 0 auto}
+.inventory-app-link span:last-child{display:grid;line-height:1.18}
+.inventory-app-link small{font-size:11px;color:#5a7471;margin-top:3px;font-weight:600}
+@media(min-width:821px){
+  .sidebar.collapsed .inventory-app-link span:last-child{display:none}
+  .sidebar.collapsed .inventory-app-link{justify-content:center;padding:9px}
+}
+@media print{.inventory-app-link{display:none!important}}
