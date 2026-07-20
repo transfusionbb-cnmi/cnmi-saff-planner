@@ -1,7 +1,7 @@
 /* CNMI Donor Helper Public V327 — 7-unit dropdown + holiday guard */
 (function(){
   'use strict';
-  const VERSION = 'V329_DONOR_HELPER_CANCEL_CONTACT_TOP';
+  const VERSION = 'V337_DONOR_HELPER_BANGKOK_MIDNIGHT';
   const CFG = window.CNMI_CONFIG || {};
   const STORAGE_KEY = 'cnmi_donor_helper_manage_tokens_v324';
   const UNIT_OPTIONS = [
@@ -30,11 +30,24 @@
   }
   function pad(value){ return String(value).padStart(2,'0'); }
   function dateKey(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
-  function todayKey(){ return dateKey(new Date()); }
+  function bangkokDateParts(value=new Date()){
+    try{
+      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(value);
+      const map=Object.fromEntries(parts.map(part=>[part.type,part.value]));
+      return {year:Number(map.year),month:Number(map.month),day:Number(map.day)};
+    }catch(_){
+      return {year:value.getFullYear(),month:value.getMonth()+1,day:value.getDate()};
+    }
+  }
+  function todayKey(){
+    const now=bangkokDateParts();
+    return `${now.year}-${pad(now.month)}-${pad(now.day)}`;
+  }
   function defaultMonth(){
-    const now = new Date();
-    if (now.getDate() >= 21) now.setMonth(now.getMonth()+1, 1);
-    return `${now.getFullYear()}-${pad(now.getMonth()+1)}`;
+    const now=bangkokDateParts();
+    let year=now.year,month=now.month;
+    if(now.day>=21){month+=1;if(month>12){month=1;year+=1;}}
+    return `${year}-${pad(month)}`;
   }
   function thaiDate(value){
     const d = new Date(`${String(value).slice(0,10)}T12:00:00`);

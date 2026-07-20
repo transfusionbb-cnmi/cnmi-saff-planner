@@ -6,7 +6,7 @@
 */
 (function(){
   'use strict';
-  const VERSION = 'V327_DONOR_HELPER_INTERNAL_BOOKING';
+  const VERSION = 'V337_DONOR_HELPER_INTERNAL_BOOKING_BANGKOK_TIME';
   const PAGE_ID = 'donorHelpers';
   const INTERNAL_UNIT = 'หน่วยเวชศาสตร์บริการโลหิต';
   const UNIT_OPTIONS = [
@@ -38,7 +38,16 @@
       if (typeof fn === 'function') fn();
     } catch (error) { console.warn(`[${VERSION}] render failed`, error); }
   }
-  function monthNow(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+  function bangkokDateParts(value=new Date()){
+    try{
+      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(value);
+      const map=Object.fromEntries(parts.map(part=>[part.type,part.value]));
+      return {year:Number(map.year),month:Number(map.month),day:Number(map.day)};
+    }catch(_){
+      return {year:value.getFullYear(),month:value.getMonth()+1,day:value.getDate()};
+    }
+  }
+  function monthNow(){ const d=bangkokDateParts(); return `${d.year}-${String(d.month).padStart(2,'0')}`; }
   function dateKey(value){
     if (!value) return '';
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0,10);
@@ -46,7 +55,7 @@
     if(Number.isNaN(d.getTime())) return String(value||'').slice(0,10);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
-  function today(){ return dateKey(new Date()); }
+  function today(){ const d=bangkokDateParts(); return `${d.year}-${String(d.month).padStart(2,'0')}-${String(d.day).padStart(2,'0')}`; }
   function weekendDates(month){
     const [y,m]=String(month||monthNow()).split('-').map(Number); if(!y||!m)return[];
     const last=new Date(y,m,0).getDate(),out=[];
