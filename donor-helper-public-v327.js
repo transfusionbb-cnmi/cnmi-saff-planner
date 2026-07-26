@@ -1,7 +1,7 @@
-/* CNMI Donor Helper Public V327 — 7-unit dropdown + holiday guard */
+/* CNMI Donor Helper Public V345 — LINE external-browser guard + V343 contact memory */
 (function(){
   'use strict';
-  const VERSION = 'V343_DONOR_HELPER_FULLNAME_PHONE_MEMORY';
+  const VERSION = 'V345_DONOR_HELPER_LINE_EXTERNAL_BROWSER_GUARD';
   const CFG = window.CNMI_CONFIG || {};
   const STORAGE_KEY = 'cnmi_donor_helper_manage_tokens_v324';
   const PROFILE_STORAGE_KEY = 'cnmi_donor_helper_profiles_v343';
@@ -21,6 +21,7 @@
   let currentMonth = defaultMonth();
   let loading = false;
   let rememberedProfiles = [];
+  const IS_LINE_BROWSER = /(?:^|[\s;])Line\/|LineBrowser|LIFF/i.test(String(navigator.userAgent || ''));
 
   const $ = id => document.getElementById(id);
   function esc(value){ return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
@@ -161,6 +162,37 @@
     node.textContent=text; node.classList.remove('hidden');
     clearTimeout(showToast.timer); showToast.timer=setTimeout(()=>node.classList.add('hidden'),2800);
   }
+  function externalBrowserUrl(){
+    const url=new URL(window.location.href);
+    url.hash='';
+    url.searchParams.set('openExternalBrowser','1');
+    url.searchParams.delete('openInAppBrowser');
+    return url.toString();
+  }
+  function showLineBrowserWarning(){
+    const warning=$('lineBrowserWarning');
+    if(warning)warning.classList.toggle('hidden',!IS_LINE_BROWSER);
+    document.documentElement.classList.toggle('line-in-app-browser',IS_LINE_BROWSER);
+  }
+  function openExternalBrowser(){
+    window.location.href=externalBrowserUrl();
+  }
+  async function copyExternalLink(){
+    const url=externalBrowserUrl();
+    try{
+      await navigator.clipboard.writeText(url);
+      showToast('คัดลอกลิงก์แล้ว ให้วางใน Chrome หรือ Safari');
+    }catch(_){
+      window.prompt('คัดลอกลิงก์นี้ แล้ววางใน Chrome หรือ Safari',url);
+    }
+  }
+  function blockLineSignup(){
+    if(!IS_LINE_BROWSER)return false;
+    showLineBrowserWarning();
+    $('lineBrowserWarning')?.scrollIntoView({behavior:'smooth',block:'start'});
+    showToast('กรุณาเปิดใน Chrome หรือ Safari ก่อนลงชื่อ');
+    return true;
+  }
   function showModal(html){ $('modalBody').innerHTML=html; $('helperModal').classList.remove('hidden'); }
   function closeModal(){ $('helperModal').classList.add('hidden'); $('modalBody').innerHTML=''; }
   function setError(text=''){
@@ -210,7 +242,7 @@
         <div class="slot-label">${esc(label)}</div>
         <div class="slot-unit">${reason||'ยังว่าง'}</div>
         ${history?`<div class="slot-cancel-history"><b>เคยลงชื่อ:</b> ${esc(history.helper_name||'-')}<br><b>ยกเลิกโดย:</b> ${esc(history.cancelled_by_label||'หัวหน้าหน่วยเวชศาสตร์บริการโลหิต/อินชาร์จ')}<br><b>เหตุผล:</b> ${esc(history.cancel_reason||'-')}<br><b>วันที่-เวลา:</b> ${esc(thaiDateTime(history.cancelled_at||history.updated_at))}</div>`:''}
-        <div class="slot-actions">${!past&&open?`<button class="primary-btn" type="button" data-signup="${esc(`${date}|${type}|${no}`)}">ลงชื่อ</button>`:''}</div>
+        <div class="slot-actions">${!past&&open?(IS_LINE_BROWSER?`<button class="line-browser-signup-blocked" type="button" data-open-external-browser>เปิดใน Chrome/Safari เพื่อลงชื่อ</button>`:`<button class="primary-btn" type="button" data-signup="${esc(`${date}|${type}|${no}`)}">ลงชื่อ</button>`):''}</div>
       </div>`;
     }
     const mine=isMine(row.id);
@@ -261,6 +293,7 @@
     }finally{loading=false;$('loadingMessage').classList.add('hidden');}
   }
   function showSignup(payload){
+    if(blockLineSignup())return;
     const [date,type,noRaw]=String(payload).split('|');const no=Number(noRaw);
     showModal(`<h2>ลงชื่อ ${esc(slotLabel(type,no))}</h2>
       <p>${esc(thaiDate(date))} • 09:00–17:00 น.</p>
@@ -291,6 +324,7 @@
       </form>`);
   }
   async function submitSignup(form){
+    if(blockLineSignup())return;
     const fd=new FormData(form);const button=form.querySelector('button[type="submit"]');
     const helperName=normalizeFullName(fd.get('helper_name'));
     const unitName=String(fd.get('unit_name')||'').trim();
@@ -309,7 +343,8 @@
       const saved=Array.isArray(result.data)?result.data[0]:result.data;
       if(saved?.signup_id&&saved?.manage_token)saveToken(saved.signup_id,saved.manage_token);
       rememberProfile({helper_name:helperName,unit_name:unitName,phone,last_used_at:new Date().toISOString()});
-      closeModal();await loadMonth();showToast('ลงชื่อเรียบร้อยแล้ว');
+      closeModal();await loadMonth();
+      showModal(`<h2>ลงชื่อเรียบร้อยแล้ว</h2><div class="signup-success-reminder"><b>กรุณาจำเบราว์เซอร์ที่ใช้ลงชื่อ</b><p>เมื่อต้องการขอยกเลิก กรุณากลับมาเปิดด้วยโทรศัพท์และเบราว์เซอร์เดิม</p></div><div class="form-actions"><button class="primary-btn" type="button" data-close-modal>รับทราบ</button></div>`);
     }catch(error){showToast(messageFromError(error));button.disabled=false;button.textContent='ยืนยันลงชื่อ';}
   }
   async function submitCancel(form){
@@ -333,14 +368,17 @@
     $('helperMonth').value=currentMonth;
     $('helperMonth').addEventListener('change',()=>{currentMonth=$('helperMonth').value||defaultMonth();loadMonth();});
     $('refreshBtn').addEventListener('click',loadMonth);
+    $('openExternalBrowserBtn')?.addEventListener('click',openExternalBrowser);
+    $('copyExternalLinkBtn')?.addEventListener('click',copyExternalLink);
     $('modalClose').addEventListener('click',closeModal);
     $('helperModal').addEventListener('click',e=>{if(e.target.id==='helperModal')closeModal();});
     document.addEventListener('click',e=>{
-      const target=e.target.closest('[data-signup],[data-cancel],[data-close-modal],[data-copy-group]');if(!target)return;
+      const target=e.target.closest('[data-signup],[data-cancel],[data-close-modal],[data-copy-group],[data-open-external-browser]');if(!target)return;
       if(target.hasAttribute('data-signup'))showSignup(target.getAttribute('data-signup'));
       else if(target.hasAttribute('data-cancel'))showCancel(target.getAttribute('data-cancel'));
       else if(target.hasAttribute('data-close-modal'))closeModal();
       else if(target.hasAttribute('data-copy-group'))copyGroup();
+      else if(target.hasAttribute('data-open-external-browser'))openExternalBrowser();
     });
     document.addEventListener('change',e=>{
       if(e.target?.id!=='rememberedProfileSelect')return;
@@ -361,6 +399,7 @@
   }
   function init(){
     bind();
+    showLineBrowserWarning();
     if(!configReady()){
       $('loadingMessage').classList.add('hidden');
       setError('ยังไม่ได้ตั้งค่า config.js หรือโหลด Supabase ไม่สำเร็จ กรุณาแจ้งผู้ดูแลระบบ');

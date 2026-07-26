@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="donor-helper-public-v327.css?v=343">
+  <link rel="stylesheet" href="donor-helper-public-v327.css?v=345">
 </head>
 <body>
   <header class="public-header">
@@ -23,6 +23,19 @@
   </header>
 
   <main class="public-shell">
+    <section id="lineBrowserWarning" class="line-browser-warning hidden" role="alert" aria-live="assertive">
+      <div class="line-browser-warning-icon" aria-hidden="true">!</div>
+      <div class="line-browser-warning-content">
+        <strong>ไม่รองรับการลงชื่อผ่านเบราว์เซอร์ใน LINE</strong>
+        <p>ขณะนี้เปิดผ่าน LINE กรุณาเปิดใน Chrome หรือ Safari ก่อนลงชื่อ เพื่อให้ระบบจำรายการและสามารถขอยกเลิกภายหลังได้</p>
+        <div class="line-browser-warning-actions">
+          <button id="openExternalBrowserBtn" class="primary-btn" type="button">เปิดในเบราว์เซอร์</button>
+          <button id="copyExternalLinkBtn" class="ghost-btn" type="button">คัดลอกลิงก์</button>
+        </div>
+        <small>ระบบจะบล็อกเฉพาะการลงชื่อใหม่ผ่าน LINE แต่ยังดูตารางและกดขอยกเลิกรายการเดิมที่ทำผ่าน LINE ได้</small>
+      </div>
+    </section>
+
     <section class="hero-card">
       <div>
         <span class="eyebrow">สำหรับคนนอกหน่วย</span>
@@ -67,6 +80,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js?v=298"></script>
-  <script src="donor-helper-public-v327.js?v=343"></script>
+  <script src="donor-helper-public-v327.js?v=345"></script>
 </body>
 </html>

@@ -64,3 +64,18 @@ button{cursor:pointer}
 /* V343: remembered profile + required contact clarity */
 .remembered-profile-note{padding:9px 11px;border-radius:10px;background:#eff8ff;color:#496579;font-size:.88rem;font-weight:500;line-height:1.45}
 .form-grid input:invalid:not(:placeholder-shown){border-color:#ef9a9a;background:#fffafa}
+
+
+/* V345: block new public sign-ups inside LINE in-app browser */
+.line-browser-warning{position:sticky;top:64px;z-index:9;display:flex;gap:14px;align-items:flex-start;padding:16px 18px;border:2px solid #e2a100;border-radius:16px;background:#fff5cc;box-shadow:0 12px 28px rgba(146,92,0,.16);color:#6f4200}
+.line-browser-warning-icon{flex:0 0 38px;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#b76e00;color:#fff;font-size:1.35rem;font-weight:800}
+.line-browser-warning-content{display:grid;gap:7px;min-width:0}
+.line-browser-warning-content strong{font-size:1.05rem;color:#7a4300}
+.line-browser-warning-content p{margin:0;font-weight:700;line-height:1.55;color:#6f4200}
+.line-browser-warning-content small{line-height:1.5;color:#78551d}
+.line-browser-warning-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+.line-browser-signup-blocked{border:1px solid #d99a18;border-radius:11px;padding:9px 13px;background:#fff5cc;color:#7a4300;font-weight:700}
+.line-browser-signup-blocked:hover{background:#ffedaa}
+.signup-success-reminder{margin:14px 0;padding:14px;border:1px solid #9ed5b0;border-radius:13px;background:#effcf3;color:#14532d;line-height:1.6}
+.signup-success-reminder p{margin:4px 0 0;color:#166534;font-weight:600}
+@media(max-width:720px){.line-browser-warning{top:62px;border-radius:14px;padding:14px}.line-browser-warning-icon{flex-basis:34px;width:34px;height:34px}.line-browser-warning-actions>*{flex:1 1 150px}}
