@@ -6,7 +6,7 @@
 */
 (function(){
   'use strict';
-  const VERSION = 'V343_DONOR_HELPER_CONTACT_PRIVACY';
+  const VERSION = 'V344_DONOR_HELPER_INTERNAL_CANCEL_REQUEST_BUTTON';
   const PAGE_ID = 'donorHelpers';
   const INTERNAL_UNIT = 'หน่วยเวชศาสตร์บริการโลหิต';
   const UNIT_OPTIONS = [
@@ -160,11 +160,26 @@
   function activeMap(){const map=new Map();activeRows().forEach(row=>map.set(slotKey(dateKey(row.work_date),row.slot_type,Number(row.slot_no)),row));return map;}
   function blockedMap(){const map=new Map();(payload().blocked_dates||[]).forEach(row=>map.set(dateKey(row.work_date),row.title||'วันหยุดนักขัตฤกษ์'));return map;}
   function dutyMap(){const map=new Map();(payload().my_duties||[]).forEach(row=>map.set(dateKey(row.work_date),Array.isArray(row.duty_codes)?row.duty_codes:[]));return map;}
-  function myActiveOn(date){return activeRows().find(row=>row.is_mine&&dateKey(row.work_date)===date);}
+  function isMyRow(row){
+    const profileId=payload()?.my_profile?.staff_id;
+    if(row?.is_mine===true||String(row?.is_mine||'').toLowerCase()==='true')return true;
+    return !!(profileId&&row?.internal_staff_id&&String(row.internal_staff_id)===String(profileId));
+  }
+  function canRequestCancel(row){return isMyRow(row)&&String(row?.status||'confirmed')==='confirmed'&&dateKey(row?.work_date)>=today();}
+  function myActiveOn(date){return activeRows().find(row=>isMyRow(row)&&dateKey(row.work_date)===date);}
   function rowById(id){return rows().find(row=>String(row.id)===String(id));}
   function cancelHistoryFor(date,type,no){return rows().filter(row=>String(row.status||'')==='cancelled'&&dateKey(row.work_date)===date&&row.slot_type===type&&Number(row.slot_no)===Number(no)).sort((a,b)=>String(b.cancelled_at||b.updated_at||b.created_at||'').localeCompare(String(a.cancelled_at||a.updated_at||a.created_at||'')))[0]||null;}
   function cancelHistoryHtml(row){if(!row)return'';return `<div class="donor-helper-slot-history"><b>เคยลงชื่อ:</b> ${esc(row.helper_name||'-')}<br><b>ยกเลิกโดย:</b> ${esc(row.cancelled_by_label||'หัวหน้าหน่วยเวชศาสตร์บริการโลหิต/อินชาร์จ')}<br><b>เหตุผล:</b> ${esc(row.cancel_reason||'-')}<br><b>วันที่-เวลา:</b> ${esc(thaiDateTime(row.cancelled_at||row.updated_at))}</div>`;}
   function contactNotice(){const c=payload().contact||{};return `<div class="notice soft-notice donor-helper-contact-note"><b>ผู้ติดต่อกรณีขอยกเลิก:</b> ${c.incharge_label?`อินชาร์จเดือนนี้: ${esc(c.incharge_label)} หรือหัวหน้าหน่วย`:'กรุณาแจ้งหัวหน้าหน่วยเวชศาสตร์บริการโลหิต'}</div>`;}
+  function myBookingsHtml(){
+    const mine=rows().filter(row=>isMyRow(row)&&['confirmed','cancel_requested'].includes(String(row.status||'confirmed'))).sort((a,b)=>dateKey(a.work_date).localeCompare(dateKey(b.work_date)));
+    if(!mine.length)return'';
+    return `<div class="card donor-helper-my-bookings"><div class="section-title donor-helper-my-bookings-head"><div><span class="muted">จัดการรายการของตนเอง</span><h3>รายการลงชื่อของฉัน</h3></div><span class="badge blue">${mine.length} รายการ</span></div><div class="donor-helper-my-booking-list">${mine.map(row=>{
+      const status=String(row.status||'confirmed');
+      const pending=status==='cancel_requested';
+      return `<div class="donor-helper-my-booking-row ${pending?'pending':''}"><div><b>${esc(thaiDate(row.work_date))}</b><span>${esc(slotLabel(row.slot_type,row.slot_no))} • 09:00–17:00 น.</span></div><div class="donor-helper-my-booking-actions"><span class="badge ${esc(statusClass(status))}">${esc(statusText(status))}</span>${canRequestCancel(row)?`<button class="tiny-btn danger-ghost donor-helper-request-cancel-btn" type="button" data-v327-self-cancel="${esc(row.id)}">รีเควสขอยกเลิก</button>`:pending?'<span class="donor-helper-pending-note">ชื่อยังคงอยู่จนกว่าหัวหน้าหน่วยหรืออินชาร์จจะอนุมัติ</span>':''}</div></div>`;
+    }).join('')}</div></div>`;
+  }
 
   function emptyActions(date,type,no,isBlocked,myDuty){
     const isPast=date<today(),isOpen=today()>=openDateFor(date),own=myActiveOn(date);
@@ -189,10 +204,10 @@
         ${emptyActions(date,type,no,isBlocked,myDuty)}
       </div>`;
     }
-    const status=String(row.status||'confirmed'),mine=!!row.is_mine;
+    const status=String(row.status||'confirmed'),mine=isMyRow(row);
     let actions='';
-    if(mine&&status==='confirmed'){
-      actions+=`<button class="tiny-btn danger-ghost" type="button" data-v327-self-cancel="${esc(row.id)}">ขอยกเลิก</button>`;
+    if(canRequestCancel(row)){
+      actions+=`<button class="tiny-btn danger-ghost donor-helper-request-cancel-btn" type="button" data-v327-self-cancel="${esc(row.id)}">รีเควสขอยกเลิก</button>`;
     }
     if(admin()){
       if(status==='cancel_requested'){
@@ -239,6 +254,7 @@
       <div class="notice soft-notice donor-helper-contact-note"><b>เบอร์โทรผู้มาช่วย:</b> แสดงเฉพาะเจ้าหน้าที่ในหน่วยที่เข้าสู่ระบบแอปนี้เท่านั้น หน้าลงชื่อสาธารณะจะไม่แสดงเบอร์โทร</div>
       <div class="notice soft-notice donor-helper-ot-note"><b>คนในหน่วย:</b> กด “ลงชื่อของฉัน” ในช่องที่ว่าง ระบบเติมชื่อ เบอร์โทร และหน่วยเวชศาสตร์บริการโลหิตให้อัตโนมัติ หลังลงชื่อแล้วให้ขอ OT ที่ <b>ส่วนที่ 2</b> เหมือนเดิม ระบบนี้ไม่สร้าง OT อัตโนมัติ <button class="tiny-btn" type="button" data-v327-go-ot>ไปส่วนขอ OT</button></div>
       ${profile.full_name?`<div class="card donor-helper-my-profile"><div><span class="muted">ข้อมูลที่ใช้ลงชื่ออัตโนมัติ</span><b>${esc(profile.full_name)}</b></div><div><span class="muted">หน่วยงาน</span><b>${esc(profile.unit_name||INTERNAL_UNIT)}</b></div><div><span class="muted">เบอร์โทร</span><b>${esc(profile.phone?formatPhone(profile.phone):'ยังไม่มีในข้อมูลส่วนตัว')}</b></div></div>`:''}
+      ${myBookingsHtml()}
       <div class="card donor-helper-toolbar"><label>เลือกเดือน <input id="donorHelperMonthInputV327" type="month" value="${esc(month)}"></label><div class="donor-helper-counts"><span class="badge blue">ลงชื่อแล้ว ${filled}/${openDates.length*3} ช่อง</span><span class="badge black">เปิดรับ ${openDates.length} วัน</span>${blocked.size?`<span class="badge orange">ปิดวันหยุด ${blocked.size} วัน</span>`:''}</div><button class="ghost-btn" type="button" data-v327-refresh>รีเฟรชรายชื่อ</button></div>
       ${st?.donorHelperErrorV327?`<div class="notice donor-helper-error"><b>ยังเปิดตารางไม่ได้</b><br>${esc(st.donorHelperErrorV327)}</div>`:''}
       ${st?.donorHelperLoadingV327?'<div class="card donor-helper-loading">กำลังโหลดรายชื่อและตรวจตารางเวร…</div>':''}
@@ -274,8 +290,9 @@
   }
 
   function showCancelModal(id){
-    const row=rowById(id);if(!row||!row.is_mine)return toast('ไม่พบสิทธิ์จัดการรายการนี้','error');
-    const html=`<h2>ขอยกเลิกการมาช่วย</h2><p class="muted">${esc(row.helper_name)} • ${esc(thaiDate(row.work_date))} • ${esc(slotLabel(row.slot_type,row.slot_no))}</p><form id="donorHelperSelfCancelFormV327" class="form-grid"><input type="hidden" name="signup_id" value="${esc(row.id)}"><label class="wide">เหตุผล <textarea name="reason" rows="3" minlength="3" required placeholder="ระบุเหตุผลเพื่อให้หน่วยงานจัดคนแทนได้"></textarea></label><label class="wide donor-helper-ack"><input type="checkbox" name="ack" required><span>รับทราบว่าต้องแจ้งอินชาร์จเดือนนี้หรือหัวหน้าหน่วยเวชศาสตร์บริการโลหิตเพื่ออนุมัติ และชื่อจะยังคงอยู่จนกว่า Admin จะยืนยัน</span></label><div class="wide form-actions"><button class="ghost-btn" type="button" data-v327-close>กลับ</button><button class="danger-btn" type="submit">ส่งคำขอยกเลิก</button></div></form>`;
+    const row=rowById(id);if(!row||!isMyRow(row))return toast('ไม่พบสิทธิ์จัดการรายการนี้','error');
+    if(!canRequestCancel(row))return toast(String(row.status||'')==='cancel_requested'?'รายการนี้ส่งรีเควสขอยกเลิกแล้ว':'รายการนี้ไม่สามารถขอยกเลิกได้','error');
+    const html=`<h2>รีเควสขอยกเลิกการมาช่วย</h2><p class="muted">${esc(row.helper_name)} • ${esc(thaiDate(row.work_date))} • ${esc(slotLabel(row.slot_type,row.slot_no))}</p><form id="donorHelperSelfCancelFormV327" class="form-grid"><input type="hidden" name="signup_id" value="${esc(row.id)}"><label class="wide">เหตุผล <textarea name="reason" rows="3" minlength="3" required placeholder="ระบุเหตุผลเพื่อให้หน่วยงานจัดคนแทนได้"></textarea></label><label class="wide donor-helper-ack"><input type="checkbox" name="ack" required><span>รับทราบว่าต้องแจ้งอินชาร์จเดือนนี้หรือหัวหน้าหน่วยเวชศาสตร์บริการโลหิตเพื่ออนุมัติ และชื่อจะยังคงอยู่จนกว่า Admin จะยืนยัน</span></label><div class="wide form-actions"><button class="ghost-btn" type="button" data-v327-close>กลับ</button><button class="danger-btn" type="submit">ส่งรีเควสขอยกเลิก</button></div></form>`;
     try{showModal(html,{small:true});}catch(_){toast('เปิดหน้าต่างขอยกเลิกไม่สำเร็จ','error');}
   }
 
@@ -340,7 +357,7 @@
         try{showModal(`<h2>ลงชื่อเรียบร้อยแล้ว</h2><p>ระบบเติมชื่อ เบอร์โทร และหน่วยงานจากข้อมูลส่วนตัวให้แล้ว</p><div class="notice soft-notice">รายการนี้ยังไม่สร้าง OT อัตโนมัติ กรุณาไปขอ OT ที่ <b>ส่วนที่ 2</b></div><div class="form-actions"><button class="primary-btn" type="button" data-v327-go-ot>ไปขอ OT ส่วนที่ 2</button><button class="ghost-btn" type="button" data-v327-close>ปิด</button></div>`,{small:true});}catch(_){toast('ลงชื่อเรียบร้อยแล้ว');}
       }else if(form.id==='donorHelperSelfCancelFormV327'){
         const result=await DB().rpc('request_cancel_donor_helper_internal_v327',{p_signup_id:fd.get('signup_id'),p_reason:String(fd.get('reason')||'').trim()});if(result.error)throw result.error;
-        try{closeModal();}catch(_){}await loadMonth(S().donorHelperMonthV327,{force:true});toast('ส่งคำขอยกเลิกแล้ว ชื่อจะยังอยู่จนกว่า Admin จะยืนยัน');
+        try{closeModal();}catch(_){}await loadMonth(S().donorHelperMonthV327,{force:true});toast('ส่งรีเควสขอยกเลิกแล้ว ชื่อจะยังอยู่จนกว่า Admin จะยืนยัน');
       }else if(form.id==='donorHelperAdminAddFormV327'){
         if(!admin())throw new Error('Permission denied');
         const unit=String(fd.get('unit_name')||'').trim(),name=normalizeFullName(fd.get('helper_name')),phone=formatPhone(fd.get('phone'));
