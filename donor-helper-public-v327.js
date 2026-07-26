@@ -1,9 +1,10 @@
 /* CNMI Donor Helper Public V327 — 7-unit dropdown + holiday guard */
 (function(){
   'use strict';
-  const VERSION = 'V337_DONOR_HELPER_BANGKOK_MIDNIGHT';
+  const VERSION = 'V343_DONOR_HELPER_FULLNAME_PHONE_MEMORY';
   const CFG = window.CNMI_CONFIG || {};
   const STORAGE_KEY = 'cnmi_donor_helper_manage_tokens_v324';
+  const PROFILE_STORAGE_KEY = 'cnmi_donor_helper_profiles_v343';
   const UNIT_OPTIONS = [
     'หน่วยคลังพยาธิวิทยา',
     'หน่วยธุรการพยาธิ',
@@ -19,6 +20,7 @@
   let contactInfo = null;
   let currentMonth = defaultMonth();
   let loading = false;
+  let rememberedProfiles = [];
 
   const $ = id => document.getElementById(id);
   function esc(value){ return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
@@ -27,6 +29,61 @@
     const value=String(selected||'').trim();
     return `<option value=""${value?'':' selected'} disabled>กรุณาเลือกหน่วยงาน</option>`+
       UNIT_OPTIONS.map(unit=>`<option value="${esc(unit)}"${unit===value?' selected':''}>${esc(unit)}</option>`).join('');
+  }
+  function normalizeFullName(value){ return String(value||'').trim().replace(/\s+/g,' '); }
+  function hasFirstAndLastName(value){ return /^\S+\s+\S+/.test(normalizeFullName(value)); }
+  function phoneDigits(value){ return String(value||'').replace(/\D/g,'').slice(0,10); }
+  function formatPhone(value){
+    const digits=phoneDigits(value);
+    if(digits.length<=3) return digits;
+    if(digits.length<=6) return `${digits.slice(0,3)}-${digits.slice(3)}`;
+    return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6,10)}`;
+  }
+  function validPhone(value){ return /^0\d{2}-\d{3}-\d{4}$/.test(formatPhone(value)); }
+  function profileKey(profile){ return `${normalizeFullName(profile?.helper_name).toLocaleLowerCase('th-TH')}|${String(profile?.unit_name||'').trim()}`; }
+  function normalizeProfile(profile){
+    const helper_name=normalizeFullName(profile?.helper_name);
+    const unit_name=String(profile?.unit_name||'').trim();
+    const phone=formatPhone(profile?.phone||'');
+    if(!helper_name||!unit_name) return null;
+    return {helper_name,unit_name,phone,last_used_at:profile?.last_used_at||profile?.updated_at||new Date().toISOString()};
+  }
+  function mergeProfiles(items){
+    const map=new Map();
+    (Array.isArray(items)?items:[]).forEach(item=>{
+      const profile=normalizeProfile(item);if(!profile)return;
+      const key=profileKey(profile),old=map.get(key);
+      if(!old||String(profile.last_used_at||'')>String(old.last_used_at||''))map.set(key,profile);
+    });
+    return [...map.values()].sort((a,b)=>String(b.last_used_at||'').localeCompare(String(a.last_used_at||''))).slice(0,20);
+  }
+  function loadLocalProfiles(){
+    try{return mergeProfiles(JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY)||'[]'));}
+    catch(_){return [];}
+  }
+  function persistProfiles(items){
+    rememberedProfiles=mergeProfiles(items);
+    try{localStorage.setItem(PROFILE_STORAGE_KEY,JSON.stringify(rememberedProfiles));}catch(_){}
+  }
+  function rememberProfile(profile){ persistProfiles([profile,...rememberedProfiles]); }
+  function rememberedProfileOptions(){
+    if(!rememberedProfiles.length)return'';
+    return `<option value="">กรุณาเลือกข้อมูลเดิม</option>`+rememberedProfiles.map((profile,index)=>`<option value="${index}">${esc(profile.helper_name)} — ${esc(profile.unit_name)}</option>`).join('');
+  }
+  async function loadRememberedProfiles(){
+    const local=loadLocalProfiles();
+    rememberedProfiles=local;
+    if(!client)return;
+    const tokens=[...new Set(Object.values(loadTokens()).map(value=>String(value||'').trim()).filter(value=>/^[0-9a-f-]{36}$/i.test(value)))].slice(-100);
+    if(!tokens.length){persistProfiles(local);return;}
+    try{
+      const result=await client.rpc('get_donor_helper_saved_profiles_v343',{p_manage_tokens:tokens});
+      if(result.error)throw result.error;
+      persistProfiles([...(Array.isArray(result.data)?result.data:[]),...local]);
+    }catch(error){
+      console.info(`[${VERSION}] remembered profile RPC unavailable; using this-device profiles only`,error?.message||error);
+      persistProfiles(local);
+    }
   }
   function pad(value){ return String(value).padStart(2,'0'); }
   function dateKey(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
@@ -209,9 +266,11 @@
       <p>${esc(thaiDate(date))} • 09:00–17:00 น.</p>
       <form id="signupForm" class="form-grid">
         <input type="hidden" name="work_date" value="${esc(date)}"><input type="hidden" name="slot_type" value="${esc(type)}"><input type="hidden" name="slot_no" value="${esc(no)}">
-        <label>ชื่อ-สกุล <input name="helper_name" required maxlength="120" autocomplete="name"></label>
-        <label>หน่วยงาน <select class="donor-helper-unit-select" name="unit_name" required>${unitSelectOptions()}</select></label>
-        <label class="wide">เบอร์โทร (ถ้ามี) <input name="phone" inputmode="tel" maxlength="30" autocomplete="tel"></label>
+        ${rememberedProfiles.length?`<label class="wide">เลือกข้อมูลที่เคยใช้บนอุปกรณ์นี้ <select id="rememberedProfileSelect">${rememberedProfileOptions()}</select></label>`:''}
+        <label>ชื่อ-สกุล <input id="signupHelperName" name="helper_name" required maxlength="120" autocomplete="name" placeholder="เช่น สมชาย ใจดี"></label>
+        <label>หน่วยงาน <select id="signupUnitName" class="donor-helper-unit-select" name="unit_name" required>${unitSelectOptions()}</select></label>
+        <label class="wide">เบอร์โทร <input id="signupPhone" name="phone" inputmode="numeric" required maxlength="12" autocomplete="tel" placeholder="0XX-XXX-XXXX" pattern="0[0-9]{2}-[0-9]{3}-[0-9]{4}"></label>
+        <div class="wide remembered-profile-note">ระบบจะจำชื่อ หน่วยงาน และเบอร์โทรไว้เฉพาะอุปกรณ์นี้ เพื่อใช้เลือกครั้งต่อไป โดยเบอร์โทรจะไม่แสดงในหน้าสาธารณะ</div>
         <label class="wide ack-box"><input type="checkbox" name="ack" required><span>ยืนยันว่าจะมาช่วยตามวันที่เลือก และรับทราบว่าหากต้องยกเลิกต้องกดขอยกเลิก ระบุเหตุผล และแจ้งอินชาร์จเดือนนี้หรือหัวหน้าหน่วยเวชศาสตร์บริการโลหิต เพื่ออนุมัติการยกเลิก ชื่อจะไม่หายจนกว่า Admin จะยืนยัน</span></label>
         <div class="form-actions"><button class="ghost-btn" type="button" data-close-modal>ยกเลิก</button><button class="primary-btn" type="submit">ยืนยันลงชื่อ</button></div>
       </form>`);
@@ -232,17 +291,24 @@
       </form>`);
   }
   async function submitSignup(form){
-    const fd=new FormData(form);const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent='กำลังบันทึก…';
+    const fd=new FormData(form);const button=form.querySelector('button[type="submit"]');
+    const helperName=normalizeFullName(fd.get('helper_name'));
     const unitName=String(fd.get('unit_name')||'').trim();
-    if(!isAllowedUnit(unitName)){showToast('กรุณาเลือกหน่วยงานจากรายการ');button.disabled=false;button.textContent='ยืนยันลงชื่อ';return;}
+    const phone=formatPhone(fd.get('phone'));
+    if(!hasFirstAndLastName(helperName)){showToast('กรุณากรอกทั้งชื่อและนามสกุล โดยเว้นวรรคระหว่างชื่อกับนามสกุล');form.elements.helper_name?.focus();return;}
+    if(!isAllowedUnit(unitName)){showToast('กรุณาเลือกหน่วยงานจากรายการ');form.elements.unit_name?.focus();return;}
+    if(!validPhone(phone)){showToast('กรุณากรอกเบอร์โทร 10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678');form.elements.phone?.focus();return;}
+    form.elements.helper_name.value=helperName;form.elements.phone.value=phone;
+    button.disabled=true;button.textContent='กำลังบันทึก…';
     try{
       const result=await client.rpc('signup_donor_helper_v324',{
         p_work_date:fd.get('work_date'),p_slot_type:fd.get('slot_type'),p_slot_no:Number(fd.get('slot_no')),
-        p_helper_name:String(fd.get('helper_name')||'').trim(),p_unit_name:unitName,p_phone:String(fd.get('phone')||'').trim()||null
+        p_helper_name:helperName,p_unit_name:unitName,p_phone:phone
       });
       if(result.error)throw result.error;
       const saved=Array.isArray(result.data)?result.data[0]:result.data;
       if(saved?.signup_id&&saved?.manage_token)saveToken(saved.signup_id,saved.manage_token);
+      rememberProfile({helper_name:helperName,unit_name:unitName,phone,last_used_at:new Date().toISOString()});
       closeModal();await loadMonth();showToast('ลงชื่อเรียบร้อยแล้ว');
     }catch(error){showToast(messageFromError(error));button.disabled=false;button.textContent='ยืนยันลงชื่อ';}
   }
@@ -276,6 +342,18 @@
       else if(target.hasAttribute('data-close-modal'))closeModal();
       else if(target.hasAttribute('data-copy-group'))copyGroup();
     });
+    document.addEventListener('change',e=>{
+      if(e.target?.id!=='rememberedProfileSelect')return;
+      const index=Number(e.target.value);if(!Number.isInteger(index)||!rememberedProfiles[index])return;
+      const profile=rememberedProfiles[index];
+      const nameInput=$('signupHelperName'),unitInput=$('signupUnitName'),phoneInput=$('signupPhone');
+      if(nameInput)nameInput.value=profile.helper_name||'';
+      if(unitInput&&isAllowedUnit(profile.unit_name))unitInput.value=profile.unit_name;
+      if(phoneInput)phoneInput.value=formatPhone(profile.phone||'');
+    });
+    document.addEventListener('input',e=>{
+      if(e.target?.name==='phone')e.target.value=formatPhone(e.target.value);
+    });
     document.addEventListener('submit',e=>{
       if(e.target.id==='signupForm'){e.preventDefault();submitSignup(e.target);}
       if(e.target.id==='cancelForm'){e.preventDefault();submitCancel(e.target);}
@@ -289,6 +367,8 @@
       return;
     }
     client=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+    rememberedProfiles=loadLocalProfiles();
+    loadRememberedProfiles();
     loadMonth();
   }
   document.addEventListener('DOMContentLoaded',init);

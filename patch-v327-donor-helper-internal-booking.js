@@ -6,7 +6,7 @@
 */
 (function(){
   'use strict';
-  const VERSION = 'V337_DONOR_HELPER_INTERNAL_BOOKING_BANGKOK_TIME';
+  const VERSION = 'V343_DONOR_HELPER_CONTACT_PRIVACY';
   const PAGE_ID = 'donorHelpers';
   const INTERNAL_UNIT = 'หน่วยเวชศาสตร์บริการโลหิต';
   const UNIT_OPTIONS = [
@@ -88,6 +88,11 @@
     return `<option value=""${isAllowedUnit(value)?'':' selected'} disabled>กรุณาเลือกหน่วยงาน</option>`+
       UNIT_OPTIONS.map(unit=>`<option value="${esc(unit)}"${unit===value?' selected':''}>${esc(unit)}</option>`).join('');
   }
+  function normalizeFullName(value){return String(value||'').trim().replace(/\s+/g,' ');}
+  function hasFirstAndLastName(value){return /^\S+\s+\S+/.test(normalizeFullName(value));}
+  function phoneDigits(value){return String(value||'').replace(/\D/g,'').slice(0,10);}
+  function formatPhone(value){const digits=phoneDigits(value);if(digits.length<=3)return digits;if(digits.length<=6)return `${digits.slice(0,3)}-${digits.slice(3)}`;return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6,10)}`;}
+  function validPhone(value){return /^0\d{2}-\d{3}-\d{4}$/.test(formatPhone(value));}
   function publicUrl(){try{return new URL('donor-helper.html',window.location.href).href;}catch(_){return'donor-helper.html';}}
   function errorText(error){
     const raw=String(error?.message||error||'ดำเนินการไม่สำเร็จ');
@@ -201,7 +206,7 @@
       <div class="donor-helper-person">${esc(row.helper_name||'-')}</div>
       <div class="donor-helper-unit">${esc(row.unit_name||'-')}</div>
       ${mine?'<div class="donor-helper-mine-label">รายการของฉัน</div>':''}
-      ${row.phone&&admin()?`<div class="donor-helper-phone">โทร ${esc(row.phone)}</div>`:''}
+      ${row.phone?`<div class="donor-helper-phone">โทร ${esc(formatPhone(row.phone))}</div>`:''}
       ${status==='cancel_requested'&&row.cancel_reason?`<div class="donor-helper-cancel-reason"><b>เหตุผล:</b> ${esc(row.cancel_reason)}</div>`:''}
       ${actions?`<div class="actions compact-actions">${actions}</div>`:''}
     </div>`;
@@ -220,7 +225,7 @@
     if(!admin())return'';
     const history=rows().filter(row=>['cancelled','no_show','completed','cancel_requested'].includes(row.status)).sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
     if(!history.length)return'';
-    return `<div class="card donor-helper-history"><div class="section-title"><h3>ประวัติและรายการที่ต้องติดตาม</h3><span class="badge black">${history.length} รายการ</span></div><div class="table-wrap"><table><thead><tr><th>วันที่</th><th>ตำแหน่ง</th><th>ชื่อ / หน่วยงาน</th><th>สถานะ</th><th>เหตุผล/เวลา</th><th>จัดการ</th></tr></thead><tbody>${history.map(row=>`<tr><td>${esc(thaiDate(row.work_date))}</td><td>${esc(slotLabel(row.slot_type,row.slot_no))}</td><td><b>${esc(row.helper_name||'-')}</b><br><span class="muted">${esc(row.unit_name||'-')}</span></td><td><span class="badge ${esc(statusClass(row.status))}">${esc(statusText(row.status))}</span></td><td>${row.cancel_reason?esc(row.cancel_reason):'-'}<br><span class="muted">อัปเดต ${esc(thaiDateTime(row.updated_at||row.created_at))}</span></td><td><div class="donor-helper-row-actions">${historyActions(row)}</div></td></tr>`).join('')}</tbody></table></div></div>`;
+    return `<div class="card donor-helper-history"><div class="section-title"><h3>ประวัติและรายการที่ต้องติดตาม</h3><span class="badge black">${history.length} รายการ</span></div><div class="table-wrap"><table><thead><tr><th>วันที่</th><th>ตำแหน่ง</th><th>ชื่อ / หน่วยงาน</th><th>สถานะ</th><th>เหตุผล/เวลา</th><th>จัดการ</th></tr></thead><tbody>${history.map(row=>`<tr><td>${esc(thaiDate(row.work_date))}</td><td>${esc(slotLabel(row.slot_type,row.slot_no))}</td><td><b>${esc(row.helper_name||'-')}</b><br><span class="muted">${esc(row.unit_name||'-')}</span>${row.phone?`<br><span class="muted">โทร ${esc(formatPhone(row.phone))}</span>`:''}</td><td><span class="badge ${esc(statusClass(row.status))}">${esc(statusText(row.status))}</span></td><td>${row.cancel_reason?esc(row.cancel_reason):'-'}<br><span class="muted">อัปเดต ${esc(thaiDateTime(row.updated_at||row.created_at))}</span></td><td><div class="donor-helper-row-actions">${historyActions(row)}</div></td></tr>`).join('')}</tbody></table></div></div>`;
   }
 
   function renderPageHtml(){
@@ -231,8 +236,9 @@
     return `<div class="donor-helper-page-v324 donor-helper-page-v327">
       <div class="card donor-helper-hero"><div><span class="donor-helper-kicker">ห้องบริจาคโลหิต • 09:00–17:00 น.</span><h3>ตารางผู้มาช่วย ${esc(monthLabel(month))}</h3><p>คนเจาะ 2 คน และ Clerk 1 คนต่อวัน • เปิดลงชื่อวันที่ 21 ของเดือนก่อนหน้า</p></div><div class="donor-helper-hero-actions"><a class="primary-btn donor-helper-link-btn" href="${esc(publicUrl())}" target="_blank" rel="noopener">เปิดหน้าลงชื่อคนนอกหน่วย</a><button class="ghost-btn" type="button" data-v327-copy-link>คัดลอกลิงก์</button></div></div>
       ${contactNotice()}
+      <div class="notice soft-notice donor-helper-contact-note"><b>เบอร์โทรผู้มาช่วย:</b> แสดงเฉพาะเจ้าหน้าที่ในหน่วยที่เข้าสู่ระบบแอปนี้เท่านั้น หน้าลงชื่อสาธารณะจะไม่แสดงเบอร์โทร</div>
       <div class="notice soft-notice donor-helper-ot-note"><b>คนในหน่วย:</b> กด “ลงชื่อของฉัน” ในช่องที่ว่าง ระบบเติมชื่อ เบอร์โทร และหน่วยเวชศาสตร์บริการโลหิตให้อัตโนมัติ หลังลงชื่อแล้วให้ขอ OT ที่ <b>ส่วนที่ 2</b> เหมือนเดิม ระบบนี้ไม่สร้าง OT อัตโนมัติ <button class="tiny-btn" type="button" data-v327-go-ot>ไปส่วนขอ OT</button></div>
-      ${profile.full_name?`<div class="card donor-helper-my-profile"><div><span class="muted">ข้อมูลที่ใช้ลงชื่ออัตโนมัติ</span><b>${esc(profile.full_name)}</b></div><div><span class="muted">หน่วยงาน</span><b>${esc(profile.unit_name||INTERNAL_UNIT)}</b></div><div><span class="muted">เบอร์โทร</span><b>${esc(profile.phone||'ยังไม่มีในข้อมูลส่วนตัว')}</b></div></div>`:''}
+      ${profile.full_name?`<div class="card donor-helper-my-profile"><div><span class="muted">ข้อมูลที่ใช้ลงชื่ออัตโนมัติ</span><b>${esc(profile.full_name)}</b></div><div><span class="muted">หน่วยงาน</span><b>${esc(profile.unit_name||INTERNAL_UNIT)}</b></div><div><span class="muted">เบอร์โทร</span><b>${esc(profile.phone?formatPhone(profile.phone):'ยังไม่มีในข้อมูลส่วนตัว')}</b></div></div>`:''}
       <div class="card donor-helper-toolbar"><label>เลือกเดือน <input id="donorHelperMonthInputV327" type="month" value="${esc(month)}"></label><div class="donor-helper-counts"><span class="badge blue">ลงชื่อแล้ว ${filled}/${openDates.length*3} ช่อง</span><span class="badge black">เปิดรับ ${openDates.length} วัน</span>${blocked.size?`<span class="badge orange">ปิดวันหยุด ${blocked.size} วัน</span>`:''}</div><button class="ghost-btn" type="button" data-v327-refresh>รีเฟรชรายชื่อ</button></div>
       ${st?.donorHelperErrorV327?`<div class="notice donor-helper-error"><b>ยังเปิดตารางไม่ได้</b><br>${esc(st.donorHelperErrorV327)}</div>`:''}
       ${st?.donorHelperLoadingV327?'<div class="card donor-helper-loading">กำลังโหลดรายชื่อและตรวจตารางเวร…</div>':''}
@@ -263,7 +269,7 @@
     if(date<today())return toast('ไม่สามารถลงชื่อย้อนหลังได้','error');
     if(today()<openDateFor(date))return toast(`เดือนนี้จะเปิดให้ลงชื่อวันที่ ${thaiDate(openDateFor(date))}`,'error');
     if(myActiveOn(date))return toast('วันนี้คุณลงชื่อช่วยไว้แล้ว 1 ตำแหน่ง','error');
-    const html=`<h2>ยืนยันลงชื่อของฉัน</h2><p class="muted">${esc(thaiDate(date))} • ${esc(slotLabel(type,no))} • 09:00–17:00 น.</p><form id="donorHelperSelfFormV327" class="form-grid"><input type="hidden" name="work_date" value="${esc(date)}"><input type="hidden" name="slot_type" value="${esc(type)}"><input type="hidden" name="slot_no" value="${esc(no)}"><div class="wide donor-helper-confirm-profile"><div><span>ชื่อ</span><b>${esc(profile.full_name||'-')}</b></div><div><span>หน่วยงาน</span><b>${esc(profile.unit_name||INTERNAL_UNIT)}</b></div><div><span>เบอร์โทร</span><b>${esc(profile.phone||'ยังไม่มีในข้อมูลส่วนตัว')}</b></div></div><label class="wide donor-helper-ack"><input type="checkbox" name="ack" required><span>ยืนยันว่าจะมาช่วยตามวันที่เลือก และรับทราบว่าหากต้องยกเลิกต้องส่งคำขอพร้อมเหตุผลเพื่อให้หัวหน้าหน่วยอนุมัติ</span></label><div class="wide form-actions"><button class="ghost-btn" type="button" data-v327-close>กลับ</button><button class="primary-btn" type="submit">ยืนยันลงชื่อ</button></div></form>`;
+    const html=`<h2>ยืนยันลงชื่อของฉัน</h2><p class="muted">${esc(thaiDate(date))} • ${esc(slotLabel(type,no))} • 09:00–17:00 น.</p><form id="donorHelperSelfFormV327" class="form-grid"><input type="hidden" name="work_date" value="${esc(date)}"><input type="hidden" name="slot_type" value="${esc(type)}"><input type="hidden" name="slot_no" value="${esc(no)}"><div class="wide donor-helper-confirm-profile"><div><span>ชื่อ</span><b>${esc(profile.full_name||'-')}</b></div><div><span>หน่วยงาน</span><b>${esc(profile.unit_name||INTERNAL_UNIT)}</b></div><div><span>เบอร์โทร</span><b>${esc(profile.phone?formatPhone(profile.phone):'ยังไม่มีในข้อมูลส่วนตัว')}</b></div></div><label class="wide donor-helper-ack"><input type="checkbox" name="ack" required><span>ยืนยันว่าจะมาช่วยตามวันที่เลือก และรับทราบว่าหากต้องยกเลิกต้องส่งคำขอพร้อมเหตุผลเพื่อให้หัวหน้าหน่วยอนุมัติ</span></label><div class="wide form-actions"><button class="ghost-btn" type="button" data-v327-close>กลับ</button><button class="primary-btn" type="submit">ยืนยันลงชื่อ</button></div></form>`;
     try{showModal(html,{small:true});}catch(_){toast('เปิดหน้าต่างยืนยันไม่สำเร็จ','error');}
   }
 
@@ -275,12 +281,13 @@
 
   function showAdminAdd(payloadText){
     const [date,type,no]=String(payloadText||'').split('|');if(blockedMap().has(date))return toast('วันนี้ไม่เปิดลงชื่อ เนื่องจากเป็นวันหยุดนักขัตฤกษ์','error');
-    const html=`<h2>เพิ่มชื่อแทน</h2><p class="muted">${esc(thaiDate(date))} • ${esc(slotLabel(type,Number(no)))}</p><form id="donorHelperAdminAddFormV327" class="form-grid"><input type="hidden" name="work_date" value="${esc(date)}"><input type="hidden" name="slot_type" value="${esc(type)}"><input type="hidden" name="slot_no" value="${esc(no)}"><label>ชื่อ-สกุล <input name="helper_name" required maxlength="120"></label><label>หน่วยงาน <select name="unit_name" required>${unitOptions()}</select></label><label class="wide">เบอร์โทร (ถ้ามี) <input name="phone" inputmode="tel" maxlength="30"></label><button class="primary-btn wide" type="submit">บันทึกชื่อ</button></form>`;
+    const html=`<h2>เพิ่มชื่อแทน</h2><p class="muted">${esc(thaiDate(date))} • ${esc(slotLabel(type,Number(no)))}</p><form id="donorHelperAdminAddFormV327" class="form-grid"><input type="hidden" name="work_date" value="${esc(date)}"><input type="hidden" name="slot_type" value="${esc(type)}"><input type="hidden" name="slot_no" value="${esc(no)}"><label>ชื่อ-สกุล <input name="helper_name" required maxlength="120" placeholder="เช่น สมชาย ใจดี"></label><label>หน่วยงาน <select name="unit_name" required>${unitOptions()}</select></label><label class="wide">เบอร์โทร <input name="phone" inputmode="numeric" required maxlength="12" placeholder="0XX-XXX-XXXX" pattern="0[0-9]{2}-[0-9]{3}-[0-9]{4}"></label><button class="primary-btn wide" type="submit">บันทึกชื่อ</button></form>`;
     try{showModal(html,{small:true});}catch(_){toast('เปิดแบบฟอร์มไม่สำเร็จ','error');}
   }
   function showAdminEdit(id){
     const row=rowById(id);if(!row)return toast('ไม่พบรายการ','error');
-    const html=`<h2>แก้ไขข้อมูลผู้มาช่วย</h2><p class="muted">${esc(thaiDate(row.work_date))} • ${esc(slotLabel(row.slot_type,row.slot_no))}</p><form id="donorHelperAdminEditFormV327" class="form-grid"><input type="hidden" name="signup_id" value="${esc(row.id)}"><label>ชื่อ-สกุล <input name="helper_name" value="${esc(row.helper_name||'')}" required maxlength="120"></label><label>หน่วยงาน <select name="unit_name" required>${unitOptions(row.unit_name||'')}</select>${row.unit_name&&!isAllowedUnit(row.unit_name)?`<span class="muted">ข้อมูลเดิม: ${esc(row.unit_name)} — กรุณาเลือกใหม่</span>`:''}</label><label class="wide">เบอร์โทร (ถ้ามี) <input name="phone" value="${esc(row.phone||'')}" inputmode="tel" maxlength="30"></label><button class="primary-btn wide" type="submit">บันทึกการแก้ไข</button></form>`;
+    const external=!row.internal_staff_id;
+    const html=`<h2>แก้ไขข้อมูลผู้มาช่วย</h2><p class="muted">${esc(thaiDate(row.work_date))} • ${esc(slotLabel(row.slot_type,row.slot_no))}</p><form id="donorHelperAdminEditFormV327" class="form-grid"><input type="hidden" name="signup_id" value="${esc(row.id)}"><label>ชื่อ-สกุล <input name="helper_name" value="${esc(row.helper_name||'')}" required maxlength="120" placeholder="เช่น สมชาย ใจดี"></label><label>หน่วยงาน <select name="unit_name" required>${unitOptions(row.unit_name||'')}</select>${row.unit_name&&!isAllowedUnit(row.unit_name)?`<span class="muted">ข้อมูลเดิม: ${esc(row.unit_name)} — กรุณาเลือกใหม่</span>`:''}</label><label class="wide">เบอร์โทร${external?'':' (ถ้ามี)'} <input name="phone" value="${esc(formatPhone(row.phone||''))}" inputmode="numeric" ${external?'required ':''}maxlength="12" placeholder="0XX-XXX-XXXX" pattern="0[0-9]{2}-[0-9]{3}-[0-9]{4}"></label>${external?'<div class="notice soft-notice wide">รายการคนนอกหน่วยต้องมีชื่อ-สกุลและเบอร์โทร 10 หลัก</div>':''}<button class="primary-btn wide" type="submit">บันทึกการแก้ไข</button></form>`;
     try{showModal(html,{small:true});}catch(_){toast('เปิดแบบฟอร์มไม่สำเร็จ','error');}
   }
   function showEditReason(id){
@@ -302,6 +309,10 @@
   document.addEventListener('change',event=>{
     const target=event.target;if(!target||target.id!=='donorHelperMonthInputV327')return;const st=S();if(!st)return;
     st.donorHelperMonthV327=target.value||monthNow();st.donorHelperLoadedMonthV327='';st.donorHelperErrorV327='';rerender();
+  },true);
+
+  document.addEventListener('input',event=>{
+    const target=event.target;if(target?.name==='phone')target.value=formatPhone(target.value);
   },true);
 
   document.addEventListener('click',event=>{
@@ -331,12 +342,21 @@
         const result=await DB().rpc('request_cancel_donor_helper_internal_v327',{p_signup_id:fd.get('signup_id'),p_reason:String(fd.get('reason')||'').trim()});if(result.error)throw result.error;
         try{closeModal();}catch(_){}await loadMonth(S().donorHelperMonthV327,{force:true});toast('ส่งคำขอยกเลิกแล้ว ชื่อจะยังอยู่จนกว่า Admin จะยืนยัน');
       }else if(form.id==='donorHelperAdminAddFormV327'){
-        if(!admin())throw new Error('Permission denied');const unit=String(fd.get('unit_name')||'').trim();if(!isAllowedUnit(unit))throw new Error('กรุณาเลือกหน่วยงานจากรายการ');
-        const result=await DB().rpc('admin_add_donor_helper_v324',{p_work_date:fd.get('work_date'),p_slot_type:fd.get('slot_type'),p_slot_no:Number(fd.get('slot_no')),p_helper_name:String(fd.get('helper_name')||'').trim(),p_unit_name:unit,p_phone:String(fd.get('phone')||'').trim()||null});if(result.error)throw result.error;
+        if(!admin())throw new Error('Permission denied');
+        const unit=String(fd.get('unit_name')||'').trim(),name=normalizeFullName(fd.get('helper_name')),phone=formatPhone(fd.get('phone'));
+        if(!hasFirstAndLastName(name))throw new Error('กรุณากรอกทั้งชื่อและนามสกุล โดยเว้นวรรคระหว่างชื่อกับนามสกุล');
+        if(!isAllowedUnit(unit))throw new Error('กรุณาเลือกหน่วยงานจากรายการ');
+        if(!validPhone(phone))throw new Error('กรุณากรอกเบอร์โทร 10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678');
+        const result=await DB().rpc('admin_add_donor_helper_v324',{p_work_date:fd.get('work_date'),p_slot_type:fd.get('slot_type'),p_slot_no:Number(fd.get('slot_no')),p_helper_name:name,p_unit_name:unit,p_phone:phone});if(result.error)throw result.error;
         try{closeModal();}catch(_){}await loadMonth(S().donorHelperMonthV327,{force:true});toast('เพิ่มชื่อแล้ว');
       }else if(form.id==='donorHelperAdminEditFormV327'){
-        if(!admin())throw new Error('Permission denied');const unit=String(fd.get('unit_name')||'').trim();if(!isAllowedUnit(unit))throw new Error('กรุณาเลือกหน่วยงานจากรายการ');
-        const result=await DB().rpc('admin_edit_donor_helper_v324',{p_signup_id:fd.get('signup_id'),p_helper_name:String(fd.get('helper_name')||'').trim(),p_unit_name:unit,p_phone:String(fd.get('phone')||'').trim()||null});if(result.error)throw result.error;
+        if(!admin())throw new Error('Permission denied');
+        const row=rowById(fd.get('signup_id')),external=!row?.internal_staff_id,unit=String(fd.get('unit_name')||'').trim(),name=normalizeFullName(fd.get('helper_name')),phone=formatPhone(fd.get('phone'));
+        if(external&&!hasFirstAndLastName(name))throw new Error('กรุณากรอกทั้งชื่อและนามสกุล โดยเว้นวรรคระหว่างชื่อกับนามสกุล');
+        if(!isAllowedUnit(unit))throw new Error('กรุณาเลือกหน่วยงานจากรายการ');
+        if(external&&!validPhone(phone))throw new Error('กรุณากรอกเบอร์โทร 10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678');
+        if(!external&&phone&&!validPhone(phone))throw new Error('กรุณากรอกเบอร์โทร 10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678');
+        const result=await DB().rpc('admin_edit_donor_helper_v324',{p_signup_id:fd.get('signup_id'),p_helper_name:name,p_unit_name:unit,p_phone:phone||null});if(result.error)throw result.error;
         try{closeModal();}catch(_){}await loadMonth(S().donorHelperMonthV327,{force:true});toast('แก้ไขข้อมูลแล้ว');
       }else if(form.id==='donorHelperAdminReasonFormV327'){
         if(!admin())throw new Error('Permission denied');
