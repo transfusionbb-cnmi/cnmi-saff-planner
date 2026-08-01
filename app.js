@@ -10962,6 +10962,18 @@ function bindGlobalEvents() {
     const n = normalizeHours(row?.staff_id, '', workDate, actual);
     return { actualHours:n.actualHours, hrHours:n.hrHours, segments:[n], shiftType:n.shiftType || '-', rateType:n.rateType, isHoliday:n.isHoliday };
   }
+  function effectiveOtNormalizationBreakdown190(row){
+    try {
+      const override = window.v190HrRateNormalization?.otNormalizationBreakdown190;
+      if (typeof override === 'function' && override !== otNormalizationBreakdown190 && override !== effectiveOtNormalizationBreakdown190) {
+        const result = override(row);
+        if (result && Number.isFinite(Number(result.hrHours))) return result;
+      }
+    } catch (error) {
+      console.warn('V353 effective OT normalization fallback', error);
+    }
+    return otNormalizationBreakdown190(row);
+  }
   function cleanReasonHtml190(row){
     try {
       const helpers = window.v176OtReasonHelpers;
@@ -11007,15 +11019,20 @@ function bindGlobalEvents() {
     return badge(s, s === 'อนุมัติ' ? 'green' : s === 'ไม่อนุมัติ' ? 'red' : s === 'ส่งกลับแก้ไข' ? 'orange' : 'black');
   }
   function hourCells190(row){
-    const n = otNormalizationBreakdown190(row);
+    const n = effectiveOtNormalizationBreakdown190(row);
     const changed = Math.abs(Number(n.hrHours || 0) - Number(n.actualHours || 0)) > 0.004;
+    const normalizeBadge = n.helperInfo
+      ? '<br><span class="badge blue">แปลงตามเรทช่องที่ลงชื่อ</span>'
+      : n.tradeInfo
+        ? '<br><span class="badge purple">แปลงตามเรทที่ซื้อ</span>'
+        : '<br><span class="badge yellow">Normalize นักขัต</span>';
     const detail = changed
       ? `<br><span class="muted">${esc190(n.rateType || '-')} ${n.segments?.[0]?.normalRate || ''}→${n.segments?.[0]?.holidayRate || ''} บ./ชม.</span>`
       : `<br><span class="muted">${esc190(n.rateType || '-')} เรทปกติ</span>`;
     return {
       actual:`<b>${formatHours190(n.actualHours, 1)}</b>`,
-      hr:`<b>${formatHours190(n.hrHours, 2)}</b>${changed ? '<br><span class="badge yellow">Normalize นักขัต</span>' : detail}`,
-      mobile:`<b>ชั่วโมงจริง:</b> ${formatHours190(n.actualHours, 1)}<br><b>ชั่วโมงเบิก HR:</b> ${formatHours190(n.hrHours, 2)}${changed ? ` <span class="badge yellow">Normalize</span>` : ''}`
+      hr:`<b>${formatHours190(n.hrHours, 2)}</b>${changed ? normalizeBadge : detail}`,
+      mobile:`<b>ชั่วโมงจริง:</b> ${formatHours190(n.actualHours, 1)}<br><b>ชั่วโมงเบิก HR:</b> ${formatHours190(n.hrHours, 2)}${changed ? ` ${normalizeBadge.replace('<br>','')}` : ''}`
     };
   }
 
@@ -11064,7 +11081,7 @@ function bindGlobalEvents() {
     const approved = pendingApprovedRows190();
     const map = {};
     approved.forEach(r => {
-      const n = otNormalizationBreakdown190(r);
+      const n = effectiveOtNormalizationBreakdown190(r);
       if (!Number.isFinite(n.actualHours) || n.actualHours <= 0) return;
       const id = r.staff_id || '-';
       map[id] = map[id] || { actual:0, hr:0, count:0, minDate:'', maxDate:'', holidayCount:0 };
@@ -11126,7 +11143,7 @@ function bindGlobalEvents() {
   }
   function exportSummaryRows190(sourceRows){
     return sourceRows.map(r => {
-      const n = otNormalizationBreakdown190(r);
+      const n = effectiveOtNormalizationBreakdown190(r);
       return {
         no: employeeCode190(r.staff_id),
         'ชื่อ': staffDisplay190(r.staff_id),
@@ -11148,7 +11165,7 @@ function bindGlobalEvents() {
     const totals = {};
     const actualTotals = {};
     sourceRows.forEach(r => {
-      const n = otNormalizationBreakdown190(r);
+      const n = effectiveOtNormalizationBreakdown190(r);
       if (!Number.isFinite(n.hrHours) || n.hrHours <= 0) return;
       totals[r.staff_id] = round2V190((totals[r.staff_id] || 0) + n.hrHours);
       actualTotals[r.staff_id] = round2V190((actualTotals[r.staff_id] || 0) + n.actualHours);
@@ -11359,15 +11376,22 @@ function bindGlobalEvents() {
   function hourCells191(row){
     const actual = round191(explicitHours191(row), 1);
     let hr = actual;
+    let breakdown = null;
     try {
       const n = window.v190HrRateNormalization?.otNormalizationBreakdown190?.(row);
-      if (n && Number.isFinite(Number(n.hrHours))) hr = Number(n.hrHours);
+      if (n && Number.isFinite(Number(n.hrHours))) { hr = Number(n.hrHours); breakdown = n; }
     } catch (_) {}
     const changed = Math.abs(Number(hr || 0) - Number(actual || 0)) > 0.004;
+    const changedLabel = breakdown?.helperInfo
+      ? 'แปลงตามเรทช่องที่ลงชื่อ'
+      : breakdown?.tradeInfo
+        ? 'แปลงตามเรทที่ซื้อ'
+        : 'Normalize';
+    const changedTone = breakdown?.helperInfo ? 'blue' : breakdown?.tradeInfo ? 'purple' : 'yellow';
     return {
       actual:`<b>${round191(actual, 1).toFixed(1)}</b>`,
-      hr:`<b>${round191(hr, 2).toFixed(2)}</b>${changed ? '<br><span class="badge yellow">Normalize</span>' : ''}`,
-      mobile:`<b>ชั่วโมงจริง:</b> ${round191(actual, 1).toFixed(1)}<br><b>ชั่วโมงเบิก HR:</b> ${round191(hr, 2).toFixed(2)}${changed ? ' <span class="badge yellow">Normalize</span>' : ''}`
+      hr:`<b>${round191(hr, 2).toFixed(2)}</b>${changed ? `<br><span class="badge ${changedTone}">${changedLabel}</span>` : ''}`,
+      mobile:`<b>ชั่วโมงจริง:</b> ${round191(actual, 1).toFixed(1)}<br><b>ชั่วโมงเบิก HR:</b> ${round191(hr, 2).toFixed(2)}${changed ? ` <span class="badge ${changedTone}">${changedLabel}</span>` : ''}`
     };
   }
   function statusActions191(row){
@@ -12811,9 +12835,19 @@ function bindGlobalEvents() {
   }
 
   window.renderOtSummary = renderOtSummary = function renderOtSummaryV208(){
-    const rows = (Array.isArray(state.otSummaryAllRowsV208) && state.otSummaryAllRowsV208.length)
-      ? state.otSummaryAllRowsV208.slice()
-      : localOtSummaryRows208();
+    const rpcRows = (Array.isArray(state.otSummaryAllRowsV208) ? state.otSummaryAllRowsV208 : []).map(r => ({ ...r }));
+    const localRows = localOtSummaryRows208();
+    // V353: RPC V208 รู้เพียงประเภทบุคลากร แต่ไม่รู้ช่อง Clerk/คนเจาะที่ลงชื่อ
+    // จึงใช้ผลคำนวณจากรายการ OT ที่หน้าเว็บมองเห็นมาทับสรุปของบุคลากรคนนั้น
+    const localByStaff = new Map(localRows.map(r => [String(r.staff_id || r.staffId || r.id || ''), r]));
+    const rows = rpcRows.length ? rpcRows.map(r => {
+      const staffId = String(r.staff_id || r.staffId || r.id || '');
+      return localByStaff.has(staffId) ? { ...r, ...localByStaff.get(staffId), _v353_recalculated:true } : r;
+    }) : localRows.slice();
+    localRows.forEach(r => {
+      const staffId = String(r.staff_id || r.staffId || r.id || '');
+      if (!rows.some(x => String(x.staff_id || x.staffId || x.id || '') === staffId)) rows.push({ ...r, _v353_recalculated:true });
+    });
     rows.forEach(r => {
       r.staff_id = r.staff_id || r.staffId || r.id || '-';
       r.actual_hours = round208(r.actual_hours ?? r.actual ?? 0, 2);

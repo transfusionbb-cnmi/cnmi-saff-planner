@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V352
+/* CNMI Staff Planner V353
    - Makes purchased-duty OT auditable: seller, date, duty, sold rate, money and HR-hour formula.
    - Uses the saved trade amount as the source of truth for cross-rate HR normalization.
    - Staff gets two nearby tabs instead of a long claim-details card at the bottom.
@@ -9,9 +9,9 @@
 */
 (function(){
   'use strict';
-  const VERSION = 'V352_TRADE_REQUEST_DUTY_DATE_FIX';
-  if (window.__CNMI_V352_TRADE_REQUEST_DUTY_DATE_FIX__) return;
-  window.__CNMI_V352_TRADE_REQUEST_DUTY_DATE_FIX__ = true;
+  const VERSION = 'V353_DONOR_HELPER_RATE_SOURCE_OF_TRUTH';
+  if (window.__CNMI_V353_DONOR_HELPER_RATE_SOURCE_OF_TRUTH__) return;
+  window.__CNMI_V353_DONOR_HELPER_RATE_SOURCE_OF_TRUTH__ = true;
 
   const tradeLoads = new Map();
   const helperLoads = new Map();
@@ -38,6 +38,25 @@
   function currentSid(){ try{return String(currentStaffId()||'');}catch(_){return String(S()?.profile?.staff_id||S()?.profile?.id||'');} }
   function admin(){ try{return typeof isAdmin==='function'&&isAdmin();}catch(_){return false;} }
   function staffRecord(id){ return (S()?.staff||[]).find(x=>String(x?.id||'')===String(id||''))||null; }
+  function normalizedPersonName(value){
+    return String(value||'')
+      .replace(/^\s*(?:นาย|นางสาว|นาง|น\.ส\.|นส\.|ดร\.|พญ\.|นพ\.)\s*/i,'')
+      .replace(/[()（）]/g,' ')
+      .replace(/\s+/g,' ')
+      .trim()
+      .toLocaleLowerCase('th-TH');
+  }
+  function legacyHelperMatchesStaff(item,staffId){
+    if(item?.internal_staff_id)return false;
+    const person=staffRecord(staffId)||{};
+    const helperName=normalizedPersonName(item?.helper_name);
+    if(!helperName)return false;
+    const fullNames=[person.full_name,person.name,person.display_name]
+      .map(normalizedPersonName).filter(Boolean);
+    if(fullNames.includes(helperName))return true;
+    const nickname=normalizedPersonName(person.nickname);
+    return !!nickname&&helperName===nickname;
+  }
   function staffName(id){
     try{return staffNick(id);}catch(_){const s=staffRecord(id)||{};return s.nickname||s.full_name||s.name||id||'-';}
   }
@@ -111,10 +130,16 @@
     if(!isHelperOtRow(row))return null;
     const sid=String(row?.staff_id||''),date=normDate(row?.work_date),month=date.slice(0,7);
     if(!sid||!date)return null;
-    return cachedHelperRows(month).find(item=>{
+    const eligible=cachedHelperRows(month).filter(item=>{
       const status=String(item?.status||'confirmed');
-      return String(item?.internal_staff_id||'')===sid&&normDate(item?.work_date)===date&&!['cancelled','no_show'].includes(status);
-    })||null;
+      return normDate(item?.work_date)===date&&!['cancelled','no_show'].includes(status);
+    });
+    const exact=eligible.find(item=>String(item?.internal_staff_id||'')===sid);
+    if(exact)return exact;
+    // รายการเก่าหรือรายการที่ Admin เพิ่มแทนอาจยังไม่มี internal_staff_id
+    // จึงใช้ชื่อบุคลากรเป็น fallback เฉพาะวันเดียวกัน และเฉพาะแถวที่ไม่มี id เท่านั้น
+    const legacy=eligible.filter(item=>legacyHelperMatchesStaff(item,sid));
+    return legacy.length===1?legacy[0]:null;
   }
   function helperClaimInfo(row,base){
     const signup=helperSignupForOtRow(row);
