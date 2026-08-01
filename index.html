@@ -4,23 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Staff Planner | Blood Bank CNMI</title>
-  <meta name="description" content="ระบบจัดตารางเวร ขายเวร เบิก OT และ Export HR ของหน่วยเวชศาสตร์บริการโลหิต CNMI" />
-  <meta name="theme-color" content="#80caff" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Staff Planner" />
-  <link rel="manifest" href="site.webmanifest?v=324" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=303" />
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=303" />
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=303" />
-  <link rel="shortcut icon" href="favicon.ico?v=303" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=342" />
-  <link rel="stylesheet" href="pwa-install-v303.css?v=305" />
-  <link rel="stylesheet" href="donor-helper-v327.css?v=344" />
+  <link rel="stylesheet" href="style.css?v=75" />
 </head>
 <body>
   <div id="setupWarning" class="setup-warning hidden">
@@ -30,32 +17,29 @@
 
   <section id="authView" class="auth-view">
     <div class="auth-card">
-      <div class="brand-mark"><img src="app-icon-1024.png?v=299" alt="CNMI Staff Planner"></div>
+      <div class="brand-mark">CNMI</div>
       <h1>ระบบเวรและกิจกรรมหน่วยงาน</h1>
-      <p class="muted">กรอก Username หรือ อีเมล Mahidol และ Password เพื่อเข้าสู่ระบบ</p>
+      <p class="muted">Login ด้วยชื่อผู้ใช้หรืออีเมล Mahidol และรหัสผ่านของระบบ</p>
 
-      <div class="auth-tabs hidden" aria-hidden="true">
-        <button class="auth-tab active" data-auth-tab="login" type="button">เข้าสู่ระบบ</button>
-        <button class="auth-tab" data-auth-tab="setupPassword" type="button">Login ครั้งแรก / ลืมรหัสผ่าน</button>
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth-tab="login">เข้าสู่ระบบ</button>
+        <button class="auth-tab" data-auth-tab="setupPassword">Login ครั้งแรก / ลืมรหัสผ่าน</button>
       </div>
 
       <form id="loginForm" class="auth-panel active">
-        <label>Username หรือ อีเมล Mahidol
-          <input id="loginEmail" type="text" placeholder="Username หรือ name@mahidol.ac.th" autocomplete="username" required>
+        <label>ชื่อผู้ใช้ หรืออีเมล Mahidol
+          <input id="loginEmail" type="text" placeholder="เช่น user หรือ name@mahidol.ac.th" autocomplete="username" required>
         </label>
         <label>รหัสผ่าน
-          <span class="password-field">
-            <input id="loginPassword" type="password" placeholder="เช่น CNMI@รหัสพนักงาน" autocomplete="current-password" required>
-            <button class="password-toggle" type="button" data-toggle-password="loginPassword" aria-label="แสดงรหัสผ่าน" aria-pressed="false">👁</button>
-          </span>
+          <input id="loginPassword" type="password" placeholder="รหัสผ่าน" autocomplete="current-password" required>
         </label>
         <button class="primary-btn full-btn" type="submit">เข้าสู่ระบบ</button>
-        <p class="hint login-helper-text">สำหรับการล็อกอินครั้งแรก หรือ ลืมรหัสผ่าน กรุณาใช้อีเมลมหิดล ส่วนรหัสผ่านคือ CNMI@ ตามด้วยรหัสพนักงาน</p>
+        <p class="hint">ยังไม่เคยตั้งรหัสผ่าน หรือจำรหัสผ่านไม่ได้ ให้ไปแท็บ “Login ครั้งแรก / ลืมรหัสผ่าน”</p>
       </form>
 
-      <form id="setupPasswordForm" class="auth-panel hidden" aria-hidden="true">
+      <form id="setupPasswordForm" class="auth-panel">
         <label>อีเมล Mahidol
-          <input id="setupPasswordEmail" type="email" placeholder="name@mahidol.ac.th" autocomplete="username">
+          <input id="setupPasswordEmail" type="email" placeholder="name@mahidol.ac.th" autocomplete="username" required>
         </label>
         <button class="primary-btn full-btn" type="submit">ส่งลิงก์ตั้งรหัสผ่าน</button>
         <p class="hint">ระบบจะส่งลิงก์เฉพาะอีเมลที่อยู่ในรายชื่อเจ้าหน้าที่และเปิดใช้งานแล้วเท่านั้น</p>
@@ -66,10 +50,7 @@
           <input id="recoveryLoginName" type="text" placeholder="เช่น user หรือ gift123 หรือ 012345" autocomplete="username" required>
         </label>
         <label>รหัสผ่านใหม่
-          <span class="password-field">
-            <input id="newPassword" type="password" placeholder="รหัสผ่านใหม่" autocomplete="new-password" required>
-            <button class="password-toggle" type="button" data-toggle-password="newPassword" aria-label="แสดงรหัสผ่าน" aria-pressed="false">👁</button>
-          </span>
+          <input id="newPassword" type="password" placeholder="รหัสผ่านใหม่" autocomplete="new-password" required>
         </label>
         <button class="primary-btn full-btn" type="submit">บันทึกชื่อผู้ใช้และรหัสผ่านใหม่</button>
         <p class="hint">ชื่อผู้ใช้ใช้ตัวอักษรอังกฤษหรือตัวเลขได้ เช่น user, gift123, 012345</p>
@@ -80,7 +61,7 @@
   <section id="appView" class="app-view hidden">
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-head">
-        <div class="brand-icon"><img src="app-icon-1024.png?v=299" alt="" aria-hidden="true"></div>
+        <div class="brand-icon">CNMI</div>
         <div>
           <div class="app-title">Staff Planner</div>
           <div class="app-subtitle">Blood Bank CNMI</div>
@@ -88,10 +69,6 @@
       </div>
       <nav id="mainNav" class="main-nav"></nav>
       <div class="sidebar-foot">
-        <a class="inventory-app-link full-btn" href="https://inventory.cnmiblood.com" target="_blank" rel="noopener noreferrer" aria-label="เปิดแอพคลังวัสดุ Inventory">
-          <span class="inventory-app-link-icon" aria-hidden="true">▦</span>
-          <span><b>คลังวัสดุ Inventory</b><small>เปิดแอพในแท็บใหม่</small></span>
-        </a>
         <div id="userMini" class="user-mini"></div>
         <button id="logoutBtn" class="danger-ghost full-btn">Log Out</button>
       </div>
@@ -124,113 +101,32 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="config.js?v=298"></script>
-  <script src="patch-v136-preauth.js?v=298"></script>
-  <script src="patch-v315-interaction-preload.js?v=323"></script>
-  <script src="patch-v316-egress-preload.js?v=323"></script>
-  <script src="patch-v316-navigation-preload.js?v=323"></script>
-  <script src="app.js?v=353"></script>
-  <script src="patch-v136-auth-layout-tabs-final.js?v=298"></script>
-  <script src="patch-v137-critical-regression-restore.js?v=298"></script>
-  <script src="patch-v138-password-complete-redirect.js?v=298"></script>
-  <script src="patch-v140-long-leave-balance-admin.js?v=298"></script>
-  <script src="patch-v141-admin-long-leave-ui-force.js?v=298"></script>
-  <script src="patch-v143-neutral-long-leave-label.js?v=298"></script>
-  <script src="patch-v196-no-stale-recovery.js?v=298"></script>
-  <script src="patch-v197-duty-permission-sync.js?v=298"></script>
-  <script src="patch-v204-duty-eligibility-state-fix.js?v=298"></script>
-  <script src="patch-v213-fast-scheduler-daily-position-dedup.js?v=298"></script>
-  <script src="patch-v214-position-management-crud-hard-fix.js?v=298"></script>
-  <script src="patch-v215-weekly-position-copy.js?v=298"></script>
-  <script src="patch-v216-month-position-blank-table.js?v=298"></script>
-  <script src="patch-v217-partial-sell-shift-segments.js?v=353"></script>
-  <script src="patch-v220-ot-approval-position-slots-final.js?v=298"></script>
-  <script src="patch-v221-duty-date-slot-edit-month-ui.js?v=298"></script>
-  <script src="patch-v222-clean-ot-ch4-month-position-ui.js?v=298"></script>
-  <script src="patch-v223-month-plan-source-template-only.js?v=298"></script>
-  <script src="patch-v224-slot-template-crud-month-plan-hard-fix.js?v=298"></script>
-  <script src="patch-v225-weekly-rotation-position-plan.js?v=298"></script>
-  <script src="patch-v227-manual-as-blood-bank-zone.js?v=308"></script>
-  <script src="patch-v230-weekly-leave-aware-position-plan-final.js?v=298"></script>
-  <script src="patch-v231-main-slot-weekly-leave-config.js?v=298"></script>
-  <script src="patch-v232-default-slot-templates.js?v=298"></script>
-  <script src="patch-v233-full-week-leave-no-position.js?v=298"></script>
-  <script src="patch-v234-ot-admin-ch4-hr-cycle.js?v=356"></script>
-  <script src="patch-v237-month-position-compact-week-swap.js?v=298"></script>
-  <script src="patch-v238-ot-summary-hr-export-logic.js?v=298"></script>
-  <script src="patch-v241-ot-single-menu-month-export-fix.js?v=298"></script>
-  <script src="patch-v244-personal-position-permissions-tab.js?v=298"></script>
-  <script src="patch-v245-personal-permission-slot-filter.js?v=298"></script>
-  <script src="patch-v246-mobile-position-menu-fix.js?v=298"></script>
-  <script src="patch-v247-outing-permission-key-and-render-fix.js?v=298"></script>
-  <script src="patch-v248-personal-permission-persist-fix.js?v=298"></script>
-  <script src="patch-v249-mobile-position-compare-compact.js?v=298"></script>
-  <script src="patch-v250-block-no-duty-on-public-holiday.js?v=298"></script>
-  <script src="patch-v252-month-position-slot-identity-fix.js?v=298"></script>
-  <script src="patch-v253-admin-holiday-unrestricted.js?v=298"></script>
-  <script src="patch-v254-leave-status-filter-admin-first.js?v=298"></script>
-  <script src="patch-v255-personal-permission-enforce-plan.js?v=298"></script>
-  <script src="patch-v256-selected-month-data-loader.js?v=298"></script>
-  <script src="patch-v258-personal-permission-isolation-fix.js?v=298"></script>
-  <script src="patch-v259-position-count-daily-month-sync-permission-guard.js?v=298"></script>
-  <script src="patch-v260-supabase-position-source-of-truth.js?v=298"></script>
-  <script src="patch-v261-daily-position-authoritative-sync.js?v=298"></script>
-  <script src="patch-v262-auto-assign-consecutive-rule-clarity.js?v=298"></script>
-  <script src="patch-v265-stability-rule-corrections.js?v=298"></script>
-  <script src="patch-v266-context-aware-auto-assign.js?v=298"></script>
-  <script src="patch-v270-trainee-semi-manual-roster.js?v=298"></script>
-  <script src="patch-v271-semi-manual-assistant-hardening.js?v=298"></script>
-  <script src="patch-v272-weekly-inline-training.js?v=298"></script>
-  <script src="patch-v273-manual-management-tool.js?v=303"></script>
-  <script src="patch-v274-person-matrix-manual-fix.js?v=298"></script>
-  <script src="patch-v275-admin-manual-ui-corrections.js?v=306"></script>
-  <script src="patch-v276-sticky-compact-columns.js?v=298"></script>
-  <script src="patch-v277-contained-scroll-cumulative-balance.js?v=298"></script>
-  <script src="patch-v278-slot-stats-holiday-balance-navigation-fix.js?v=307"></script>
-  <script src="patch-v279-duty-pair-summary.js?v=298"></script>
-  <script src="patch-v281-position-admin-compact-stats-tabs.js?v=298"></script>
-  <script src="patch-v282-position-management-interaction-recovery.js?v=298"></script>
-  <script src="patch-v283-position-matrix-readable-trainee-color.js?v=298"></script>
-  <script src="patch-v284-daily-position-interaction-and-width-fix.js?v=298"></script>
-  <script src="patch-v286-daily-position-stable-route-staff-month-compact.js?v=298"></script>
-  <script src="patch-v287-daily-position-authoritative-date-loader.js?v=298"></script>
-  <script src="patch-v288-position-month-save-scroll-lock.js?v=298"></script>
-  <script src="patch-v289-position-base-bulk-save-timeout.js?v=298"></script>
-  <script src="patch-v290-position-month-ajax-no-rerender.js?v=298"></script>
-  <script src="patch-v291-position-month-always-dropdown-smooth-scroll.js?v=298"></script>
-  <script src="patch-v292-schedule-image-export.js?v=341"></script>
-  <script src="patch-v293-position-month-admin-clean-full-summary-fix.js?v=298"></script>
-  <script src="patch-v301-calendar-leave-approval-interaction-fix.js?v=301"></script>
-  <script src="patch-v296-popup-and-position-details.js?v=301"></script>
-  <script src="patch-v297-position-month-image-export-slot-details.js?v=298"></script>
-  <script src="patch-v298-baseline-balance-after-trade.js?v=298"></script>
-  <script src="patch-v300-mobile-daily-position-card-stack-fix.js?v=301"></script>
-  <script src="patch-v305-mobile-app-scroll-and-position-description.js?v=305"></script>
-  <script src="patch-v311-mobile-popup-daily-summary-fix.js?v=334"></script>
-  <script src="pwa-install-v303.js?v=327"></script>
-  <script src="patch-v313-app-count-filter-pwa-trade-fix.js?v=315"></script>
-  <script src="patch-v314-admin-ot-calendar-ch4-fix.js?v=323"></script>
-  <script src="patch-v316-route-loader.js?v=323"></script>
-  <script src="patch-v318-hr-carry-year-month-filter.js?v=323"></script>
-  <script src="patch-v319-fiscal-year-unlock.js?v=323"></script>
-  <script src="patch-v321-daily-role-options.js?v=323"></script>
-  <script src="patch-v322-daily-baseline-compare.js?v=323"></script>
-  <script src="patch-v323-popup-job-stability.js?v=323"></script>
-  <script src="patch-v326-donor-helper-unit-dropdown.js?v=326"></script>
-  <script src="patch-v327-donor-helper-internal-booking.js?v=344"></script>
-  <script src="patch-v331-ch4-daily-detail-staff-order.js?v=331"></script>
-  <script src="patch-v332-calendar-activity-time-location.js?v=332"></script>
-  <script src="patch-v333-physician-direct-leave.js?v=333"></script>
-  <script src="patch-v335-daily-position-save-route-lock.js?v=335"></script>
-  <script src="patch-v336-continuous-balance-staff-color.js?v=336"></script>
-  <script src="patch-v337-daily-position-single-save-publish.js?v=337"></script>
-  <script src="patch-v338-partial-trade-current-balance-fix.js?v=338"></script>
-  <script src="patch-v339-thai-balance-label-holiday-carry.js?v=339"></script>
-  <script src="patch-v340-baseline-duty-holiday-columns.js?v=340"></script>
-  <script src="patch-v346-ot-carry-in-summary.js?v=346"></script>
-  <script src="patch-v347-ot-claim-details-money.js?v=349"></script>
-  <script src="patch-v348-ot-trade-rate-tabs-popup.js?v=356"></script>
-  <script src="patch-v357-extra-ot-explicit-rate-form.js?v=357"></script>
+  <script src="config.js?v=75"></script>
+  <script src="app.js?v=358"></script>
+  <script src="patch-v58.js?v=75"></script>
+  <script src="patch-v59.js?v=75"></script>
+  <script src="patch-v72.js?v=75"></script>
+  <script src="patch-v74.js?v=75"></script>
+  <script src="patch-v75.js?v=75"></script>
+  <script src="patch-v77-rolling-1year-calendar.js?v=77"></script>
+  <script src="patch-v79-selected-month-loader-rolling-cap.js?v=79"></script>
+  <script src="patch-v80-robust-selected-month-loader.js?v=80"></script>
+  <script src="patch-v84-final-mobile-schedule-position-session.js?v=84"></script>
+  <script src="patch-v85-mobile-calendar-schedule-session-fix.js?v=85"></script>
+  <script src="patch-v86-session-hard-timeout-fix.js?v=86"></script>
+  <script src="patch-v88-roster-balanced-autoassign-final.js?v=88"></script>
+  <script src="patch-v89-roster-preset-excel-fairness.js?v=89"></script>
+  <script src="patch-v90-roster-preset-dnd-stable.js?v=90"></script>
+  <script src="patch-v91-holiday-first-fairness.js?v=91"></script>
+  <script src="patch-v92-duty-mt-or-tang.js?v=92"></script>
+  <script src="patch-v93-unlock-all-roster.js?v=93"></script>
+  <script src="patch-v95-roster-manual-swap-safe.js?v=95"></script>
+  <script src="patch-v98-fairness-duty-columns.js?v=98"></script>
+  <script src="patch-v100-position-rights-thursday-chbd3-mt.js?v=100"></script>
+  <script src="patch-v101-trade-gps-dashboard-fiscal-calendar-position.js?v=101"></script>
+  <script src="patch-v103-leave-list-confirmed-filters.js?v=103"></script>
+  <script src="patch-v104-desktop-roster-mobile-ui-clean.js?v=104"></script>
+  <script src="patch-v105-desktop-roster-tabs-fix.js?v=105"></script>
+  <script src="patch-v106-desktop-roster-actions-fix.js?v=106"></script>
 </body>
 </html>
