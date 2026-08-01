@@ -145,7 +145,7 @@
     /* Runs only when Admin presses Export. It does not preload with the OT page. */
     const res=await client.from('ot_requests').select('*').lt('work_date',source.start).order('work_date',{ascending:false}).limit(5000);
     if(res.error)throw res.error;
-    const exported=(res.data||[]).filter(row=>approved(row)&&claimStatus(row)==='exported');
+    const exported=(res.data||[]).filter(row=>approved(row));
     const latestRowsByStaff=new Map(),latestMarkerByStaff=new Map();
     exported.forEach(row=>{
       const staffId=String(row.staff_id||''),mk=String(row.work_date||'').slice(0,7);
@@ -162,6 +162,13 @@
     const out=new Map(),staffIds=new Set([...latestRowsByStaff.keys(),...latestMarkerByStaff.keys()]);
     staffIds.forEach(staffId=>{
       const latest=latestRowsByStaff.get(staffId),marker=latestMarkerByStaff.get(staffId);
+      /* Recalculate the immediately previous month from its live approved rows.
+         This keeps carry-in equal to the carry-out currently shown after edits. */
+      if(latest&&latest.month===previousMonth(source.month)){
+        const total=round2(latest.rows.reduce((sum,row)=>sum+Number(normalize(row).hrHours||0),0));
+        const claimed=Math.floor((total+1e-7)/8)*8,amount=round2(Math.max(0,total-claimed));
+        out.set(staffId,{amount,sourceMonth:latest.month,source:'previous-month-live',anchorRowId:latest.rows[0]?.id||marker?.rowId||''});return;
+      }
       if(marker&&(!latest||marker.month>=latest.month)){
         out.set(staffId,{amount:round2(marker.amount),sourceMonth:marker.month,source:'saved-v318',anchorRowId:marker.rowId||''});return;
       }
@@ -189,12 +196,13 @@
     const latestMarkerByStaff=new Map();
     (markers.data||[]).forEach(row=>{const staffId=String(row.staff_id||''),marker=parseCarryMarker(row);if(!staffId||!marker||marker.month>=source.month)return;const old=latestMarkerByStaff.get(staffId);if(!old||marker.month>old.month||(marker.month===old.month&&marker.at>old.at))latestMarkerByStaff.set(staffId,{...marker,rowId:row.id||''});});
     const fallbackByStaff=new Map();
-    (previousRows.data||[]).filter(row=>approved(row)&&claimStatus(row)==='exported').forEach(row=>{const staffId=String(row.staff_id||'');if(!staffId)return;if(!fallbackByStaff.has(staffId))fallbackByStaff.set(staffId,[]);fallbackByStaff.get(staffId).push(row);});
+    /* The previous month's live approved rows are the source of truth.  A saved
+       marker can become stale when Admin edits a rate/hours after HR export. */
+    (previousRows.data||[]).filter(row=>approved(row)).forEach(row=>{const staffId=String(row.staff_id||'');if(!staffId)return;if(!fallbackByStaff.has(staffId))fallbackByStaff.set(staffId,[]);fallbackByStaff.get(staffId).push(row);});
     const out=new Map();
     new Set([...latestMarkerByStaff.keys(),...fallbackByStaff.keys()]).forEach(staffId=>{
       const marker=latestMarkerByStaff.get(staffId),rows=fallbackByStaff.get(staffId)||[];
-      if(marker&&marker.month>=prev.month){out.set(staffId,{amount:round2(marker.amount),sourceMonth:marker.month,source:'saved-v318',anchorRowId:marker.rowId||''});return;}
-      if(rows.length){const total=round2(rows.reduce((sum,row)=>sum+Number(normalize(row).hrHours||0),0)),claimed=Math.floor((total+1e-7)/8)*8;out.set(staffId,{amount:round2(Math.max(0,total-claimed)),sourceMonth:prev.month,source:'derived-v317-summary',anchorRowId:rows[0]?.id||''});return;}
+      if(rows.length){const total=round2(rows.reduce((sum,row)=>sum+Number(normalize(row).hrHours||0),0)),claimed=Math.floor((total+1e-7)/8)*8;out.set(staffId,{amount:round2(Math.max(0,total-claimed)),sourceMonth:prev.month,source:'previous-month-live',anchorRowId:rows[0]?.id||marker?.rowId||''});return;}
       if(marker)out.set(staffId,{amount:round2(marker.amount),sourceMonth:marker.month,source:'saved-v318',anchorRowId:marker.rowId||''});
     });
     summaryCarryCache.set(key,{map:out,expires:Date.now()+CARRY_TTL});
