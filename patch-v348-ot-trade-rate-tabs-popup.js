@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V353
+/* CNMI Staff Planner V355
    - Makes purchased-duty OT auditable: seller, date, duty, sold rate, money and HR-hour formula.
    - Uses the saved trade amount as the source of truth for cross-rate HR normalization.
    - Staff gets two nearby tabs instead of a long claim-details card at the bottom.
@@ -9,9 +9,11 @@
 */
 (function(){
   'use strict';
-  const VERSION = 'V353_DONOR_HELPER_RATE_SOURCE_OF_TRUTH';
-  if (window.__CNMI_V353_DONOR_HELPER_RATE_SOURCE_OF_TRUTH__) return;
-  window.__CNMI_V353_DONOR_HELPER_RATE_SOURCE_OF_TRUTH__ = true;
+  const VERSION = 'V355_DONOR_HELPER_OT_LINK_FIX';
+  const HELPER_REASON_RE = /มาช่วย\s*งาน\s*เสาร์\s*[–—-]?\s*อาทิตย์|มาช่วย.*เสาร์.*อาทิตย์|ช่วยห้องบริจาคโลหิต|donor\s*helper/i;
+  const HELPER_MARKER_RE = /\[DONOR_HELPER_SLOT=(clerk|phlebotomist):(\d+)\]/i;
+  if (window.__CNMI_V355_DONOR_HELPER_OT_LINK_FIX__) return;
+  window.__CNMI_V355_DONOR_HELPER_OT_LINK_FIX__ = true;
 
   const tradeLoads = new Map();
   const helperLoads = new Map();
@@ -40,12 +42,14 @@
   function staffRecord(id){ return (S()?.staff||[]).find(x=>String(x?.id||'')===String(id||''))||null; }
   function normalizedPersonName(value){
     return String(value||'')
-      .replace(/^\s*(?:นาย|นางสาว|นาง|น\.ส\.|นส\.|ดร\.|พญ\.|นพ\.)\s*/i,'')
+      .replace(/^\s*(?:นาย|นางสาว|นาง|น\.?\s*ส\.?|นส\.?|ดร\.?|พญ\.?|นพ\.?)\s*/i,'')
       .replace(/[()（）]/g,' ')
+      .replace(/[.,/\\_-]+/g,' ')
       .replace(/\s+/g,' ')
       .trim()
       .toLocaleLowerCase('th-TH');
   }
+  function compactPersonName(value){ return normalizedPersonName(value).replace(/\s+/g,''); }
   function legacyHelperMatchesStaff(item,staffId){
     if(item?.internal_staff_id)return false;
     const person=staffRecord(staffId)||{};
@@ -54,6 +58,7 @@
     const fullNames=[person.full_name,person.name,person.display_name]
       .map(normalizedPersonName).filter(Boolean);
     if(fullNames.includes(helperName))return true;
+    if(fullNames.map(compactPersonName).includes(compactPersonName(helperName)))return true;
     const nickname=normalizedPersonName(person.nickname);
     return !!nickname&&helperName===nickname;
   }
@@ -92,19 +97,11 @@
     if(typeof data==='string'){try{return JSON.parse(data)||{};}catch(_){return{};}}
     return data;
   }
-  function cachedHelperRows(month){
-    if(helperRowsByMonth.has(month))return helperRowsByMonth.get(month)||[];
-    const st=S();
-    if(String(st?.donorHelperLoadedMonthV327||'')===String(month||'')){
-      const rows=Array.isArray(st?.donorHelperPayloadV327?.rows)?st.donorHelperPayloadV327.rows:[];
-      helperRowsByMonth.set(month,rows);
-      return rows;
-    }
-    return [];
-  }
-  async function ensureHelpers(month){
+  function cachedHelperRows(month){ return helperRowsByMonth.get(String(month||'').slice(0,7))||[]; }
+  async function ensureHelpers(month,options={}){
     const key=String(month||selectedMonth()).slice(0,7);
-    if(helperRowsByMonth.has(key))return {loaded:true,count:(helperRowsByMonth.get(key)||[]).length,cached:true};
+    if(!options.force&&helperRowsByMonth.has(key))return {loaded:true,count:(helperRowsByMonth.get(key)||[]).length,cached:true};
+    if(options.force)helperLoads.delete(key);
     if(helperLoads.has(key))return helperLoads.get(key);
     let db=null;try{db=sb;}catch(_){db=window.sb||null;}
     if(!db?.rpc)return {loaded:false,reason:'no-db'};
@@ -114,7 +111,7 @@
       const payload=parsePayload(result?.data);
       const rows=Array.isArray(payload?.rows)?payload.rows:[];
       helperRowsByMonth.set(key,rows);
-      return {loaded:true,count:rows.length};
+      return {loaded:true,count:rows.length,month:key};
     })().catch(error=>{
       console.warn(`[${VERSION}] donor-helper load`,error);
       helperLoads.delete(key);
@@ -124,22 +121,28 @@
     return task;
   }
   function isHelperOtRow(row){
-    return /มาช่วยงานเสาร์\s*[–—-]?\s*อาทิตย์|มาช่วย.*เสาร์.*อาทิตย์|ช่วยห้องบริจาคโลหิต|donor\s*helper/i.test(`${row?.reason||''} ${row?.note||''}`);
+    return HELPER_REASON_RE.test(`${row?.reason||''} ${row?.note||''}`);
   }
-  function helperSignupForOtRow(row){
-    if(!isHelperOtRow(row))return null;
-    const sid=String(row?.staff_id||''),date=normDate(row?.work_date),month=date.slice(0,7);
-    if(!sid||!date)return null;
+  function helperMarker(row){
+    const match=`${row?.device||''} ${row?.note||''}`.match(HELPER_MARKER_RE);
+    if(!match)return null;
+    return {slot_type:String(match[1]).toLowerCase(),slot_no:Number(match[2]||1),id:'saved-with-ot'};
+  }
+  function helperSignupForStaffDate(staffId,date){
+    const sid=String(staffId||''),day=normDate(date),month=day.slice(0,7);
+    if(!sid||!day)return null;
     const eligible=cachedHelperRows(month).filter(item=>{
       const status=String(item?.status||'confirmed');
-      return normDate(item?.work_date)===date&&!['cancelled','no_show'].includes(status);
+      return normDate(item?.work_date)===day&&!['cancelled','no_show'].includes(status);
     });
     const exact=eligible.find(item=>String(item?.internal_staff_id||'')===sid);
     if(exact)return exact;
-    // รายการเก่าหรือรายการที่ Admin เพิ่มแทนอาจยังไม่มี internal_staff_id
-    // จึงใช้ชื่อบุคลากรเป็น fallback เฉพาะวันเดียวกัน และเฉพาะแถวที่ไม่มี id เท่านั้น
     const legacy=eligible.filter(item=>legacyHelperMatchesStaff(item,sid));
     return legacy.length===1?legacy[0]:null;
+  }
+  function helperSignupForOtRow(row){
+    if(!isHelperOtRow(row))return null;
+    return helperMarker(row)||helperSignupForStaffDate(row?.staff_id,row?.work_date);
   }
   function helperClaimInfo(row,base){
     const signup=helperSignupForOtRow(row);
@@ -404,7 +407,9 @@
       if(String(S()?.page||'')!=='ot')return;
       const month=selectedMonth(),scope=admin()?'admin':currentSid(),key=`${month}|${scope}`;
       if(refreshedTradeScopes.has(key))return;
-      const [trades,helpers]=await Promise.all([ensureTrades(month,currentSid()),ensureHelpers(month)]);
+      // โหลดเฉพาะเดือนที่ผู้ใช้กำลังดูใหม่จากฐานข้อมูลจริงหนึ่งครั้ง
+      // ไม่ใช้ payload ว่างเดิม และไม่ดึงเดือนก่อนหน้า/เดือนถัดไป
+      const [trades,helpers]=await Promise.all([ensureTrades(month,currentSid()),ensureHelpers(month,{force:true})]);
       if((trades?.loaded||helpers?.loaded)&&typeof renderPage==='function'){
         refreshedTradeScopes.add(key);
         renderPage();
@@ -416,6 +421,46 @@
     const wrapped=function renderOtPageV348(){const html=previousRenderOtPage.apply(this,arguments);queueFullRefresh();setTimeout(arrangeStaff,0);return html;};
     try{window.renderOtPage=renderOtPage=wrapped;}catch(_){window.renderOtPage=wrapped;}
   }
+
+  const previousSaveOtRequest=window.saveOtRequest||(typeof saveOtRequest==='function'?saveOtRequest:null);
+  const saveOtRequestV355=async function(form){
+    const fd=new FormData(form);
+    const reason=String(fd.get('reason')||'').trim();
+    if(!HELPER_REASON_RE.test(reason)||form?.dataset?.adminSimple==='1'){
+      return typeof previousSaveOtRequest==='function'?previousSaveOtRequest(form):undefined;
+    }
+    const staffId=currentSid(),workDate=normDate(fd.get('work_date'));
+    if(!staffId||!workDate)return showToast('กรุณาระบุวันที่มาช่วยงานให้ถูกต้อง',{tone:'error'});
+    const loaded=await ensureHelpers(workDate.slice(0,7),{force:true});
+    if(!loaded?.loaded)return showToast('โหลดข้อมูลช่องลงชื่อมาช่วยงานไม่สำเร็จ กรุณารีเฟรชแล้วลองใหม่',{tone:'error'});
+    const signup=helperSignupForStaffDate(staffId,workDate);
+    if(!signup){
+      return showToast('ไม่พบชื่อของคุณในช่อง Clerk หรือคนเจาะของวันที่เลือก กรุณาลงชื่อหน้าคนมาช่วยห้องบริจาคโลหิตก่อน แล้วจึงขอ OT',{tone:'error'});
+    }
+    let pos={ok:true,lat:null,lng:null,accuracy:null};
+    try{if(typeof getGps==='function')pos=await getGps();}catch(_){}
+    if(pos&&!pos.ok)return typeof showGpsHelp==='function'?showGpsHelp(pos.message):showToast(pos.message||'บันทึกไม่ได้',{tone:'error'});
+    const startTime=String(fd.get('start_time')||'').trim();
+    const note=String(fd.get('note')||'').trim();
+    const marker=`[DONOR_HELPER_SLOT=${String(signup.slot_type||'').toLowerCase()}:${Number(signup.slot_no||1)}]`;
+    const payload={
+      staff_id:staffId,work_date:workDate,start_time:startTime,end_time:fd.get('end_time'),reason,note,
+      status:'รออนุมัติ',lat:pos?.lat??null,lng:pos?.lng??null,accuracy:pos?.accuracy??null,
+      device:`${marker} | ${navigator.userAgent}`.slice(0,250)
+    };
+    let result=await sb.from('ot_requests').insert(payload);
+    if(result.error&&/start_time|column|schema/i.test(result.error.message||'')){
+      const fallback={...payload,note:`เวลาเริ่ม ${startTime}${note?' | '+note:''}`};
+      delete fallback.start_time;
+      result=await sb.from('ot_requests').insert(fallback);
+    }
+    if(result.error)return showToast(result.error.message||'บันทึกคำขอ OT ไม่สำเร็จ',{tone:'error'});
+    await loadAllData();
+    if(typeof renderPage==='function')renderPage();
+    showToast(`ส่งคำขอ OT เพิ่มแล้ว • ระบบผูกกับช่อง ${signup.slot_type==='clerk'?'Clerk':`คนเจาะ ${Number(signup.slot_no||1)}`}`);
+  };
+  window.saveOtRequest=saveOtRequestV355;
+  try{saveOtRequest=saveOtRequestV355;}catch(_){}
 
   document.addEventListener('click',e=>{
     const tab=e.target?.closest?.('[data-v348-staff-tab]');
@@ -456,6 +501,6 @@
   `;
   document.head.appendChild(style);
 
-  window.cnmiV348={version:VERSION,breakdown,tradeForOtRow,tradeClaimInfo,helperSignupForOtRow,helperClaimInfo,ensureTrades,ensureHelpers,detailRows,arrangeStaff};
+  window.cnmiV348={version:VERSION,breakdown,tradeForOtRow,tradeClaimInfo,helperSignupForOtRow,helperSignupForStaffDate,helperClaimInfo,ensureTrades,ensureHelpers,detailRows,arrangeStaff};
   console.info(`[${VERSION}] loaded`);
 })();
