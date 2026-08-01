@@ -1,14 +1,14 @@
 /* =========================
-   V347 OT Claim Details + Claimed Money
+   V349 OT Claim Details + Mixed-rate Claimed Money
    - Staff sees claim details for the signed-in staff account only.
    - Admin can open one person's OT details from the monthly summary.
    - Money is calculated from "เบิก HR รอบนี้" after carry-in, not raw monthly OT.
    ========================= */
 (function(){
   'use strict';
-  const VERSION = 'V347_OT_CLAIM_DETAILS_CLAIMED_MONEY';
-  if (window.__CNMI_V347_OT_CLAIM_DETAILS_CLAIMED_MONEY__) return;
-  window.__CNMI_V347_OT_CLAIM_DETAILS_CLAIMED_MONEY__ = true;
+  const VERSION = 'V349_OT_CLAIM_DETAILS_MIXED_RATE_MONEY';
+  if (window.__CNMI_V349_OT_CLAIM_DETAILS_MIXED_RATE_MONEY__) return;
+  window.__CNMI_V349_OT_CLAIM_DETAILS_MIXED_RATE_MONEY__ = true;
 
   const previousRenderOtPage = window.renderOtPage || (typeof renderOtPage === 'function' ? renderOtPage : null);
   let detailHydrationToken = 0;
@@ -61,11 +61,14 @@
     try { return staffPill(staffId); }
     catch (_) { return `<span class="staff-pill">${esc(staffName(staffId))}</span>`; }
   }
+  function isTang(staffId){
+    const s = staffRec(staffId) || {};
+    return /(^|\s)แตง($|\s)/.test(`${s.nickname || ''} ${s.full_name || ''}`.trim()) || String(s.nickname || '').trim() === 'แตง';
+  }
   function staffRateType(staffId){
     const s = staffRec(staffId) || {};
-    const nick = String(s.nickname || s.full_name || '').trim();
     const type = String(s.staff_type || s.type || '').trim();
-    return type === 'เคิก' && !/แตง/.test(nick) ? 'เคิก' : 'MT';
+    return type === 'เคิก' || isTang(staffId) ? 'เคิก' : 'MT';
   }
   function staffRate(staffId){ return staffRateType(staffId) === 'เคิก' ? 90 : 130; }
   function selectedMonth(forStaff=false){
@@ -124,21 +127,74 @@
     }).join('')}</tbody></table></div>`;
   }
   function sumCurrentHr(rows){ return round2(rows.reduce((sum,row) => sum + Number(breakdown(row).hrHours || 0), 0)); }
+  function rateSegmentsForRow(row){
+    const n = breakdown(row);
+    const trade = n?.tradeInfo;
+    if (trade) {
+      const rate = Number(trade.receiverNormalRate || (trade.receiverType === 'เคิก' ? 90 : 130));
+      return [{ hours:round2(n.hrHours), rate, type:trade.receiverType || (rate === 90 ? 'เคิก' : 'MT'), duty:String(trade.assignment?.duty_code || row?.duty_code || '') }];
+    }
+    const source = Array.isArray(n?.segments) && n.segments.length ? n.segments : [n];
+    const out = source.map(seg => {
+      const type = String(seg?.rateType || n?.rateType || staffRateType(row?.staff_id)) === 'เคิก' ? 'เคิก' : 'MT';
+      const rate = Number(seg?.normalRate || (type === 'เคิก' ? 90 : 130));
+      return { hours:round2(seg?.hrHours == null ? n?.hrHours : seg.hrHours), rate, type, duty:String(seg?.shiftType || n?.shiftType || row?.duty_code || '') };
+    }).filter(seg => seg.hours > 0 && seg.rate > 0);
+    const sourceTotal = round2(out.reduce((sum,seg) => sum + seg.hours, 0));
+    const targetTotal = round2(n?.hrHours || 0);
+    if (out.length && Math.abs(sourceTotal - targetTotal) > 0.01) out[out.length - 1].hours = round2(Math.max(0, out[out.length - 1].hours + targetTotal - sourceTotal));
+    return out;
+  }
+  function claimedMoneyBreakdown(staffId, rows, carryIn, claimedHours){
+    const claimed = round2(Math.max(0, claimedHours || 0));
+    const segments = [];
+    const carry = round2(Math.max(0, carryIn || 0));
+    if (carry > 0) segments.push({ hours:carry, rate:staffRate(staffId), type:staffRateType(staffId), duty:'ยอดทบจากรอบก่อน', carry:true });
+    (rows || []).slice().sort((a,b) => normDate(a?.work_date).localeCompare(normDate(b?.work_date)) || String(a?.created_at || '').localeCompare(String(b?.created_at || ''))).forEach(row => {
+      rateSegmentsForRow(row).forEach(seg => segments.push(seg));
+    });
+    let remaining = claimed;
+    const buckets = new Map();
+    segments.forEach(seg => {
+      if (remaining <= 0) return;
+      const used = round2(Math.min(Math.max(0, seg.hours || 0), remaining));
+      if (used <= 0) return;
+      remaining = round2(Math.max(0, remaining - used));
+      const tangCh4 = isTang(staffId) && seg.type === 'MT' && /ช4/.test(seg.duty || '');
+      const label = tangCh4 ? 'MT (เฉพาะ ช4)' : seg.type;
+      const key = `${label}|${seg.rate}`;
+      const current = buckets.get(key) || { label, rate:seg.rate, hours:0, amount:0 };
+      current.hours = round2(current.hours + used);
+      current.amount = round2(current.amount + used * seg.rate);
+      buckets.set(key, current);
+    });
+    if (remaining > 0) {
+      const rate = staffRate(staffId), label = staffRateType(staffId), key = `${label}|${rate}`;
+      const current = buckets.get(key) || { label, rate, hours:0, amount:0 };
+      current.hours = round2(current.hours + remaining);
+      current.amount = round2(current.amount + remaining * rate);
+      buckets.set(key, current);
+      remaining = 0;
+    }
+    const items = Array.from(buckets.values());
+    const amount = round2(items.reduce((sum,item) => sum + item.amount, 0));
+    const formula = items.length ? items.map(item => `${item.label} ${hours(item.rate, 0)} บ./ชม. × ${hours(item.hours, 2)} ชม.`).join(' + ') : '-';
+    return { amount, items, formula, claimed };
+  }
   function summaryHtml(staffId, rows, carryInfo){
     const current = sumCurrentHr(rows);
     const carryIn = round2(carryInfo?.amount || 0);
     const available = round2(current + carryIn);
     const claimed = Math.floor((available + 1e-7) / 8) * 8;
     const carryOut = round2(Math.max(0, available - claimed));
-    const rate = staffRate(staffId);
-    const amount = round2(claimed * rate);
+    const pay = claimedMoneyBreakdown(staffId, rows, carryIn, claimed);
     return `<div class="v347-claim-equation">
       <div><span>OT เดือนนี้เทียบ HR</span><b>${hours(current, 2)} ชม.</b></div>
       <div><span>OT ทบมาจากรอบก่อน</span><b>${hours(carryIn, 2)} ชม.</b></div>
       <div><span>รวมพร้อมเบิก HR</span><b>${hours(available, 2)} ชม.</b></div>
       <div class="claimed"><span>เบิก HR รอบนี้</span><b>${hours(claimed, 2)} ชม.</b></div>
       <div><span>OT ทบไปรอบหน้า</span><b>${hours(carryOut, 2)} ชม.</b></div>
-      <div class="money"><span>คำนวณเป็นเงินจากยอดเบิก</span><b>${money(amount)}</b><small>${esc(staffRateType(staffId))} ${rate} บ./ชม. × ${hours(claimed, 2)} ชม.</small></div>
+      <div class="money"><span>คำนวณเป็นเงินจากยอดเบิก</span><b>${money(pay.amount)}</b><small>${esc(pay.formula)}</small></div>
     </div>`;
   }
   async function carryFor(staffId, month){
@@ -206,14 +262,18 @@
         const staffButton = row.querySelector('[data-v347-show-staff],[data-v234-show-staff]');
         const sid = staffButton?.getAttribute('data-v347-show-staff') || staffButton?.getAttribute('data-v234-show-staff') || '';
         const claimed = readCellNumber(row.children[claimedIndex]);
-        const rate = staffRate(sid);
-        const amount = round2(claimed * rate);
+        const carryIn = readCellNumber(row.querySelector('.v346-carry-in'));
+        const month = selectedMonth(false);
+        let detailRows = approvedDetails(sid, month);
+        if (table.closest('.v241-hr-export-section')) detailRows = detailRows.filter(r => claimStatus(r) === 'Pending');
+        const pay = claimedMoneyBreakdown(sid, detailRows, carryIn, claimed);
+        const amount = pay.amount;
         total = round2(total + amount);
         const cell = row.children[moneyIndex];
-        const signature = `${amount}|${claimed}|${rate}`;
+        const signature = `${amount}|${claimed}|${pay.formula}`;
         if (cell && cell.dataset.v347ClaimedMoney !== signature) {
-          cell.innerHTML = `<b>${money(amount)}</b><br><span class="muted">${esc(staffRateType(sid))} ${rate} บ./ชม. × เบิก ${hours(claimed, 2)} ชม.</span>`;
-          cell.title = `คิดจากเบิก HR รอบนี้ ${hours(claimed, 2)} ชั่วโมง × ${rate} บาท`;
+          cell.innerHTML = `<b>${money(amount)}</b><br><span class="muted">${esc(pay.formula)}</span>`;
+          cell.title = `คิดจากเบิก HR รอบนี้ ${hours(claimed, 2)} ชั่วโมง: ${pay.formula}`;
           cell.dataset.v347ClaimedMoney = signature;
         }
       });
@@ -282,6 +342,6 @@
   style.textContent = '.v347-claim-equation{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:10px;margin:12px 0 16px}.v347-claim-equation>div{display:flex;flex-direction:column;gap:4px;padding:12px;border:1px solid #dbe7f3;border-radius:12px;background:#f8fbff}.v347-claim-equation span{color:#5f7184;font-size:12px}.v347-claim-equation b{font-size:18px}.v347-claim-equation .claimed{background:#effbf4;border-color:#ccebd8}.v347-claim-equation .money{background:#fff7ec;border-color:#f2dfc2}.v347-claim-equation small{color:#7a5a2b}.v347-detail-table th,.v347-detail-table td{vertical-align:top}.v347-admin-detail{min-width:min(100%,980px)}@media(max-width:760px){.v347-claim-equation{grid-template-columns:1fr 1fr}.v347-claim-equation .money{grid-column:1/-1}}';
   document.head.appendChild(style);
 
-  window.cnmiV347 = { version:VERSION, approvedDetails, summaryHtml, updateClaimedMoney, showAdminDetail };
+  window.cnmiV347 = { version:VERSION, approvedDetails, summaryHtml, updateClaimedMoney, showAdminDetail, claimedMoneyBreakdown, rateSegmentsForRow };
   console.info(`[${VERSION}] loaded`);
 })();
