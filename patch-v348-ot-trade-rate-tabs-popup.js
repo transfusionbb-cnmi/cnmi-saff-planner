@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V355
+/* CNMI Staff Planner V356
    - Makes purchased-duty OT auditable: seller, date, duty, sold rate, money and HR-hour formula.
    - Uses the saved trade amount as the source of truth for cross-rate HR normalization.
    - Staff gets two nearby tabs instead of a long claim-details card at the bottom.
@@ -9,11 +9,11 @@
 */
 (function(){
   'use strict';
-  const VERSION = 'V355_DONOR_HELPER_OT_LINK_FIX';
+  const VERSION = 'V356_DONOR_HELPER_SLOT_RATE_AUTHORITATIVE';
   const HELPER_REASON_RE = /มาช่วย\s*งาน\s*เสาร์\s*[–—-]?\s*อาทิตย์|มาช่วย.*เสาร์.*อาทิตย์|ช่วยห้องบริจาคโลหิต|donor\s*helper/i;
   const HELPER_MARKER_RE = /\[DONOR_HELPER_SLOT=(clerk|phlebotomist):(\d+)\]/i;
-  if (window.__CNMI_V355_DONOR_HELPER_OT_LINK_FIX__) return;
-  window.__CNMI_V355_DONOR_HELPER_OT_LINK_FIX__ = true;
+  if (window.__CNMI_V356_DONOR_HELPER_SLOT_RATE_AUTHORITATIVE__) return;
+  window.__CNMI_V356_DONOR_HELPER_SLOT_RATE_AUTHORITATIVE__ = true;
 
   const tradeLoads = new Map();
   const helperLoads = new Map();
@@ -152,12 +152,12 @@
     const slotType=String(signup.slot_type||'').toLowerCase();
     const workType=slotType==='clerk'?'เคิก':'MT';
     const tangMtException=isTangStaff(row?.staff_id)&&slotType!=='clerk';
-    // ช่องที่ลงชื่อกำหนด "มูลค่างาน" แต่ฐาน HR ยังยึดประเภทบุคลากร
-    // ดังนั้นแตงลงช่อง MT = 8×130÷90 = 11.56 ชม. ไม่ใช่เปลี่ยนฐานทั้งคนเป็น MT
-    const receiverType=baseRateTypeFor(row?.staff_id);
-    const receiverNormalRate=receiverType==='เคิก'?90:130;
+    // ช่องที่ลงชื่อเป็นแหล่งข้อมูลหลักทั้ง "กลุ่มเรท" และจำนวนชั่วโมงเบิก HR
+    // Clerk = เคิก, คนเจาะ = MT โดยไม่แปลงกลับเป็นเรทประจำตัวของผู้มาช่วย
     const workRate=rateForType(workType,row?.work_date);
-    const claimHours=receiverNormalRate>0?round2(actual*workRate/receiverNormalRate):0;
+    const receiverType=workType;
+    const receiverNormalRate=workRate;
+    const claimHours=actual;
     const slotLabel=slotType==='clerk'?'Clerk':`MT / คนเจาะ ${Number(signup.slot_no||1)}`;
     return {signup,actualHours:actual,slotType,slotLabel,workType,workRate,receiverType,receiverNormalRate,claimHours,tangMtException,isHoliday:isHoliday(row?.work_date)};
   }
@@ -302,10 +302,10 @@
   function helperExplain(info){
     if(!info)return '';
     const holiday=info.isHoliday?'วันนักขัตฤกษ์':'วันปกติ';
-    const formula=`${hours(info.actualHours)} ชม. × ${hours(info.workRate)} บ./ชม. ÷ ฐาน HR ${hours(info.receiverNormalRate)} บ./ชม. = ${hours(info.claimHours)} ชม.เบิก HR`;
+    const formula=`${hours(info.actualHours)} ชม. × เรท${info.workType} ${hours(info.workRate)} บ./ชม. = ${baht(info.actualHours*info.workRate)} • เบิก HR ${hours(info.claimHours)} ชม. ที่เรท${info.workType}`;
     return `<div class="v350-helper-box">
       <div class="v350-helper-head"><span class="badge blue">OT มาช่วยเสาร์–อาทิตย์</span><b>คิดเรทตามช่องที่ลงชื่อ</b>${info.tangMtException?'<span class="badge green">แตงลงช่อง MT = เรท MT เช่นเดียวกับ ช4</span>':''}</div>
-      <div class="v350-helper-grid"><span><small>ตำแหน่งที่ลงชื่อ</small><b>${esc(info.slotLabel)}</b></span><span><small>เรทของช่อง (${esc(holiday)})</small><b>${esc(info.workType)} ${hours(info.workRate)} บ./ชม.</b></span><span><small>ฐานเบิก HR ของผู้รับ</small><b>${esc(info.receiverType)} ${hours(info.receiverNormalRate)} บ./ชม.</b></span><span><small>ชั่วโมงจริง</small><b>${hours(info.actualHours)} ชม.</b></span></div>
+      <div class="v350-helper-grid"><span><small>ตำแหน่งที่ลงชื่อ</small><b>${esc(info.slotLabel)}</b></span><span><small>เรทของช่อง (${esc(holiday)})</small><b>${esc(info.workType)} ${hours(info.workRate)} บ./ชม.</b></span><span><small>กลุ่มเรทที่ส่ง HR</small><b>${esc(info.receiverType)} ${hours(info.receiverNormalRate)} บ./ชม.</b></span><span><small>ชั่วโมงจริง / เบิก HR</small><b>${hours(info.actualHours)} / ${hours(info.claimHours)} ชม.</b></span></div>
       <div class="v350-helper-formula"><b>วิธีคำนวณ:</b> ${esc(formula)}</div>
     </div>`;
   }

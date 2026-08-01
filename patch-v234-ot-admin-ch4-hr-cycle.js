@@ -482,8 +482,11 @@
       if (!Number.isFinite(Number(n.hrHours)) || Number(n.hrHours) <= 0) return;
       const id = r.staff_id || '-';
       const rateType = n.rateType || staffRateType(id);
-      const rate = rateForType(rateType);
-      map[id] = map[id] || { staff_id:id, actual:0, hr:0, money:0, count:0, holiday:0, minDate:'', maxDate:'', rateType, rate };
+      const rate = Number(n?.helperInfo?.workRate || rateForType(rateType));
+      map[id] = map[id] || { staff_id:id, actual:0, hr:0, money:0, count:0, holiday:0, minDate:'', maxDate:'', rateType, rate, rateLabels:[] };
+      const rateLabel = `${rateType} ${rate} บ./ชม.`;
+      if (!map[id].rateLabels.includes(rateLabel)) map[id].rateLabels.push(rateLabel);
+      if (map[id].rateType !== rateType || map[id].rate !== rate) map[id].rateType = 'หลายเรท';
       map[id].actual = Math.round((map[id].actual + Number(n.actualHours || 0)) * 100) / 100;
       map[id].hr = Math.round((map[id].hr + Number(n.hrHours || 0)) * 100) / 100;
       map[id].money = Math.round((map[id].money + Number(n.hrHours || 0) * rate) * 100) / 100;
@@ -498,7 +501,7 @@
   function summaryTable(title, rows, tone, emptyText){
     const grouped = groupOtRows(rows);
     if (!grouped.length) return `<div class="v234-summary-block"><h4>${esc(title)}</h4>${emptySafe(emptyText)}</div>`;
-    return `<div class="v234-summary-block"><h4>${esc(title)}</h4><div class="table-wrap v234-ot-summary-table"><table id="${tone === 'ready' ? 'otSummaryTable' : 'otSummaryOutOfCycleTable'}"><thead><tr><th>ชื่อ</th><th>ชั่วโมงจริง Pending</th><th>ชั่วโมงเบิก HR</th><th>คำนวณเป็นเงิน</th><th>OT ทบไปรอบหน้า</th><th>จำนวนรายการ</th><th>รายการนักขัต</th><th>ช่วงวันที่ของรายการ</th><th>สถานะ</th></tr></thead><tbody>${grouped.map(r => `<tr><td><button class="link-btn v234-staff-link" type="button" data-v234-show-staff="${esc(r.staff_id)}">${staffPillSafe(r.staff_id)}</button></td><td>${formatHours(r.actual, 1)}</td><td><b>${formatHours(r.hr, 2)}</b></td><td><b>${formatMoney(r.money)}</b><br><span class="muted">${esc(r.rateType)} ${r.rate} บ./ชม.</span></td><td><b>${formatHours(r.carry, 2)}</b></td><td>${r.count}</td><td>${r.holiday}</td><td>${esc(r.minDate ? `${fmtDate(r.minDate)} - ${fmtDate(r.maxDate || r.minDate)}` : '-')}</td><td>${badgeSafe(tone === 'ready' ? 'พร้อม Export' : 'Pending นอกรอบ / ตกค้าง', tone === 'ready' ? 'green' : 'orange')}</td></tr>`).join('')}</tbody></table></div></div>`;
+    return `<div class="v234-summary-block"><h4>${esc(title)}</h4><div class="table-wrap v234-ot-summary-table"><table id="${tone === 'ready' ? 'otSummaryTable' : 'otSummaryOutOfCycleTable'}"><thead><tr><th>ชื่อ</th><th>ชั่วโมงจริง Pending</th><th>ชั่วโมงเบิก HR</th><th>คำนวณเป็นเงิน</th><th>OT ทบไปรอบหน้า</th><th>จำนวนรายการ</th><th>รายการนักขัต</th><th>ช่วงวันที่ของรายการ</th><th>สถานะ</th></tr></thead><tbody>${grouped.map(r => `<tr><td><button class="link-btn v234-staff-link" type="button" data-v234-show-staff="${esc(r.staff_id)}">${staffPillSafe(r.staff_id)}</button></td><td>${formatHours(r.actual, 1)}</td><td><b>${formatHours(r.hr, 2)}</b></td><td><b>${formatMoney(r.money)}</b><br><span class="muted">${esc((r.rateLabels || []).join(' + ') || `${r.rateType} ${r.rate} บ./ชม.`)}</span></td><td><b>${formatHours(r.carry, 2)}</b></td><td>${r.count}</td><td>${r.holiday}</td><td>${esc(r.minDate ? `${fmtDate(r.minDate)} - ${fmtDate(r.maxDate || r.minDate)}` : '-')}</td><td>${badgeSafe(tone === 'ready' ? 'พร้อม Export' : 'Pending นอกรอบ / ตกค้าง', tone === 'ready' ? 'green' : 'orange')}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
   window.renderOtSummary = renderOtSummary = function renderOtSummaryV234(){
     try {
