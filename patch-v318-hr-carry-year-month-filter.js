@@ -146,7 +146,7 @@
     const res=await client.from('ot_requests').select('*').lt('work_date',source.start).order('work_date',{ascending:false}).limit(5000);
     if(res.error)throw res.error;
     const exported=(res.data||[]).filter(row=>approved(row));
-    const latestRowsByStaff=new Map(),latestMarkerByStaff=new Map();
+    const latestRowsByStaff=new Map(),markersByStaff=new Map();
     exported.forEach(row=>{
       const staffId=String(row.staff_id||''),mk=String(row.work_date||'').slice(0,7);
       if(!staffId||!/^[0-9]{4}-[0-9]{2}$/.test(mk)||mk>=source.month)return;
@@ -155,19 +155,25 @@
       else if(mk===g.month)g.rows.push(row);
       const marker=parseCarryMarker(row);
       if(marker&&marker.month<source.month){
-        const old=latestMarkerByStaff.get(staffId);
-        if(!old||marker.month>old.month||(marker.month===old.month&&marker.at>old.at))latestMarkerByStaff.set(staffId,{...marker,rowId:row.id||''});
+        if(!markersByStaff.has(staffId))markersByStaff.set(staffId,[]);
+        markersByStaff.get(staffId).push({...marker,rowId:row.id||''});
       }
     });
-    const out=new Map(),staffIds=new Set([...latestRowsByStaff.keys(),...latestMarkerByStaff.keys()]);
+    markersByStaff.forEach(list=>list.sort((a,b)=>a.month.localeCompare(b.month)||a.at.localeCompare(b.at)));
+    const out=new Map(),staffIds=new Set([...latestRowsByStaff.keys(),...markersByStaff.keys()]);
     staffIds.forEach(staffId=>{
-      const latest=latestRowsByStaff.get(staffId),marker=latestMarkerByStaff.get(staffId);
+      const latest=latestRowsByStaff.get(staffId),markers=markersByStaff.get(staffId)||[];
+      const marker=markers[markers.length-1];
       /* Recalculate the immediately previous month from its live approved rows.
-         This keeps carry-in equal to the carry-out currently shown after edits. */
+         IMPORTANT: include the carry that entered that previous month.  The old
+         code used only that month's new OT, so June's displayed carry-out could
+         never equal July's carry-in when June itself started with a carry. */
       if(latest&&latest.month===previousMonth(source.month)){
-        const total=round2(latest.rows.reduce((sum,row)=>sum+Number(normalize(row).hrHours||0),0));
+        const carryIntoLatest=[...markers].reverse().find(x=>x.month<latest.month);
+        const current=round2(latest.rows.reduce((sum,row)=>sum+Number(normalize(row).hrHours||0),0));
+        const total=round2(Number(carryIntoLatest?.amount||0)+current);
         const claimed=Math.floor((total+1e-7)/8)*8,amount=round2(Math.max(0,total-claimed));
-        out.set(staffId,{amount,sourceMonth:latest.month,source:'previous-month-live',anchorRowId:latest.rows[0]?.id||marker?.rowId||''});return;
+        out.set(staffId,{amount,sourceMonth:latest.month,source:'previous-month-ledger',anchorRowId:latest.rows[0]?.id||marker?.rowId||''});return;
       }
       if(marker&&(!latest||marker.month>=latest.month)){
         out.set(staffId,{amount:round2(marker.amount),sourceMonth:marker.month,source:'saved-v318',anchorRowId:marker.rowId||''});return;
@@ -193,16 +199,17 @@
       client.from('ot_requests').select('*').gte('work_date',prev.start).lte('work_date',prev.end).order('work_date',{ascending:false})
     ]);
     if(markers.error)throw markers.error;if(previousRows.error)throw previousRows.error;
-    const latestMarkerByStaff=new Map();
-    (markers.data||[]).forEach(row=>{const staffId=String(row.staff_id||''),marker=parseCarryMarker(row);if(!staffId||!marker||marker.month>=source.month)return;const old=latestMarkerByStaff.get(staffId);if(!old||marker.month>old.month||(marker.month===old.month&&marker.at>old.at))latestMarkerByStaff.set(staffId,{...marker,rowId:row.id||''});});
+    const markersByStaff=new Map();
+    (markers.data||[]).forEach(row=>{const staffId=String(row.staff_id||''),marker=parseCarryMarker(row);if(!staffId||!marker||marker.month>=source.month)return;if(!markersByStaff.has(staffId))markersByStaff.set(staffId,[]);markersByStaff.get(staffId).push({...marker,rowId:row.id||''});});
+    markersByStaff.forEach(list=>list.sort((a,b)=>a.month.localeCompare(b.month)||a.at.localeCompare(b.at)));
     const fallbackByStaff=new Map();
     /* The previous month's live approved rows are the source of truth.  A saved
        marker can become stale when Admin edits a rate/hours after HR export. */
     (previousRows.data||[]).filter(row=>approved(row)).forEach(row=>{const staffId=String(row.staff_id||'');if(!staffId)return;if(!fallbackByStaff.has(staffId))fallbackByStaff.set(staffId,[]);fallbackByStaff.get(staffId).push(row);});
     const out=new Map();
-    new Set([...latestMarkerByStaff.keys(),...fallbackByStaff.keys()]).forEach(staffId=>{
-      const marker=latestMarkerByStaff.get(staffId),rows=fallbackByStaff.get(staffId)||[];
-      if(rows.length){const total=round2(rows.reduce((sum,row)=>sum+Number(normalize(row).hrHours||0),0)),claimed=Math.floor((total+1e-7)/8)*8;out.set(staffId,{amount:round2(Math.max(0,total-claimed)),sourceMonth:prev.month,source:'previous-month-live',anchorRowId:rows[0]?.id||marker?.rowId||''});return;}
+    new Set([...markersByStaff.keys(),...fallbackByStaff.keys()]).forEach(staffId=>{
+      const markerList=markersByStaff.get(staffId)||[],marker=markerList[markerList.length-1],rows=fallbackByStaff.get(staffId)||[];
+      if(rows.length){const carryIntoPrev=[...markerList].reverse().find(x=>x.month<prev.month),current=round2(rows.reduce((sum,row)=>sum+Number(normalize(row).hrHours||0),0)),total=round2(Number(carryIntoPrev?.amount||0)+current),claimed=Math.floor((total+1e-7)/8)*8;out.set(staffId,{amount:round2(Math.max(0,total-claimed)),sourceMonth:prev.month,source:'previous-month-ledger',anchorRowId:rows[0]?.id||marker?.rowId||''});return;}
       if(marker)out.set(staffId,{amount:round2(marker.amount),sourceMonth:marker.month,source:'saved-v318',anchorRowId:marker.rowId||''});
     });
     summaryCarryCache.set(key,{map:out,expires:Date.now()+CARRY_TTL});
