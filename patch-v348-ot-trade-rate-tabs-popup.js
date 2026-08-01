@@ -1,16 +1,17 @@
-/* CNMI Staff Planner V350
+/* CNMI Staff Planner V351
    - Makes purchased-duty OT auditable: seller, date, duty, sold rate, money and HR-hour formula.
    - Uses the saved trade amount as the source of truth for cross-rate HR normalization.
    - Staff gets two nearby tabs instead of a long claim-details card at the bottom.
    - Admin detail modal is wide on desktop and card-based on mobile.
    - Trade rows are loaded only for roster assignments in the selected OT month.
    - Weekend donor-helper OT uses the signed slot rate: phlebotomist = MT, Clerk = clerk.
+   - Tang signing the MT donor-helper slot is paid as MT, the same exception as Tang's ช4 duty.
 */
 (function(){
   'use strict';
-  const VERSION = 'V350_DONOR_HELPER_SLOT_OT_RATE';
-  if (window.__CNMI_V350_DONOR_HELPER_SLOT_OT_RATE__) return;
-  window.__CNMI_V350_DONOR_HELPER_SLOT_OT_RATE__ = true;
+  const VERSION = 'V351_TANG_DONOR_HELPER_MT_RATE';
+  if (window.__CNMI_V351_TANG_DONOR_HELPER_MT_RATE__) return;
+  window.__CNMI_V351_TANG_DONOR_HELPER_MT_RATE__ = true;
 
   const tradeLoads = new Map();
   const helperLoads = new Map();
@@ -40,6 +41,10 @@
   function staffName(id){
     try{return staffNick(id);}catch(_){const s=staffRecord(id)||{};return s.nickname||s.full_name||s.name||id||'-';}
   }
+  function isTangStaff(id){
+    const s=staffRecord(id)||{};
+    return /(^|\s)แตง($|\s)/.test(`${s.nickname||''} ${s.full_name||''}`.trim())||String(s.nickname||'').trim()==='แตง';
+  }
   function staffPillSafe(id){ try{return staffPill(id);}catch(_){return `<span class="staff-pill">${esc(staffName(id))}</span>`;} }
   function selectedMonth(){
     const raw=String(S()?.otSourceMonthV241||S()?.otMoneyMonthV241||S()?.myDutyMonthFilter||S()?.monthKey||'').slice(0,7);
@@ -53,16 +58,14 @@
   function rateTypeFor(staffId,dutyCode){
     try{const t=dutyStaffTypeForRate(staffId,dutyCode);if(t)return t==='เคิก'?'เคิก':'MT';}catch(_){}
     const s=staffRecord(staffId)||{};
-    const nick=String(s.nickname||s.full_name||'');
-    if(/แตง/.test(nick)&&['ช3A','ช3B','ช4','ช4A','ช4B'].includes(String(dutyCode||'')))return 'MT';
+    if(isTangStaff(staffId)&&['ช3A','ช3B','ช4','ช4A','ช4B'].includes(String(dutyCode||'')))return 'MT';
     return String(s.staff_type||s.type||'').trim()==='เคิก'?'เคิก':'MT';
   }
   function normalRateFor(staffId,dutyCode){ return rateTypeFor(staffId,dutyCode)==='เคิก'?90:130; }
   function rateForType(type,date){ return type==='เคิก'?(isHoliday(date)?120:90):(isHoliday(date)?160:130); }
   function baseRateTypeFor(staffId){
     const s=staffRecord(staffId)||{};
-    const nick=String(s.nickname||s.full_name||'');
-    if(/แตง/.test(nick))return 'เคิก';
+    if(isTangStaff(staffId))return 'เคิก';
     return String(s.staff_type||s.type||'').trim()==='เคิก'?'เคิก':'MT';
   }
   function parsePayload(data){
@@ -120,12 +123,13 @@
     if(actual<=0)return null;
     const slotType=String(signup.slot_type||'').toLowerCase();
     const workType=slotType==='clerk'?'เคิก':'MT';
-    const receiverType=baseRateTypeFor(row?.staff_id);
+    const tangMtException=isTangStaff(row?.staff_id)&&slotType!=='clerk';
+    const receiverType=tangMtException?'MT':baseRateTypeFor(row?.staff_id);
     const receiverNormalRate=receiverType==='เคิก'?90:130;
     const workRate=rateForType(workType,row?.work_date);
     const claimHours=receiverNormalRate>0?round2(actual*workRate/receiverNormalRate):0;
-    const slotLabel=slotType==='clerk'?'Clerk':`คนเจาะ ${Number(signup.slot_no||1)}`;
-    return {signup,actualHours:actual,slotType,slotLabel,workType,workRate,receiverType,receiverNormalRate,claimHours,isHoliday:isHoliday(row?.work_date)};
+    const slotLabel=slotType==='clerk'?'Clerk':`MT / คนเจาะ ${Number(signup.slot_no||1)}`;
+    return {signup,actualHours:actual,slotType,slotLabel,workType,workRate,receiverType,receiverNormalRate,claimHours,tangMtException,isHoliday:isHoliday(row?.work_date)};
   }
   function sellHours(trade,a){
     const marker=Number(String(trade?.note||'').match(/\[SELL_HOURS=(\d+(?:\.\d+)?)\]/i)?.[1]||0);
@@ -270,7 +274,7 @@
     const holiday=info.isHoliday?'วันนักขัตฤกษ์':'วันปกติ';
     const formula=`${hours(info.actualHours)} ชม. × ${hours(info.workRate)} บ./ชม. ÷ ฐาน HR ${hours(info.receiverNormalRate)} บ./ชม. = ${hours(info.claimHours)} ชม.เบิก HR`;
     return `<div class="v350-helper-box">
-      <div class="v350-helper-head"><span class="badge blue">OT มาช่วยเสาร์–อาทิตย์</span><b>คิดเรทตามช่องที่ลงชื่อ</b></div>
+      <div class="v350-helper-head"><span class="badge blue">OT มาช่วยเสาร์–อาทิตย์</span><b>คิดเรทตามช่องที่ลงชื่อ</b>${info.tangMtException?'<span class="badge green">แตงลงช่อง MT = เรท MT เช่นเดียวกับ ช4</span>':''}</div>
       <div class="v350-helper-grid"><span><small>ตำแหน่งที่ลงชื่อ</small><b>${esc(info.slotLabel)}</b></span><span><small>เรทของช่อง (${esc(holiday)})</small><b>${esc(info.workType)} ${hours(info.workRate)} บ./ชม.</b></span><span><small>ฐานเบิก HR ของผู้รับ</small><b>${esc(info.receiverType)} ${hours(info.receiverNormalRate)} บ./ชม.</b></span><span><small>ชั่วโมงจริง</small><b>${hours(info.actualHours)} ชม.</b></span></div>
       <div class="v350-helper-formula"><b>วิธีคำนวณ:</b> ${esc(formula)}</div>
     </div>`;
