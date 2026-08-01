@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V318 — automatic HR carry forward + separate year/month history filters
+/* CNMI Staff Planner V371 — balanced HR dummy allocation + automatic carry forward
    - Uses V317 manual-style HR workbook and 8-hour dummy allocation as the base.
    - Automatically adds the latest carry-out to the next source month before allocation.
    - Stores an exact carry snapshot inside the existing claim_batch_id field; no new SQL/table.
@@ -7,9 +7,9 @@
 */
 (function(){
   'use strict';
-  const VERSION='V364_PREVIOUS_MONTH_LIVE_CARRY_PRIORITY';
-  if(window.__CNMI_V364_PREVIOUS_MONTH_LIVE_CARRY_PRIORITY__)return;
-  window.__CNMI_V364_PREVIOUS_MONTH_LIVE_CARRY_PRIORITY__=true;
+  const VERSION='V371_BALANCED_HR_DUMMY_ALLOCATION';
+  if(window.__CNMI_V371_BALANCED_HR_DUMMY_ALLOCATION__)return;
+  window.__CNMI_V371_BALANCED_HR_DUMMY_ALLOCATION__=true;
 
   const previousRenderOtPage=window.renderOtPage||(typeof renderOtPage==='function'?renderOtPage:null);
   const historyCache=new Map();
@@ -271,33 +271,151 @@
   function allowedSlots(date,holidays){return (weekend(date)||publicHoliday(date,holidays))?[0,8,16]:[0,16];}
   function slotTimes(slot){if(slot===8)return {start:'08:00',end:'16:00',startValue:8/24,endValue:16/24};if(slot===16)return {start:'16:00',end:'00:00',startValue:16/24,endValue:0};return {start:'00:00',end:'08:00',startValue:0,endValue:8/24};}
   function allocate(totals,cycle,leaves,holidays){
-    const dates=datesBetween(cycle.start,cycle.end),occupancy=new Map(),rows=[],leaveSkipped=[];
-    totals.forEach((t,index)=>{
-      const desired=Math.max(0,Math.floor((Number(t.total||0)+1e-7)/8));
-      let remaining=desired;
-      const rotated=dates.slice((index*2)%Math.max(1,dates.length)).concat(dates.slice(0,(index*2)%Math.max(1,dates.length)));
-      let progress=true,guard=0;
-      while(remaining>0&&progress&&guard++<4){
-        progress=false;
-        for(const date of rotated){
-          if(remaining<=0)break;
-          if(hasLeave(t.staff_id,date,leaves)){if(!leaveSkipped.some(x=>x.staff_id===t.staff_id&&x.date===date))leaveSkipped.push({staff_id:t.staff_id,date,reason:'วันลาในรอบ HR'});continue;}
-          const usedToday=new Set(rows.filter(x=>x.staff_id===t.staff_id&&x.date===date).map(x=>x.slot));
-          let daily=usedToday.size;
-          const candidates=allowedSlots(date,holidays).filter(slot=>!usedToday.has(slot)&&(occupancy.get(`${date}|${slot}`)||0)<6).sort((a,b)=>(occupancy.get(`${date}|${a}`)||0)-(occupancy.get(`${date}|${b}`)||0)||a-b);
-          for(const slot of candidates){
-            if(remaining<=0||daily>=2)break;
-            const key=`${date}|${slot}`,times=slotTimes(slot),holidayType=(weekend(date)||publicHoliday(date,holidays));
-            rows.push({staff_id:t.staff_id,date,slot,...times,type:holidayType?2:1,claimCode:holidayType?claimCodes(t.staff_id).holiday:claimCodes(t.staff_id).normal,employeeCode:t.employeeCode,name:staffNickSafe(t.staff_id),fullName:staffFullName(t.staff_id)});
-            occupancy.set(key,(occupancy.get(key)||0)+1);usedToday.add(slot);daily++;remaining--;progress=true;
-          }
-        }
+    const dates=datesBetween(cycle.start,cycle.end);
+    const dateCount=Math.max(1,dates.length);
+    const totalUnits=(totals||[]).reduce((sum,t)=>sum+Math.max(0,Math.floor((Number(t.total||0)+1e-7)/8)),0);
+    const occupancy=new Map(),dateOccupancy=new Map(),rows=[],leaveSkipped=[];
+    const compareScore=(a,b)=>{for(let i=0;i<Math.max(a.length,b.length);i++){const av=Number(a[i]||0),bv=Number(b[i]||0);if(av<bv)return -1;if(av>bv)return 1;}return 0;};
+
+    /*
+      Build exact date targets before assigning any person.
+      Normal weekdays have 2 slots; Saturday/Sunday/public holidays have 3 slots.
+      Targets are proportional to slot capacity, so normal dates differ by at most 1
+      and holiday-type dates differ by at most 1 whenever leave constraints allow.
+    */
+    const dateInfos=dates.map((date,index)=>{
+      const slots=allowedSlots(date,holidays);
+      return {date,index,slots,weight:slots.length,target:0,slotTargets:new Map()};
+    });
+    const totalWeight=Math.max(1,dateInfos.reduce((sum,x)=>sum+x.weight,0));
+    let baseAllocated=0;
+    dateInfos.forEach(info=>{
+      const ideal=totalUnits*info.weight/totalWeight;
+      info.ideal=ideal;
+      info.fraction=ideal-Math.floor(ideal);
+      info.target=Math.floor(ideal);
+      baseAllocated+=info.target;
+    });
+    let extra=Math.max(0,totalUnits-baseAllocated);
+    const spreadStep=dateCount>1?(dateCount%2===0?dateCount-1:Math.max(1,dateCount-2)):1;
+    dateInfos.slice().sort((a,b)=>b.fraction-a.fraction||((a.index*spreadStep)%dateCount)-((b.index*spreadStep)%dateCount)||a.index-b.index).slice(0,extra).forEach(info=>{info.target++;});
+
+    dateInfos.forEach(info=>{
+      const count=info.slots.length,base=Math.floor(info.target/count),remainder=info.target%count,start=info.index%count;
+      info.slots.forEach(slot=>info.slotTargets.set(slot,base));
+      for(let i=0;i<remainder;i++){
+        const slot=info.slots[(start+i)%count];
+        info.slotTargets.set(slot,(info.slotTargets.get(slot)||0)+1);
       }
-      t.desiredUnits=desired;t.claimedUnits=desired-remaining;t.claimed=round2(t.claimedUnits*8);t.carry=round2(Number(t.total||0)-t.claimed);t.unallocatedUnits=remaining;
-      const mine=rows.filter(x=>x.staff_id===t.staff_id);t.normalHours=mine.filter(x=>x.type===1).length*8;t.holidayHours=mine.filter(x=>x.type===2).length*8;t.money=round2(t.claimed*t.baseRate);
+    });
+
+    const dateInfoMap=new Map(dateInfos.map(x=>[x.date,x]));
+    const cells=[];
+    dateInfos.forEach(info=>info.slots.forEach(slot=>cells.push({date:info.date,dateIndex:info.index,slot,target:info.slotTargets.get(slot)||0,assigned:0})));
+    const byStaffDay=new Map();
+    const staffDaySlots=(staffId,date)=>{
+      const key=`${staffId}|${date}`;
+      if(!byStaffDay.has(key))byStaffDay.set(key,new Set());
+      return byStaffDay.get(key);
+    };
+    const addRow=(t,cell)=>{
+      const info=dateInfoMap.get(cell.date),times=slotTimes(cell.slot),holidayType=(weekend(cell.date)||publicHoliday(cell.date,holidays));
+      rows.push({staff_id:t.staff_id,date:cell.date,slot:cell.slot,...times,type:holidayType?2:1,claimCode:holidayType?claimCodes(t.staff_id).holiday:claimCodes(t.staff_id).normal,employeeCode:t.employeeCode,name:staffNickSafe(t.staff_id),fullName:staffFullName(t.staff_id)});
+      cell.assigned++;
+      occupancy.set(`${cell.date}|${cell.slot}`,cell.assigned);
+      dateOccupancy.set(cell.date,(dateOccupancy.get(cell.date)||0)+1);
+      staffDaySlots(t.staff_id,cell.date).add(cell.slot);
+    };
+
+    /* Record every leave date in the HR cycle once, independently from allocation order. */
+    (totals||[]).forEach(t=>dates.forEach(date=>{if(hasLeave(t.staff_id,date,leaves))leaveSkipped.push({staff_id:t.staff_id,date,reason:'วันลาในรอบ HR'});}));
+
+    const remaining=new Map(),desiredMap=new Map(),assignedMap=new Map();
+    (totals||[]).forEach(t=>{
+      const desired=Math.max(0,Math.floor((Number(t.total||0)+1e-7)/8));
+      t.desiredUnits=desired;
+      remaining.set(String(t.staff_id),desired);
+      desiredMap.set(String(t.staff_id),desired);
+      assignedMap.set(String(t.staff_id),0);
+    });
+    const staffBase=(totals||[]).slice().sort((a,b)=>{
+      const leaveA=dates.reduce((n,d)=>n+(hasLeave(a.staff_id,d,leaves)?1:0),0),leaveB=dates.reduce((n,d)=>n+(hasLeave(b.staff_id,d,leaves)?1:0),0);
+      return leaveB-leaveA||Number(b.desiredUnits||0)-Number(a.desiredUnits||0)||staffNickSafe(a.staff_id).localeCompare(staffNickSafe(b.staff_id),'th');
+    });
+    const remainingTotal=()=>[...remaining.values()].reduce((sum,n)=>sum+Number(n||0),0);
+
+    /* Round-robin staff allocation prevents early staff from filling the first dates. */
+    let round=0,progress=true;
+    while(remainingTotal()>0&&progress&&round<100){
+      progress=false;
+      const order=staffBase.slice().sort((a,b)=>{
+        const aid=String(a.staff_id),bid=String(b.staff_id),ar=(remaining.get(aid)||0)/Math.max(1,desiredMap.get(aid)||1),br=(remaining.get(bid)||0)/Math.max(1,desiredMap.get(bid)||1);
+        return br-ar||(remaining.get(bid)||0)-(remaining.get(aid)||0)||staffNickSafe(a.staff_id).localeCompare(staffNickSafe(b.staff_id),'th');
+      });
+      order.forEach((t,staffIndex)=>{
+        const staffId=String(t.staff_id),left=remaining.get(staffId)||0;
+        if(left<=0)return;
+        const candidates=[];
+        cells.forEach(cell=>{
+          if(cell.assigned>=cell.target)return;
+          if(hasLeave(t.staff_id,cell.date,leaves))return;
+          const used=staffDaySlots(t.staff_id,cell.date);
+          if(used.has(cell.slot)||used.size>=2)return;
+          const info=dateInfoMap.get(cell.date),dateUsed=dateOccupancy.get(cell.date)||0;
+          const rotation=(cell.dateIndex-((staffIndex*3+round)%dateCount)+dateCount)%dateCount;
+          candidates.push({cell,score:[used.size,cell.assigned/Math.max(1,cell.target),dateUsed/Math.max(1,info.target),cell.assigned,dateUsed,rotation,cell.slot]});
+        });
+        if(!candidates.length)return;
+        candidates.sort((a,b)=>compareScore(a.score,b.score));
+        addRow(t,candidates[0].cell);
+        remaining.set(staffId,left-1);
+        assignedMap.set(staffId,(assignedMap.get(staffId)||0)+1);
+        progress=true;
+      });
+      round++;
+    }
+
+    /* Rare fallback for heavy leave overlap: keep max 6 people/slot and choose the least-overflowing date/slot. */
+    let overflowRound=0;
+    while(remainingTotal()>0&&overflowRound++<100){
+      let moved=false;
+      for(const t of staffBase){
+        const staffId=String(t.staff_id),left=remaining.get(staffId)||0;
+        if(left<=0)continue;
+        const candidates=[];
+        cells.forEach(cell=>{
+          if(cell.assigned>=6||hasLeave(t.staff_id,cell.date,leaves))return;
+          const used=staffDaySlots(t.staff_id,cell.date);
+          if(used.has(cell.slot)||used.size>=2)return;
+          const info=dateInfoMap.get(cell.date),dateUsed=dateOccupancy.get(cell.date)||0;
+          const slotCounts=info.slots.map(slot=>occupancy.get(`${cell.date}|${slot}`)||0),after=slotCounts.map((n,i)=>info.slots[i]===cell.slot?n+1:n);
+          const spread=Math.max(...after)-Math.min(...after);
+          const slotOverflow=Math.max(0,cell.assigned+1-cell.target),dateOverflow=Math.max(0,dateUsed+1-info.target);
+          candidates.push({cell,score:[slotOverflow,dateOverflow,spread,used.size,cell.assigned,dateUsed,cell.dateIndex,cell.slot]});
+        });
+        if(!candidates.length)continue;
+        candidates.sort((a,b)=>compareScore(a.score,b.score));
+        addRow(t,candidates[0].cell);
+        remaining.set(staffId,left-1);
+        assignedMap.set(staffId,(assignedMap.get(staffId)||0)+1);
+        moved=true;
+      }
+      if(!moved)break;
+    }
+
+    (totals||[]).forEach(t=>{
+      const desired=Number(t.desiredUnits||0),claimed=Number(assignedMap.get(String(t.staff_id))||0),unallocated=Math.max(0,desired-claimed);
+      t.claimedUnits=claimed;t.claimed=round2(claimed*8);t.carry=round2(Number(t.total||0)-t.claimed);t.unallocatedUnits=unallocated;
+      const mine=rows.filter(x=>String(x.staff_id)===String(t.staff_id));t.normalHours=mine.filter(x=>x.type===1).length*8;t.holidayHours=mine.filter(x=>x.type===2).length*8;t.money=round2(t.claimed*t.baseRate);
     });
     rows.sort((a,b)=>a.date.localeCompare(b.date)||a.slot-b.slot||staffNickSafe(a.staff_id).localeCompare(staffNickSafe(b.staff_id),'th'));
-    return {rows,occupancy,leaveSkipped};
+
+    const balanceRows=dateInfos.map(info=>{
+      const slots={};info.slots.forEach(slot=>{slots[slot]=occupancy.get(`${info.date}|${slot}`)||0;});
+      const values=Object.values(slots),spread=values.length?Math.max(...values)-Math.min(...values):0;
+      return {date:info.date,target:info.target,total:dateOccupancy.get(info.date)||0,slots,spread,type:(weekend(info.date)||publicHoliday(info.date,holidays))?'holiday':'weekday'};
+    });
+    return {rows,occupancy,dateOccupancy,leaveSkipped,balanceRows};
   }
 
   function sourceRowsForSheet(totals,month,cycle){
@@ -382,6 +500,13 @@
     for(let r=2;r<=rows.length;r++){for(const col of ['A','B'])if(ws[`${col}${r}`]){ws[`${col}${r}`].t='s';ws[`${col}${r}`].z='@';}for(const col of ['D','E'])if(ws[`${col}${r}`]){ws[`${col}${r}`].t='n';ws[`${col}${r}`].z='h:mm';}}
     return ws;
   }
+  function balanceCheckRows(allocation){
+    return (allocation?.balanceRows||[]).map(x=>({
+      'วันที่ HR dummy':x.date,'วัน':thaiWeekday(x.date),'ประเภทวัน':x.type==='holiday'?'เสาร์/อาทิตย์/นักขัต':'วันธรรมดา',
+      'เป้าหมายจำนวนเวร':x.target,'จำนวนเวรจริง':x.total,'00:00-08:00':Number(x.slots?.[0]||0),'08:00-16:00':Number(x.slots?.[8]||0),'16:00-00:00':Number(x.slots?.[16]||0),
+      'ส่วนต่างช่วงเวลาสูงสุด':x.spread,'ตรวจสอบ':x.spread<=1?'ผ่าน':'ควรตรวจสอบ'
+    }));
+  }
   function makeJsonSheet(rows,headers,widths){const ws=XLSX.utils.json_to_sheet(rows,{header:headers});ws['!cols']=(widths||headers.map(()=>16)).map(w=>({wch:w}));ws['!autofilter']={ref:`A1:${XLSX.utils.encode_col(headers.length-1)}${Math.max(1,rows.length+1)}`};return ws;}
   function batchId(){const d=new Date();return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;}
   async function markExported(rows,id,totals,sourceMonth){
@@ -422,6 +547,8 @@
       XLSX.utils.book_append_sheet(wb,makeTimeSheet(),'time');
       XLSX.utils.book_append_sheet(wb,makeNameSheet(totals,allocation),'name');
       XLSX.utils.book_append_sheet(wb,makeHrSheet(allocation),'HR_OT');
+      const balanceRows=balanceCheckRows(allocation);
+      XLSX.utils.book_append_sheet(wb,makeJsonSheet(balanceRows,Object.keys(balanceRows[0]||{'วันที่ HR dummy':'','วัน':'','ประเภทวัน':'','เป้าหมายจำนวนเวร':'','จำนวนเวรจริง':'','00:00-08:00':'','08:00-16:00':'','16:00-00:00':'','ส่วนต่างช่วงเวลาสูงสุด':'','ตรวจสอบ':''}),[16,12,22,18,16,16,16,16,22,18]),'Dummy_Balance_Check');
       XLSX.utils.book_append_sheet(wb,makeJsonSheet(sourceSheetRows,Object.keys(sourceSheetRows[0]||{}),[14,30,14,14,12,24,34,42,14,12,16,12,16,16,44,20]),'Source_OT_1_to_End');
       XLSX.utils.book_append_sheet(wb,makeJsonSheet(summaryRows,Object.keys(summaryRows[0]||{}),[14,30,14,12,10,16,16,16,22,14,18,14,18,16]),'Staff_Total');
       XLSX.utils.book_append_sheet(wb,makeJsonSheet(carryRows,Object.keys(carryRows[0]||{'รหัสพนักงาน':'','ชื่อ':'','เดือน OT ปัจจุบัน':'','เดือนยอดทบยกมา':'','ยอดทบยกมา(ชม.)':'','OT เดือนนี้เทียบ HR':'','โอทีทั้งหมดรวมยอดทบ':'','เบิกจริง':'','ทบเดือนหน้า(ชม.)':'','หมายเหตุ':''}),[14,30,16,16,18,18,22,14,18,62]),'Carry_Forward');
