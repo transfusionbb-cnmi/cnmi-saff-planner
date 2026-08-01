@@ -2573,8 +2573,12 @@ function renderTradeButton(slot) {
 }
 function renderDutyTradePanel(assignments) {
   const monthRows = state.tradeRequests.filter(r => {
-    const a = tradeAssignmentForDisplay(r, assignments);
-    return normalizeDateKey(a?.duty_date).startsWith(state.monthKey) || String(r.created_at || '').startsWith(state.monthKey);
+    // Filter by the actual duty date only. A trade may be requested in July for
+    // an August duty, so created_at must never decide which month displays it.
+    // tradeAssignmentForDisplay resolves the original duty from the complete
+    // loaded roster and falls back to the saved duty snapshot when necessary.
+    const dutyAssignment = tradeAssignmentForDisplay(r, assignments);
+    return normalizeDateKey(dutyAssignment?.duty_date).startsWith(state.monthKey);
   });
   const staffFilter = state.tradeFilterStaff || '';
   const visible = monthRows.filter(r => !staffFilter || r.requester_id === staffFilter || r.receiver_id === staffFilter);
