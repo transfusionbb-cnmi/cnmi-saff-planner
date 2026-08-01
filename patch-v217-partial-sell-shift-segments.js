@@ -137,13 +137,17 @@
       .replace(/\s*\[SELL_PART=[a-z_]+\]\s*/ig, ' ')
       .replace(/\s*\[SELL_HOURS=\d+(?:\.\d+)?\]\s*/ig, ' ')
       .replace(/\s*\[SELL_SEGMENTS=[a-z_,]+\]\s*/ig, ' ')
+      .replace(/\s*\[SELL_DATE=[^\]]+\]\s*/ig, ' ')
+      .replace(/\s*\[SELL_DUTY=[^\]]+\]\s*/ig, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
   }
   function buildNote(part, a, note){
     const clean = stripMarkers(note);
     const cfg = PARTS[part] || PARTS[defaultPartFor(a)];
-    const marker = `[SELL_PART=${part}] [SELL_HOURS=${hoursText(partHours(part, a))}] [SELL_SEGMENTS=${(cfg.segments || []).join(',')}]`;
+    const dutyDate = encodeURIComponent(normDate(a?.duty_date || ''));
+    const dutyCode = encodeURIComponent(String(a?.duty_code || ''));
+    const marker = `[SELL_PART=${part}] [SELL_HOURS=${hoursText(partHours(part, a))}] [SELL_SEGMENTS=${(cfg.segments || []).join(',')}] [SELL_DATE=${dutyDate}] [SELL_DUTY=${dutyCode}]`;
     return clean ? `${marker} ${clean}` : marker;
   }
   function forcedRate(mode, date){

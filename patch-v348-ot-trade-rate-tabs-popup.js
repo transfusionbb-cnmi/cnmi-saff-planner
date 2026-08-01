@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V351
+/* CNMI Staff Planner V352
    - Makes purchased-duty OT auditable: seller, date, duty, sold rate, money and HR-hour formula.
    - Uses the saved trade amount as the source of truth for cross-rate HR normalization.
    - Staff gets two nearby tabs instead of a long claim-details card at the bottom.
@@ -9,9 +9,9 @@
 */
 (function(){
   'use strict';
-  const VERSION = 'V351_TANG_DONOR_HELPER_MT_RATE';
-  if (window.__CNMI_V351_TANG_DONOR_HELPER_MT_RATE__) return;
-  window.__CNMI_V351_TANG_DONOR_HELPER_MT_RATE__ = true;
+  const VERSION = 'V352_TRADE_REQUEST_DUTY_DATE_FIX';
+  if (window.__CNMI_V352_TRADE_REQUEST_DUTY_DATE_FIX__) return;
+  window.__CNMI_V352_TRADE_REQUEST_DUTY_DATE_FIX__ = true;
 
   const tradeLoads = new Map();
   const helperLoads = new Map();
@@ -124,7 +124,9 @@
     const slotType=String(signup.slot_type||'').toLowerCase();
     const workType=slotType==='clerk'?'เคิก':'MT';
     const tangMtException=isTangStaff(row?.staff_id)&&slotType!=='clerk';
-    const receiverType=tangMtException?'MT':baseRateTypeFor(row?.staff_id);
+    // ช่องที่ลงชื่อกำหนด "มูลค่างาน" แต่ฐาน HR ยังยึดประเภทบุคลากร
+    // ดังนั้นแตงลงช่อง MT = 8×130÷90 = 11.56 ชม. ไม่ใช่เปลี่ยนฐานทั้งคนเป็น MT
+    const receiverType=baseRateTypeFor(row?.staff_id);
     const receiverNormalRate=receiverType==='เคิก'?90:130;
     const workRate=rateForType(workType,row?.work_date);
     const claimHours=receiverNormalRate>0?round2(actual*workRate/receiverNormalRate):0;
@@ -139,7 +141,7 @@
     return 0;
   }
   function cleanTradeNote(note){
-    return String(note||'').replace(/\s*\[SELL_PART=[a-z_]+\]\s*/ig,' ').replace(/\s*\[SELL_HOURS=\d+(?:\.\d+)?\]\s*/ig,' ').replace(/\s*\[SELL_SEGMENTS=[^\]]+\]\s*/ig,' ').replace(/\s{2,}/g,' ').trim();
+    return String(note||'').replace(/\s*\[SELL_PART=[a-z_]+\]\s*/ig,' ').replace(/\s*\[SELL_HOURS=\d+(?:\.\d+)?\]\s*/ig,' ').replace(/\s*\[SELL_SEGMENTS=[^\]]+\]\s*/ig,' ').replace(/\s*\[SELL_DATE=[^\]]+\]\s*/ig,' ').replace(/\s*\[SELL_DUTY=[^\]]+\]\s*/ig,' ').replace(/\s{2,}/g,' ').trim();
   }
   function soldRateType(trade,a){
     const mode=String(trade?.rate_mode||'receiver');

@@ -2573,13 +2573,39 @@ function renderTradeButton(slot) {
 }
 function renderDutyTradePanel(assignments) {
   const monthRows = state.tradeRequests.filter(r => {
-    const a = assignments.find(x => x.id === r.from_assignment_id || x.id === r.to_assignment_id);
-    return a || String(r.created_at || '').startsWith(state.monthKey);
+    const a = tradeAssignmentForDisplay(r, assignments);
+    return normalizeDateKey(a?.duty_date).startsWith(state.monthKey) || String(r.created_at || '').startsWith(state.monthKey);
   });
   const staffFilter = state.tradeFilterStaff || '';
   const visible = monthRows.filter(r => !staffFilter || r.requester_id === staffFilter || r.receiver_id === staffFilter);
   if (!visible.length) return `<div class="trade-panel"><h3>คำขอขายเวร</h3>${empty('ยังไม่มีคำขอขายเวรในเดือนนี้')}</div>`;
   return `<div class="trade-panel"><h3>คำขอขายเวร</h3><div class="table-wrap desktop-table"><table><thead><tr><th>ผู้ขายเวร</th><th>ผู้รับเวร</th><th>รายการ</th><th>เงินโดยประมาณ</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>${visible.map(r => renderTradeRow(r, assignments)).join('')}</tbody></table></div>${renderTradeCards(visible, assignments)}</div>`;
+}
+
+function tradeSnapshotValue(note, key) {
+  const match = String(note || '').match(new RegExp(`\\[${key}=([^\\]]+)\\]`, 'i'));
+  if (!match?.[1]) return '';
+  try { return decodeURIComponent(match[1]); } catch (_) { return match[1]; }
+}
+
+function tradeAssignmentForDisplay(row, assignments=[]) {
+  const id = String(row?.from_assignment_id || '');
+  const live = (assignments || []).find(a => String(a?.id || '') === id)
+    || (state.rosterAssignments || []).find(a => String(a?.id || '') === id);
+  if (live) return live;
+  const dutyDate = tradeSnapshotValue(row?.note, 'SELL_DATE');
+  const dutyCode = tradeSnapshotValue(row?.note, 'SELL_DUTY');
+  return dutyDate || dutyCode
+    ? { id, duty_date:dutyDate, duty_code:dutyCode, _trade_snapshot:true }
+    : null;
+}
+
+function tradeDutyDisplay(row, assignments=[]) {
+  const from = tradeAssignmentForDisplay(row, assignments);
+  if (!from?.duty_date) return '<span class="trade-duty-missing">ไม่พบวันที่เวรเดิม</span>';
+  const label = DUTY_LABEL[from.duty_code] || from.duty_code || 'ไม่ระบุเวร';
+  const snapshot = from._trade_snapshot ? ' <span class="badge black">ข้อมูลวันที่ที่บันทึกไว้</span>' : '';
+  return `${formatThaiDate(from.duty_date)} ${escapeHtml(label)}${snapshot}`;
 }
 function renderTradeActionButtons(r) {
   const actions = [];
@@ -2600,15 +2626,15 @@ function renderTradeActionButtons(r) {
 }
 function renderTradeCards(rows, assignments) {
   return `<div class="mobile-cards trade-mobile-cards">${rows.map(r => {
-    const from = assignments.find(a => a.id === r.from_assignment_id) || {};
+    const from = tradeAssignmentForDisplay(r, assignments) || {};
     const to = null;
-    return `<div class="mobile-card"><div class="section-title"><h3>ขายเวร</h3>${badge(tradeStatusLabel(r.status, r), r.status==='confirmed'?'green':r.status==='rejected'?'red':r.status==='completed'?'blue':'orange')}</div><div><b>ผู้ขายเวร:</b> ${staffPill(r.requester_id)}<br><b>ผู้รับเวร:</b> ${staffPill(r.receiver_id)}</div><div>${formatThaiDate(from.duty_date)} ${DUTY_LABEL[from.duty_code] || from.duty_code || ''}</div><div><b>เงินโดยประมาณ:</b> ${tradePaymentDisplay(r, from, to)}</div><div class="actions">${renderTradeActionButtons(r)}</div></div>`;
+    return `<div class="mobile-card"><div class="section-title"><h3>ขายเวร</h3>${badge(tradeStatusLabel(r.status, r), r.status==='confirmed'?'green':r.status==='rejected'?'red':r.status==='completed'?'blue':'orange')}</div><div><b>ผู้ขายเวร:</b> ${staffPill(r.requester_id)}<br><b>ผู้รับเวร:</b> ${staffPill(r.receiver_id)}</div><div><b>วันที่ / เวร:</b> ${tradeDutyDisplay(r, assignments)}</div><div><b>เงินโดยประมาณ:</b> ${tradePaymentDisplay(r, from, to)}</div><div class="actions">${renderTradeActionButtons(r)}</div></div>`;
   }).join('')}</div>`;
 }
 function renderTradeRow(r, assignments) {
-  const from = assignments.find(a => a.id === r.from_assignment_id) || {};
+  const from = tradeAssignmentForDisplay(r, assignments) || {};
   const to = null;
-  return `<tr><td>${staffPill(r.requester_id)}</td><td>${staffPill(r.receiver_id)}</td><td>ขายเวร • ${escapeHtml(niceRoleRateLabel(r.rate_mode))}<br><span class="muted">${formatThaiDate(from.duty_date)} ${DUTY_LABEL[from.duty_code] || from.duty_code || ''}</span></td><td>${tradePaymentDisplay(r, from, to)}</td><td>${badge(tradeStatusLabel(r.status, r), r.status==='confirmed'?'green':r.status==='rejected'?'red':r.status==='completed'?'blue':'orange')}</td><td>${renderTradeActionButtons(r)}</td></tr>`;
+  return `<tr><td>${staffPill(r.requester_id)}</td><td>${staffPill(r.receiver_id)}</td><td>ขายเวร • ${escapeHtml(niceRoleRateLabel(r.rate_mode))}<br><span class="muted">${tradeDutyDisplay(r, assignments)}</span></td><td>${tradePaymentDisplay(r, from, to)}</td><td>${badge(tradeStatusLabel(r.status, r), r.status==='confirmed'?'green':r.status==='rejected'?'red':r.status==='completed'?'blue':'orange')}</td><td>${renderTradeActionButtons(r)}</td></tr>`;
 }
 function tradeStatusLabel(status, row=null) {
   return ({ pending:'รออีกฝ่ายยืนยัน', confirmed:'ยืนยันแล้ว รอ Admin บันทึก', rejected:'ปฏิเสธ', completed:'บันทึกขายเวรแล้ว' }[status] || status || '-');
