@@ -1,6 +1,6 @@
-/* CNMI Staff Planner PWA service worker — V369 */
+/* CNMI Staff Planner PWA service worker — V370 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v369`;
+const CACHE_NAME = `${CACHE_PREFIX}v370`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
   './pwa-install-v303.css', './pwa-install-v303.js',
@@ -27,6 +27,7 @@ const APP_SHELL = [
   './patch-v366-continuous-ot-carry.js',
   './patch-v368-authoritative-continuous-ot-carry.js',
   './patch-v369-ot-menu-inventory-app-launch.js',
+  './patch-v370-ot-mobile-fit.js',
   './patch-v347-ot-claim-details-money.js',
   './patch-v348-ot-trade-rate-tabs-popup.js',
   './patch-v326-donor-helper-unit-dropdown.js',
