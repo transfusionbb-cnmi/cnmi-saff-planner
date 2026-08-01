@@ -60,7 +60,8 @@
   }
   function updateRows(carryMap){
     document.querySelectorAll('table[data-v346-prepared="1"] tbody tr').forEach(row=>{
-      const staffId=row.querySelector('[data-v234-show-staff]')?.getAttribute('data-v234-show-staff')||'';
+      const staffButton=row.querySelector('[data-v347-show-staff],[data-v234-show-staff]');
+      const staffId=staffButton?.getAttribute('data-v347-show-staff')||staffButton?.getAttribute('data-v234-show-staff')||'';
       const info=carryMap instanceof Map?carryMap.get(String(staffId)):null;
       const carryIn=round2(info?.amount||0),current=round2(row.dataset.v346CurrentHr||0),available=round2(current+carryIn);
       const claimed=Math.floor((available+1e-7)/8)*8,carryOut=round2(Math.max(0,available-claimed));
