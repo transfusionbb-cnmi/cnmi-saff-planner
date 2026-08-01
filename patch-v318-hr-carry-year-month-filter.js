@@ -7,9 +7,9 @@
 */
 (function(){
   'use strict';
-  const VERSION='V318_HR_DUMMY_MANUAL_HISTORY_FILTER';
-  if(window.__CNMI_V318_HR_DUMMY_MANUAL_HISTORY_FILTER__)return;
-  window.__CNMI_V318_HR_DUMMY_MANUAL_HISTORY_FILTER__=true;
+  const VERSION='V364_PREVIOUS_MONTH_LIVE_CARRY_PRIORITY';
+  if(window.__CNMI_V364_PREVIOUS_MONTH_LIVE_CARRY_PRIORITY__)return;
+  window.__CNMI_V364_PREVIOUS_MONTH_LIVE_CARRY_PRIORITY__=true;
 
   const previousRenderOtPage=window.renderOtPage||(typeof renderOtPage==='function'?renderOtPage:null);
   const historyCache=new Map();
@@ -168,17 +168,17 @@
          carry-out shown by that month.  Pass it forward unchanged.  Do not
          reconstruct it from OT rows because that can turn (for example) June's
          displayed 5.14 into an unrelated 7.6 when July is opened. */
-      const directMarker=[...markers].reverse().find(x=>x.month===previousMonth(source.month));
-      if(directMarker){
-        out.set(staffId,{amount:round2(directMarker.amount),sourceMonth:directMarker.month,source:'direct-previous-month-carry',anchorRowId:directMarker.rowId||''});return;
-      }
       if(latest&&latest.month===previousMonth(source.month)){
         const current=round2(latest.rows.reduce((sum,row)=>sum+Number(normalize(row).hrHours||0),0));
         /* Match the carry-out shown on the immediately previous month's
            summary.  An older marker is not an input here: adding it again is
            what changed June 5.14 into July 7.6. */
         const claimed=Math.floor((current+1e-7)/8)*8,amount=round2(Math.max(0,current-claimed));
-        out.set(staffId,{amount,sourceMonth:latest.month,source:'previous-month-ledger',anchorRowId:latest.rows[0]?.id||marker?.rowId||''});return;
+        out.set(staffId,{amount,sourceMonth:latest.month,source:'previous-month-live-summary',anchorRowId:latest.rows[0]?.id||marker?.rowId||''});return;
+      }
+      const directMarker=[...markers].reverse().find(x=>x.month===previousMonth(source.month));
+      if(directMarker){
+        out.set(staffId,{amount:round2(directMarker.amount),sourceMonth:directMarker.month,source:'direct-previous-month-carry-fallback',anchorRowId:directMarker.rowId||''});return;
       }
       if(marker&&(!latest||marker.month>=latest.month)){
         out.set(staffId,{amount:round2(marker.amount),sourceMonth:marker.month,source:'saved-v318',anchorRowId:marker.rowId||''});return;
@@ -214,9 +214,9 @@
     const out=new Map();
     new Set([...markersByStaff.keys(),...fallbackByStaff.keys()]).forEach(staffId=>{
       const markerList=markersByStaff.get(staffId)||[],marker=markerList[markerList.length-1],rows=fallbackByStaff.get(staffId)||[];
+      if(rows.length){const current=round2(rows.reduce((sum,row)=>sum+Number(normalize(row).hrHours||0),0)),claimed=Math.floor((current+1e-7)/8)*8;out.set(staffId,{amount:round2(Math.max(0,current-claimed)),sourceMonth:prev.month,source:'previous-month-live-summary',anchorRowId:rows[0]?.id||marker?.rowId||''});return;}
       const directMarker=[...markerList].reverse().find(x=>x.month===prev.month);
-      if(directMarker){out.set(staffId,{amount:round2(directMarker.amount),sourceMonth:directMarker.month,source:'direct-previous-month-carry',anchorRowId:directMarker.rowId||''});return;}
-      if(rows.length){const current=round2(rows.reduce((sum,row)=>sum+Number(normalize(row).hrHours||0),0)),claimed=Math.floor((current+1e-7)/8)*8;out.set(staffId,{amount:round2(Math.max(0,current-claimed)),sourceMonth:prev.month,source:'previous-month-ledger-fallback',anchorRowId:rows[0]?.id||marker?.rowId||''});return;}
+      if(directMarker){out.set(staffId,{amount:round2(directMarker.amount),sourceMonth:directMarker.month,source:'direct-previous-month-carry-fallback',anchorRowId:directMarker.rowId||''});return;}
       if(marker)out.set(staffId,{amount:round2(marker.amount),sourceMonth:marker.month,source:'saved-v318',anchorRowId:marker.rowId||''});
     });
     summaryCarryCache.set(key,{map:out,expires:Date.now()+CARRY_TTL});
