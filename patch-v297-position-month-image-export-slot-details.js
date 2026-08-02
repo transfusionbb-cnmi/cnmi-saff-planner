@@ -1,6 +1,6 @@
-/* CNMI Staff Planner V384
-   Beautiful monthly position image export (no summary col + clone live description)
-   - keeps staff name + summary as the first two columns of the SAME table
+/* CNMI Staff Planner V386
+   Monthly position export day-count hotfix (no summary col + clone live description)
+   - keeps the staff name as the first column of the SAME table
    - preserves each staff member's color bar
    - forces date columns into chronological order (1 -> last day)
    - removes sticky/scroll UI only inside the hidden export layout
@@ -8,7 +8,7 @@
 */
 (function(){
   'use strict';
-  const VERSION='V385_POSITION_MONTH_EXPORT_CLEANER';
+  const VERSION='V386_POSITION_MONTH_EXPORT_DAY_COUNT_FIX';
   if(window.__CNMI_V297_POSITION_MONTH_IMAGE_EXPORT_SLOT_DETAILS__)return;
   window.__CNMI_V297_POSITION_MONTH_IMAGE_EXPORT_SLOT_DETAILS__=true;
 
@@ -245,16 +245,18 @@
     if(!table)throw new Error('ไม่พบตารางสำหรับ Export');
     const expected=daysInMonth(key);
     const colCount=maxCellCount(table);
-    if(colCount<expected+2){
-      throw new Error(`ตารางเดือนนี้สร้างได้เพียง ${Math.max(0,colCount-2)} วัน จาก ${expected} วัน กรุณารีเฟรชแล้ว Export ใหม่`);
+    // V385 removes the summary column before measuring the export table.
+    // The completed table therefore contains 1 staff-name column + every day of the month.
+    const actualDays=Math.max(0,colCount-1);
+    if(actualDays<expected){
+      throw new Error(`ตารางเดือนนี้สร้างได้เพียง ${actualDays} วัน จาก ${expected} วัน กรุณารีเฟรชแล้ว Export ใหม่`);
     }
 
     const nameWidth=112;
-    const summaryWidth=170;
     const dayWidth=58;
     Array.from(table.rows||[]).forEach(row=>{
       Array.from(row.cells||[]).forEach((cell,index)=>{
-        const px=index===0?nameWidth:(index===1?summaryWidth:dayWidth);
+        const px=index===0?nameWidth:dayWidth;
         cell.style.setProperty('width',`${px}px`,'important');
         cell.style.setProperty('min-width',`${px}px`,'important');
         cell.style.setProperty('max-width',`${px}px`,'important');
@@ -262,7 +264,7 @@
       });
     });
 
-    const tableWidth=nameWidth+summaryWidth+(expected*dayWidth)+2;
+    const tableWidth=nameWidth+(expected*dayWidth)+2;
     table.style.setProperty('width',`${tableWidth}px`,'important');
     table.style.setProperty('min-width',`${tableWidth}px`,'important');
     table.style.setProperty('max-width',`${tableWidth}px`,'important');
