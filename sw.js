@@ -1,6 +1,6 @@
-/* CNMI Staff Planner PWA service worker — V374 */
+/* CNMI Staff Planner PWA service worker — V377 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v374`;
+const CACHE_NAME = `${CACHE_PREFIX}v377`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
   './pwa-install-v303.css', './pwa-install-v303.js',
@@ -31,6 +31,7 @@ const APP_SHELL = [
   './patch-v372-position-admin-authoritative-mobile-jump.js',
   './patch-v373-position-stat-colors-compact-offdays.js',
   './patch-v374-outing-column-and-position-display-restore.js',
+  './patch-v377-staff-duty-tracking-and-menu-number-fix.js',
   './patch-v347-ot-claim-details-money.js',
   './patch-v348-ot-trade-rate-tabs-popup.js',
   './patch-v326-donor-helper-unit-dropdown.js',
@@ -44,6 +45,8 @@ const APP_SHELL = [
   './patch-v314-admin-ot-calendar-ch4-fix.js',
   './patch-v275-admin-manual-ui-corrections.js',
   './patch-v278-slot-stats-holiday-balance-navigation-fix.js',
+  './patch-v292-schedule-image-export.js',
+  './patch-v297-position-month-image-export-slot-details.js',
   './patch-v305-mobile-app-scroll-and-position-description.js',
   './patch-v311-mobile-popup-daily-summary-fix.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
