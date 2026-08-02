@@ -1,5 +1,5 @@
 /* CNMI Staff Planner V384
-   Beautiful monthly position image export
+   Beautiful monthly position image export (no summary col + clone live description)
    - keeps staff name + summary as the first two columns of the SAME table
    - preserves each staff member's color bar
    - forces date columns into chronological order (1 -> last day)
@@ -8,7 +8,7 @@
 */
 (function(){
   'use strict';
-  const VERSION='V384_POSITION_MONTH_BEAUTIFUL_EXPORT';
+  const VERSION='V385_POSITION_MONTH_EXPORT_CLEANER';
   if(window.__CNMI_V297_POSITION_MONTH_IMAGE_EXPORT_SLOT_DETAILS__)return;
   window.__CNMI_V297_POSITION_MONTH_IMAGE_EXPORT_SLOT_DETAILS__=true;
 
@@ -79,6 +79,27 @@
       ${rows.length?`<div class="table-wrap v297-position-description-wrap"><table class="v297-position-description-table"><thead><tr><th>ตำแหน่ง</th><th>วันที่ใช้</th><th>โซน</th><th>เวลาพัก</th><th>ผู้ปฏิบัติหลัก / เงื่อนไข</th><th>รายละเอียดหน้าที่</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${esc(r.code)}</b></td><td>${esc(compactDays(r.dates))}</td><td>${esc(r.zone)}</td><td>${esc(r.break_time)}</td><td>${esc(r.main_rule)}</td><td class="v297-job-cell">${esc(r.job_desc)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state">เดือนนี้ยังไม่มีตำแหน่งในตาราง</div>'}
     </section>`;
   }
+  function liveDescriptionSection(){
+    const live=document.querySelector('[data-v297-position-descriptions]');
+    if(!live)return null;
+    const clone=live.cloneNode(true);
+    clone.querySelectorAll('button,[role="button"],select,input,textarea').forEach(node=>node.remove());
+    clone.querySelectorAll('[style]').forEach(node=>{
+      node.style.setProperty('position','static','important');
+      node.style.setProperty('left','auto','important');
+      node.style.setProperty('right','auto','important');
+      node.style.setProperty('top','auto','important');
+      node.style.setProperty('bottom','auto','important');
+      node.style.setProperty('transform','none','important');
+      node.style.setProperty('overflow','visible','important');
+      node.style.setProperty('max-height','none','important');
+    });
+    clone.querySelectorAll('.table-wrap,.v297-position-description-wrap').forEach(node=>{
+      node.style.setProperty('overflow','visible','important');
+      node.style.setProperty('max-height','none','important');
+    });
+    return clone;
+  }
   function brandHeader(key){
     return `<div class="v297-export-brand-header">
       <div class="v297-export-logo" aria-hidden="true"><b>BB</b><small>CNMI</small></div>
@@ -142,8 +163,14 @@
       button.replaceWith(span);
     });
   }
+  function stripSummaryColumn(table){
+    Array.from(table.rows||[]).forEach(row=>{
+      if((row.cells||[]).length>1)row.deleteCell(1);
+    });
+  }
   function normalizeExportTable(table,key){
     reorderDateColumns(table,key);
+    stripSummaryColumn(table);
     replaceControls(table);
 
     table.setAttribute('dir','ltr');
@@ -196,9 +223,14 @@
     tableWrap.appendChild(table);
     sheet.appendChild(tableWrap);
 
-    const descriptions=document.createElement('div');
-    descriptions.innerHTML=descriptionMarkup(key);
-    sheet.appendChild(descriptions.firstElementChild);
+    const liveDescriptions=liveDescriptionSection();
+    if(liveDescriptions){
+      sheet.appendChild(liveDescriptions);
+    }else{
+      const descriptions=document.createElement('div');
+      descriptions.innerHTML=descriptionMarkup(key);
+      sheet.appendChild(descriptions.firstElementChild);
+    }
 
     sandbox.appendChild(sheet);
     document.body.appendChild(sandbox);
