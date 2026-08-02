@@ -74,7 +74,10 @@
   }
   function enhance(){
     if(!isTargetPage())return;
-    document.querySelectorAll('.v275-position-table').forEach(markTable);
+    document.querySelectorAll('.v275-position-table').forEach(table=>{
+      if(table.closest('[data-v297-export-sandbox="1"]')) return;
+      markTable(table);
+    });
   }
   function queue(){
     if(queued)return;
