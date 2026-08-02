@@ -168,6 +168,32 @@
       if((row.cells||[]).length>1)row.deleteCell(1);
     });
   }
+  function normalizeLeaveLabelForExport(value){
+    const text=String(value||'').trim();
+    return text==='ลาพักร้อน'?'ลาพักผ่อน':text;
+  }
+  function emphasizeLeaveCellsForExport(table){
+    table.querySelectorAll('.v275-position-day.leave,.matrix-cell.leave-cell,[data-v291-leave-label]').forEach(cell=>{
+      cell.classList.add('v392-export-leave-cell');
+      let badge=cell.querySelector('.mini-status');
+      if(!badge){
+        const label=normalizeLeaveLabelForExport(cell.getAttribute('data-v291-leave-label'));
+        if(label){
+          badge=document.createElement('span');
+          badge.className='mini-status leave-other';
+          badge.textContent=label;
+          cell.insertBefore(badge,cell.firstChild);
+        }
+      }
+      if(badge){
+        badge.textContent=normalizeLeaveLabelForExport(badge.textContent);
+        badge.classList.add('v392-export-leave-badge');
+      }
+      cell.querySelectorAll('.v297-export-position-text,.v275-position-pill').forEach(node=>{
+        node.classList.add('v392-export-position-under-leave');
+      });
+    });
+  }
   function exactOutingDaysFromLiveTable(table){
     const days=new Set();
     const head=table?.tHead?.rows?.[0];
@@ -205,6 +231,7 @@
     reorderDateColumns(table,key);
     stripSummaryColumn(table);
     replaceControls(table);
+    emphasizeLeaveCellsForExport(table);
 
     table.setAttribute('dir','ltr');
     table.style.setProperty('direction','ltr','important');
@@ -470,6 +497,9 @@
     .v297-export-table-wrap .v384-export-summary-cell span,.v297-export-table-wrap .v384-export-summary-cell small{font-size:6.8px!important;line-height:1.15!important;color:#64748b!important}
 
     .v297-export-position-text{display:block;width:100%;max-width:100%;padding:4px 3px;border-radius:7px;background:#edf5ff;color:#2563eb;font-size:10.5px!important;font-weight:800;line-height:1.15!important;text-align:center;white-space:normal!important;overflow-wrap:anywhere;word-break:normal;box-sizing:border-box}
+    .v297-export-table-wrap td.v392-export-leave-cell{background:#fff8e8!important;box-shadow:inset 0 0 0 2px #f59e0b!important;vertical-align:top!important;padding:3px!important}
+    .v297-export-table-wrap .v392-export-leave-badge{display:block!important;width:100%!important;margin:0 0 3px!important;padding:4px 2px!important;border:1px solid currentColor!important;border-radius:7px!important;font-size:9.5px!important;font-weight:900!important;line-height:1.1!important;text-align:center!important;white-space:normal!important;box-sizing:border-box!important}
+    .v297-export-table-wrap .v392-export-position-under-leave{display:block!important;margin-top:1px!important;padding:2px 1px!important;background:transparent!important;color:#64748b!important;font-size:7px!important;font-weight:700!important;line-height:1.05!important;opacity:.42!important}
     .v297-export-table-wrap .v275-meta-day,.v297-export-table-wrap .v275-meta-day b,.v297-export-table-wrap .v275-meta-day span{font-size:9px!important;line-height:1.15!important}
     .v297-export-table-wrap .v275-date-head b{font-size:11px!important}
     .v297-export-table-wrap .v275-date-head small{font-size:8px!important}

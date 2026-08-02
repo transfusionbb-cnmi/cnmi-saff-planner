@@ -26,7 +26,7 @@ const NAV_GROUPS = [
   { id: 'admin', title: 'เมนู Admin', hint: 'ตั้งค่าและจัดการระบบ', adminOnly: true }
 ];
 
-const LEAVE_TYPES = ['ลาพักร้อน','ลากิจ','ลาป่วย','ลาคลอด','ไม่รับเวร','อื่นๆ'];
+const LEAVE_TYPES = ['ลาพักผ่อน','ลากิจ','ลาป่วย','ลาคลอด','ไม่รับเวร','อื่นๆ'];
 const ACTIVITY_TYPES = ['ประชุม','อบรม','ออกหน่วย','ตรวจมาตรฐาน','ซ้อม CODE','อื่นๆ'];
 const ACTIVITY_LOCATIONS = ['ห้องบริจาคโลหิต','คลังเลือด','ห้องบริจาคโลหิต/คลังเลือด','ห้องประชุม 3D','ห้องประชุม ER'];
 const OT_REASONS = ['เวรปั่นเลือดหลังเวลา (รอเทียบ LIS)','มาช่วยปั่นเลือด','มาช่วยจ่ายเลือด','มาช่วยออกหน่วย','อยู่ต่อเคลียร์งาน','มาช่วยงาน CQI','อื่นๆ'];
@@ -1383,7 +1383,7 @@ function activityClass(type) {
   return 'black';
 }
 function leaveBadgeClass(type) {
-  if (type === 'ลาพักร้อน') return 'green';
+  if (type === 'ลาพักผ่อน' || type === 'ลาพักร้อน') return 'green';
   if (type === 'ลากิจ') return 'purple';
   if (type === 'ลาป่วย' || type === 'ลาคลอด') return 'yellow';
   if (type === 'ไม่รับเวร') return 'black';
@@ -1455,7 +1455,8 @@ function isNoDutyLeaveType(type) {
   return String(type || '').trim() === 'ไม่รับเวร';
 }
 function leaveDisplayType(l) {
-  return String(l?.type || l?.leave_type || l?.reason_type || 'ลาอื่นๆ').split(':::')[0].trim();
+  const value = String(l?.type || l?.leave_type || l?.reason_type || 'ลาอื่นๆ').split(':::')[0].trim();
+  return value === 'ลาพักร้อน' ? 'ลาพักผ่อน' : value;
 }
 function leaveCellClass(type) {
   const t = leaveDisplayType({ type });
@@ -1888,7 +1889,7 @@ function renderCalendar() {
       </div>
       ${state.calendarView === 'month' ? renderCalendarMonth() : state.calendarView === 'week' ? renderCalendarWeek() : renderCalendarDay()}
       <div class="toolbar">
-        ${badge('ลาพักร้อน', 'green')} ${badge('ลากิจ', 'purple')} ${badge('ลาป่วย/ลาคลอด', 'yellow')} ${badge('อบรม', 'blue')} ${badge('ประชุม', 'orange')} ${badge('ออกหน่วย', 'red')} ${badge('เวร', 'black')}
+        ${badge('ลาพักผ่อน', 'green')} ${badge('ลากิจ', 'purple')} ${badge('ลาป่วย/ลาคลอด', 'yellow')} ${badge('อบรม', 'blue')} ${badge('ประชุม', 'orange')} ${badge('ออกหน่วย', 'red')} ${badge('เวร', 'black')}
       </div>
     </div>`;
 }
@@ -1927,10 +1928,11 @@ function collectCalendarEvents() {
     const days = daysBetween(l.start_date, l.end_date);
     const hrChecked = isLeaveHrChecked(l.id);
     days.forEach(date => {
-      const lt = l.type === 'ลาพักร้อน' ? 'leave-vacation' : l.type === 'ลากิจ' ? 'leave-personal' : (l.type === 'ลาป่วย' || l.type === 'ลาคลอด') ? 'leave-sick' : l.type === 'ไม่รับเวร' ? 'noduty' : 'leave-other';
+      const displayType = leaveDisplayType(l);
+      const lt = displayType === 'ลาพักผ่อน' ? 'leave-vacation' : displayType === 'ลากิจ' ? 'leave-personal' : (displayType === 'ลาป่วย' || displayType === 'ลาคลอด') ? 'leave-sick' : displayType === 'ไม่รับเวร' ? 'noduty' : 'leave-other';
       const reason = leaveReasonText(l);
       const reasonSuffix = reason ? ` — ${reason}` : '';
-      events.push({ date, type: lt, title: `${l.type}: ${staffNick(l.staff_id)}${reasonSuffix}${hrChecked ? ' ✓ ตรวจ HR แล้ว' : ''}`, raw: l, hrChecked, reason });
+      events.push({ date, type: lt, title: `${displayType}: ${staffNick(l.staff_id)}${reasonSuffix}${hrChecked ? ' ✓ ตรวจ HR แล้ว' : ''}`, raw: l, hrChecked, reason });
     });
   });
   state.activities.forEach(a => {
@@ -1990,7 +1992,7 @@ function renderDayTimeline(date) {
   const evs = collectCalendarEvents().filter(e => e.date === date);
   return `<div class="card"><div class="section-title"><h3>${formatThaiDate(date)}</h3><button class="tiny-btn" data-day-detail="${date}">รายละเอียด</button></div>${evs.length ? evs.map(e => `<div class="timeline-item"><span>${escapeHtml(e.title)}${calendarEventDetail(e)}</span><span>${badge(eventText(e.type), eventBadge(e.type))}</span></div>`).join('') : empty('ไม่มีรายการ')}</div>`;
 }
-function eventText(type) { return ({'leave-vacation':'ลาพักร้อน','leave-personal':'ลากิจ','leave-sick':'ลาป่วย/ลาคลอด','leave-other':'ลา', noduty:'ไม่รับเวร', training:'อบรม', meeting:'ประชุม', outing:'ออกหน่วย', standard:'ตรวจมาตรฐาน', code:'ซ้อม CODE', holiday:'วันหยุด', duty:'เวร'}[type] || type); }
+function eventText(type) { return ({'leave-vacation':'ลาพักผ่อน','leave-personal':'ลากิจ','leave-sick':'ลาป่วย/ลาคลอด','leave-other':'ลา', noduty:'ไม่รับเวร', training:'อบรม', meeting:'ประชุม', outing:'ออกหน่วย', standard:'ตรวจมาตรฐาน', code:'ซ้อม CODE', holiday:'วันหยุด', duty:'เวร'}[type] || type); }
 function eventBadge(type) { return ({'leave-vacation':'green','leave-personal':'purple','leave-sick':'yellow','leave-other':'blue', noduty:'black', training:'blue', meeting:'orange', outing:'red', standard:'purple', code:'yellow', holiday:'yellow', duty:'black'}[type] || 'black'); }
 function showDayDetail(date) {
   const evs = collectCalendarEvents().filter(e => e.date === date);
@@ -2010,7 +2012,7 @@ function renderLeavePage() {
           ${isAdmin() ? `<label class="wide">บันทึกให้เจ้าหน้าที่ <select name="staff_id" id="leaveStaffSelect" required>${staffOptions(selectedStaff)}</select><span class="hint">Admin เพิ่ม/แก้ไข/ยกเลิกแทน staff ได้ รวมถึงลาย้อนหลัง กรณีเจ้าหน้าที่ไม่สะดวกบันทึกเอง</span></label>` : ''}
           
           <label>ประเภท
-            <select name="type" required>${LEAVE_TYPES.map(t => `<option ${editing?.type===t?'selected':''}>${t}</option>`).join('')}</select>
+            <select name="type" required>${LEAVE_TYPES.map(t => `<option ${leaveDisplayType(editing)===t?'selected':''}>${t}</option>`).join('')}</select>
           </label>
           <label>วันที่เริ่ม <input name="start_date" type="date" value="${editing?.start_date || todayStr()}" required></label>
           <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${editing?.end_date || todayStr()}" required></label>
@@ -2036,9 +2038,9 @@ function renderLeavePage() {
 function renderLeaveTable(rows) {
   if (!rows.length) return empty('ยังไม่มีรายการ');
   const table = `<div class="table-wrap desktop-table leave-desktop-table"><table><thead><tr><th>ชื่อ</th><th>ประเภท</th><th>ช่วงวันที่</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
-    ${rows.map(r => `<tr><td>${escapeHtml(staffNick(r.staff_id))}${r.recorded_by_admin ? '<br><span class="badge purple">Admin บันทึกแทน</span>' : ''}${leaveCancellationBadge(r)}</td><td>${badge(r.type, leaveBadgeClass(r.type))}</td><td>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}<br><span class="badge blue">${escapeHtml(r.leave_period || 'เต็มวัน')}</span><br><span class="muted">${escapeHtml(r.note || '')}</span>${r.admin_record_reason ? `<br><span class="muted">เหตุผล Admin: ${escapeHtml(r.admin_record_reason)}</span>` : ''}</td><td>${leaveStatusBadge(r)}</td><td><div class="actions">${renderLeaveActions(r)}</div></td></tr>`).join('')}
+    ${rows.map(r => `<tr><td>${escapeHtml(staffNick(r.staff_id))}${r.recorded_by_admin ? '<br><span class="badge purple">Admin บันทึกแทน</span>' : ''}${leaveCancellationBadge(r)}</td><td>${badge(leaveDisplayType(r), leaveBadgeClass(r.type))}</td><td>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}<br><span class="badge blue">${escapeHtml(r.leave_period || 'เต็มวัน')}</span><br><span class="muted">${escapeHtml(r.note || '')}</span>${r.admin_record_reason ? `<br><span class="muted">เหตุผล Admin: ${escapeHtml(r.admin_record_reason)}</span>` : ''}</td><td>${leaveStatusBadge(r)}</td><td><div class="actions">${renderLeaveActions(r)}</div></td></tr>`).join('')}
   </tbody></table></div>`;
-  const cards = `<div class="mobile-cards">${rows.map(r => `<div class="mobile-card"><div class="section-title"><h3>${escapeHtml(staffNick(r.staff_id))}</h3>${badge(r.type, leaveBadgeClass(r.type))}</div><div><b>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}</b><br>${badge(r.leave_period || 'เต็มวัน','blue')} ${leaveStatusBadge(r)}</div>${r.recorded_by_admin ? '<span class="badge purple">Admin บันทึกแทน</span>' : ''}${leaveCancellationBadge(r)}<span class="muted">${escapeHtml(r.note || '')}</span><div class="actions">${renderLeaveActions(r)}</div></div>`).join('')}</div>`;
+  const cards = `<div class="mobile-cards">${rows.map(r => `<div class="mobile-card"><div class="section-title"><h3>${escapeHtml(staffNick(r.staff_id))}</h3>${badge(leaveDisplayType(r), leaveBadgeClass(r.type))}</div><div><b>${formatThaiDate(r.start_date)} - ${formatThaiDate(r.end_date)}</b><br>${badge(r.leave_period || 'เต็มวัน','blue')} ${leaveStatusBadge(r)}</div>${r.recorded_by_admin ? '<span class="badge purple">Admin บันทึกแทน</span>' : ''}${leaveCancellationBadge(r)}<span class="muted">${escapeHtml(r.note || '')}</span><div class="actions">${renderLeaveActions(r)}</div></div>`).join('')}</div>`;
   return table + cards;
 }
 function isLeaveCancellationRequested(row) {
@@ -2199,7 +2201,7 @@ function renderHrPage() {
     ${leaveRows.length ? `<div class="table-wrap"><table><thead><tr><th>ผู้ลา</th><th>ประเภท/วันที่</th><th>สถานะ HR</th><th>บันทึกตรวจสอบ</th></tr></thead><tbody>
       ${leaveRows.map(l => { const h = state.hrChecks.find(x => x.leave_request_id === l.id) || {}; return `<tr>
         <td>${escapeHtml(staffName(l.staff_id))}</td>
-        <td>${badge(l.type, leaveBadgeClass(l.type))}<br>${formatThaiDate(l.start_date)} - ${formatThaiDate(l.end_date)}<br><span class="muted">เหตุผล: ${escapeHtml(leaveReasonText(l) || '-')}</span></td>
+        <td>${badge(leaveDisplayType(l), leaveBadgeClass(l.type))}<br>${formatThaiDate(l.start_date)} - ${formatThaiDate(l.end_date)}<br><span class="muted">เหตุผล: ${escapeHtml(leaveReasonText(l) || '-')}</span></td>
         <td>${badge(h.status || 'รอตรวจสอบ', h.status === 'ตรวจสอบแล้ว' ? 'green' : 'orange')}<br><span class="muted">ผู้ตรวจ: ${h.checked_by ? staffNick(h.checked_by) : '-'}</span></td>
         <td><form class="hr-form form-grid" data-leave-id="${l.id}">
           <label>สถานะ <select name="status">${HR_STATUSES.map(st => `<option ${st===(h.status||'รอตรวจสอบ')?'selected':''}>${st}</option>`).join('')}</select></label>
@@ -2229,9 +2231,9 @@ function renderHrSummaryPage() {
       <label>เดือน <input type="month" id="hrSummaryFilterMonth" value="${monthFilter || ''}"></label>
     </div>
     ${checkedRows.length ? `<div class="table-wrap desktop-table"><table><thead><tr><th>ผู้ลา</th><th>ประเภท/ช่วงวันที่</th><th>วันที่แจ้งใน HR</th><th>ผู้ตรวจ/เวลาตรวจ</th><th>หมายเหตุ</th><th>ย้อนกลับ</th></tr></thead><tbody>
-      ${checkedRows.map(({h,l}) => `<tr><td>${escapeHtml(staffName(l.staff_id))}</td><td>${badge(l.type, leaveBadgeClass(l.type))}<br>${formatThaiDate(l.start_date)} - ${formatThaiDate(l.end_date)}<br><span class="muted">${escapeHtml(leaveReasonText(l) || '')}</span></td><td>${h.hr_reported_date ? formatThaiDate(h.hr_reported_date) : '-'}</td><td>${staffPill(h.checked_by)}<br><span class="muted">${formatThaiDateTime(h.checked_at)}</span></td><td>${escapeHtml(h.note || '-')}</td><td><button class="tiny-btn danger" data-hr-revert="${h.id}">ย้อนกลับ</button></td></tr>`).join('')}
+      ${checkedRows.map(({h,l}) => `<tr><td>${escapeHtml(staffName(l.staff_id))}</td><td>${badge(leaveDisplayType(l), leaveBadgeClass(l.type))}<br>${formatThaiDate(l.start_date)} - ${formatThaiDate(l.end_date)}<br><span class="muted">${escapeHtml(leaveReasonText(l) || '')}</span></td><td>${h.hr_reported_date ? formatThaiDate(h.hr_reported_date) : '-'}</td><td>${staffPill(h.checked_by)}<br><span class="muted">${formatThaiDateTime(h.checked_at)}</span></td><td>${escapeHtml(h.note || '-')}</td><td><button class="tiny-btn danger" data-hr-revert="${h.id}">ย้อนกลับ</button></td></tr>`).join('')}
     </tbody></table></div>
-    <div class="mobile-cards">${checkedRows.map(({h,l}) => `<div class="mobile-card"><div class="section-title"><h3>${escapeHtml(staffNick(l.staff_id))}</h3>${badge(l.type, leaveBadgeClass(l.type))}</div><div>${formatThaiDate(l.start_date)} - ${formatThaiDate(l.end_date)}</div><div><b>เหตุผล:</b> ${escapeHtml(leaveReasonText(l) || '-')}</div><div><b>แจ้งใน HR:</b> ${h.hr_reported_date ? formatThaiDate(h.hr_reported_date) : '-'}</div><div><b>ผู้ตรวจ:</b> ${staffPill(h.checked_by)}<br><span class="muted">${formatThaiDateTime(h.checked_at)}</span></div><div><b>หมายเหตุ:</b> ${escapeHtml(h.note || '-')}</div><div class="actions"><button class="tiny-btn danger" data-hr-revert="${h.id}">ย้อนกลับไปตรวจสอบใหม่</button></div></div>`).join('')}</div>` : empty('ยังไม่มีรายการที่ตรวจสอบ HR แล้วตามตัวกรองนี้')}
+    <div class="mobile-cards">${checkedRows.map(({h,l}) => `<div class="mobile-card"><div class="section-title"><h3>${escapeHtml(staffNick(l.staff_id))}</h3>${badge(leaveDisplayType(l), leaveBadgeClass(l.type))}</div><div>${formatThaiDate(l.start_date)} - ${formatThaiDate(l.end_date)}</div><div><b>เหตุผล:</b> ${escapeHtml(leaveReasonText(l) || '-')}</div><div><b>แจ้งใน HR:</b> ${h.hr_reported_date ? formatThaiDate(h.hr_reported_date) : '-'}</div><div><b>ผู้ตรวจ:</b> ${staffPill(h.checked_by)}<br><span class="muted">${formatThaiDateTime(h.checked_at)}</span></div><div><b>หมายเหตุ:</b> ${escapeHtml(h.note || '-')}</div><div class="actions"><button class="tiny-btn danger" data-hr-revert="${h.id}">ย้อนกลับไปตรวจสอบใหม่</button></div></div>`).join('')}</div>` : empty('ยังไม่มีรายการที่ตรวจสอบ HR แล้วตามตัวกรองนี้')}
   </div>`;
 }
 
@@ -5332,7 +5334,7 @@ function bindGlobalEvents() {
     const known = ['ลาป่วย','ลากิจ','ลาพักผ่อน','ลาพักร้อน','ลาคลอด','ไม่รับเวร','ลาอุปสมบท','ลาอบรม','ลาอื่นๆ','อื่นๆ'];
     for (const k of known) {
       const hit = candidates.find(t => t === k || t.includes(k));
-      if (hit) return k === 'อื่นๆ' ? 'ลาอื่นๆ' : k;
+      if (hit) return k === 'อื่นๆ' ? 'ลาอื่นๆ' : (k === 'ลาพักร้อน' ? 'ลาพักผ่อน' : k);
     }
     const generic = candidates.find(t => !['ลา/ไม่รับเวร','ลางาน','ลา'].includes(t));
     if (generic) return generic;
@@ -5792,7 +5794,7 @@ function bindGlobalEvents() {
           <form id="leaveForm" class="form-grid">
             ${adminMode ? `<label class="wide">บันทึกให้เจ้าหน้าที่ <select name="staff_id" id="leaveStaffSelect" required>${staffOptions(selectedStaff)}</select><span class="hint">Admin เพิ่ม/แก้ไข/ยกเลิกแทน staff ได้ รวมถึงลาย้อนหลัง กรณีเจ้าหน้าที่ไม่สะดวกบันทึกเอง</span></label>` : ''}
             <label>ประเภท
-              <select name="type" required>${LEAVE_TYPES.map(t => `<option ${editing?.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
+              <select name="type" required>${LEAVE_TYPES.map(t => `<option ${leaveDisplayType(editing) === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
             </label>
             <label>วันที่เริ่ม <input name="start_date" type="date" value="${editing?.start_date || todayStr()}" required></label>
             <label>วันที่สิ้นสุด <input name="end_date" type="date" value="${editing?.end_date || todayStr()}" required></label>
