@@ -168,6 +168,39 @@
       if((row.cells||[]).length>1)row.deleteCell(1);
     });
   }
+  function exactOutingDaysFromLiveTable(table){
+    const days=new Set();
+    const head=table?.tHead?.rows?.[0];
+    if(!head)return days;
+    Array.from(head.cells||[]).forEach(cell=>{
+      const day=parseDayNumber(cell);
+      if(!day)return;
+      const marked=cell.classList.contains('outing-head')||
+        cell.classList.contains('v388-outing-color-only')||
+        !!cell.querySelector('.v374-outing-label,.v388-outing-label-only')||
+        /ออกหน่วย/.test(String(cell.textContent||''));
+      if(marked)days.add(day);
+    });
+    return days;
+  }
+  function applyExactOutingDaysToExport(table,days){
+    table.querySelectorAll('.v388-outing-label-only,.v374-outing-label,.v390-export-outing-label').forEach(node=>node.remove());
+    table.querySelectorAll('.v388-outing-color-only,.outing-head,.outing-cell,.v390-export-outing-day').forEach(node=>{
+      node.classList.remove('v388-outing-color-only','outing-head','outing-cell','v390-export-outing-day');
+    });
+    const head=table?.tHead?.rows?.[0];
+    if(!head)return;
+    Array.from(head.cells||[]).forEach((headCell,columnIndex)=>{
+      const day=parseDayNumber(headCell);
+      if(!day||!days.has(day))return;
+      Array.from(table.rows||[]).forEach(row=>row.cells?.[columnIndex]?.classList.add('v390-export-outing-day'));
+      const label=document.createElement('span');
+      label.className='v390-export-outing-label';
+      label.textContent='ออกหน่วย';
+      headCell.appendChild(label);
+    });
+  }
+
   function normalizeExportTable(table,key){
     reorderDateColumns(table,key);
     stripSummaryColumn(table);
@@ -218,8 +251,14 @@
 
     const tableWrap=document.createElement('div');
     tableWrap.className='v297-export-table-wrap';
+    const exactOutingDays=exactOutingDaysFromLiveTable(live);
     const table=live.cloneNode(true);
+    // The hidden export clone must not look like a live V275 table. Otherwise
+    // display-only patches can observe it and recolor adjacent columns again.
+    table.classList.remove('v275-position-table');
+    table.classList.add('v390-export-position-table');
     normalizeExportTable(table,key);
+    applyExactOutingDaysToExport(table,exactOutingDays);
     tableWrap.appendChild(table);
     sheet.appendChild(tableWrap);
 
@@ -416,6 +455,10 @@
     .v297-export-table-wrap td{background:#fff}
     .v297-export-table-wrap .v275-meta-day.off{background:#e9eef5!important;color:#64748b!important}
     .v297-export-table-wrap .v275-count-row th,.v297-export-table-wrap .v275-count-row td{background:#fffaf0!important}
+
+    .v297-export-table-wrap th.v390-export-outing-day{background:#fecdd3!important;color:#9f1239!important;box-shadow:inset 0 -3px 0 #e11d48!important}
+    .v297-export-table-wrap td.v390-export-outing-day{background:#fff1f2!important}
+    .v390-export-outing-label{display:block;margin-top:1px;color:#be123c;font-size:7px;font-weight:900;line-height:1.05;white-space:nowrap}
 
     .v297-export-table-wrap .v384-export-name-cell{background:var(--staff-bg,#f8fafc)!important;color:var(--staff-fg,#0f172a)!important;text-align:left!important;border-right:2px solid rgba(148,163,184,.45)!important;padding:5px 7px!important;vertical-align:middle!important}
     .v297-export-table-wrap .v384-export-name-cell b{display:block!important;font-size:10px!important;line-height:1.15!important;padding:0!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
