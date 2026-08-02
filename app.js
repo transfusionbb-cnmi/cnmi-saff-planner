@@ -1762,9 +1762,33 @@ function positionTemplateForDate(date) {
   if (isNoPositionDay(date)) return [];
   return hasOuting(date) ? OUTING_POSITIONS : DEFAULT_POSITIONS;
 }
-function hasOuting(date) { return state.activities.some(a => a.event_type === 'ออกหน่วย' && dateInRange(date, a.start_date, a.end_date)); }
+function isOutingPositionCode(code) {
+  const target = String(code || '').trim();
+  return !!target && OUTING_POSITIONS.some(p => String(p?.code || '').trim() === target);
+}
+function isOutingPositionRow(row) {
+  if (!row) return false;
+  if (row.is_outing === true) return true;
+  if (String(row.zone || '').trim() === 'ออกหน่วย') return true;
+  return isOutingPositionCode(row.position_code || row.code);
+}
+function outingActivityOnDate(date) {
+  const key = normalizeDateKey(date);
+  return (state.activities || []).find(a => {
+    if (String(a?.event_type || '').trim() !== 'ออกหน่วย') return false;
+    const start = normalizeDateKey(a?.start_date || a?.date);
+    const end = normalizeDateKey(a?.end_date || a?.start_date || a?.date);
+    return !!start && key >= start && key <= end;
+  }) || null;
+}
+function hasOuting(date) {
+  const key = normalizeDateKey(date);
+  if (!key) return false;
+  if (outingActivityOnDate(key)) return true;
+  return (state.positions || []).some(r => normalizeDateKey(r?.work_date) === key && isOutingPositionRow(r));
+}
 function outingParticipants(date) {
-  const act = state.activities.find(a => a.event_type === 'ออกหน่วย' && dateInRange(date, a.start_date, a.end_date));
+  const act = outingActivityOnDate(date);
   return act ? asArray(act.participant_ids) : [];
 }
 function positionRuleOk(staff, rule) {
