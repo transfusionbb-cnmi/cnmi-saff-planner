@@ -1,12 +1,13 @@
-/* CNMI Staff Planner V375
-   Position-month image export polish
-   - fixes right-edge cut off (day 31 missing)
-   - keeps a clean branded header before the table
-   - exports a nicer full-width image with slot descriptions
+
+/* CNMI Staff Planner V383
+   Position-month image export
+   - moves staff names to a left legend so day 31 is never covered
+   - keeps staff color bars in the exported image
+   - exports full month grid + position descriptions
 */
 (function(){
   'use strict';
-  const VERSION='V376_POSITION_MONTH_EXPORT_NAME_FIRST_FULL_31_DAYS';
+  const VERSION='V383_POSITION_MONTH_EXPORT_LEFT_LEGEND_STAFF_COLORS';
   if(window.__CNMI_V297_POSITION_MONTH_IMAGE_EXPORT_SLOT_DETAILS__)return;
   window.__CNMI_V297_POSITION_MONTH_IMAGE_EXPORT_SLOT_DETAILS__=true;
 
@@ -75,29 +76,31 @@
     </div>`;
   }
   function removeColumn(table,index){table.querySelectorAll('tr').forEach(tr=>{const cells=tr.children;if(cells[index])cells[index].remove();});}
+  function plainText(node){return String(node?.innerText||node?.textContent||'').replace(/\s+/g,' ').trim();}
+  function buildStaffLegendMarkup(liveTable){
+    const rows=[...liveTable.querySelectorAll('tbody tr')].filter(row=>!row.classList.contains('v275-count-row'));
+    const items=rows.map(row=>{
+      const nameCell=row.querySelector('.v275-sticky-name');
+      if(!nameCell)return null;
+      const name=nameCell.querySelector('b')?.textContent?.trim()||plainText(nameCell)||'-';
+      const sub=nameCell.querySelector('small')?.textContent?.trim()||'';
+      const style=nameCell.getAttribute('style')||'';
+      const summaryCell=row.querySelector('.v275-sticky-summary');
+      let summary=plainText(summaryCell);
+      summary=summary.replace(/^\s*สรุปวันนี้\s*/,'').trim();
+      if(summary.length>54)summary=summary.slice(0,54)+'…';
+      return {name,sub,style,summary};
+    }).filter(Boolean);
+    return `<aside class="v383-staff-legend"><div class="v383-staff-legend-title">เจ้าหน้าที่</div>${items.map(item=>`<div class="v383-staff-legend-item" style="${esc(item.style)}"><div class="v383-staff-legend-badge"><b>${esc(item.name)}</b>${item.sub?`<small>${esc(item.sub)}</small>`:''}</div>${item.summary?`<div class="v383-staff-legend-summary">${esc(item.summary)}</div>`:''}</div>`).join('')}</aside>`;
+  }
   function normalizeExportTable(table){
-    removeColumn(table,1); // คงไว้เฉพาะชื่อเจ้าหน้าที่ + วันที่ทั้งเดือน
+    // Remove sticky name + summary columns from the main matrix.
+    // The exported image will show them in a separate left legend instead.
+    removeColumn(table,1);
+    removeColumn(table,0);
 
-    // ตารางจริงใช้คอลัมน์ชื่อแบบ sticky เมื่อเลื่อนแนวนอน หาก clone class เดิมไปจับภาพ
-    // html2canvas อาจวาดชื่อไปทับคอลัมน์ท้ายเดือน ทำให้ดูเหมือนวันที่ 31 หาย
-    // จึงล้าง sticky/transform และยืนยันว่าคอลัมน์ชื่อเป็นคอลัมน์แรกจริงทุกแถว
     table.setAttribute('dir','ltr');
     table.style.setProperty('direction','ltr','important');
-    table.querySelectorAll('tr').forEach(row=>{
-      const cells=Array.from(row.children||[]);
-      const nameCell=cells.find(cell=>cell.classList?.contains('v275-sticky-name'))||cells[0];
-      if(nameCell&&row.firstElementChild!==nameCell)row.insertBefore(nameCell,row.firstElementChild);
-    });
-    table.querySelectorAll('.v275-sticky-name,.v275-sticky-summary').forEach(cell=>{
-      cell.classList.remove('v275-sticky-name','v275-sticky-summary');
-      cell.classList.add('v376-export-name-cell');
-      cell.style.setProperty('position','static','important');
-      cell.style.setProperty('left','auto','important');
-      cell.style.setProperty('right','auto','important');
-      cell.style.setProperty('transform','none','important');
-      cell.style.setProperty('z-index','auto','important');
-    });
-
     table.querySelectorAll('select').forEach(select=>{const span=document.createElement('span');span.className='v297-export-position-text';span.textContent=select.value||'';select.replaceWith(span);});
     table.querySelectorAll('input').forEach(input=>{const span=document.createElement('span');span.className='v297-export-input-text';span.textContent=input.value||'-';input.replaceWith(span);});
     table.querySelectorAll('button.v275-info,[data-v275-status]').forEach(node=>node.remove());
@@ -113,8 +116,11 @@
     sandbox.dataset.v297ExportSandbox='1';
     sandbox.style.cssText='position:fixed;left:-100000px;top:0;z-index:-1;background:#f6f9fc;padding:24px;width:max-content;max-width:none;overflow:visible;';
     const sheet=document.createElement('div');sheet.className='v297-export-sheet';sheet.innerHTML=brandHeader(key);
+    const main=document.createElement('div');main.className='v383-export-main';
+    const legend=document.createElement('div');legend.className='v383-export-legend-wrap';legend.innerHTML=buildStaffLegendMarkup(live);main.appendChild(legend);
     const tableWrap=document.createElement('div');tableWrap.className='v297-export-table-wrap';
-    const table=live.cloneNode(true);normalizeExportTable(table);tableWrap.appendChild(table);sheet.appendChild(tableWrap);
+    const table=live.cloneNode(true);normalizeExportTable(table);tableWrap.appendChild(table);main.appendChild(tableWrap);
+    sheet.appendChild(main);
     const descriptions=document.createElement('div');descriptions.innerHTML=descriptionMarkup(key);sheet.appendChild(descriptions.firstElementChild);
     sandbox.appendChild(sheet);document.body.appendChild(sandbox);
     return {key,sandbox,target:sheet};
@@ -127,46 +133,56 @@
     if(!table)throw new Error('ไม่พบตารางสำหรับ Export');
     const expected=daysInMonth(key);
     const colCount=maxCellCount(table);
-    if(colCount<expected+1){
-      throw new Error(`ตารางเดือนนี้สร้างได้เพียง ${Math.max(0,colCount-1)} วัน จาก ${expected} วัน กรุณารีเฟรชแล้ว Export ใหม่`);
+    if(colCount<expected){
+      throw new Error(`ตารางเดือนนี้สร้างได้เพียง ${colCount} วัน จาก ${expected} วัน กรุณารีเฟรชแล้ว Export ใหม่`);
     }
-    const rows=Array.from(table.rows||[]);
-    const firstHeader=rows.find(r=>Array.from(r.cells||[]).length>0)?.cells?.[0]||null;
-    const firstWidth=Math.max(92,Math.ceil(firstHeader?.scrollWidth||firstHeader?.getBoundingClientRect?.().width||92));
     const dayWidth=56;
-    rows.forEach(row=>{
-      Array.from(row.cells||[]).forEach((cell,index)=>{
-        const px=index===0?firstWidth:dayWidth;
+    Array.from(table.rows||[]).forEach(row=>{
+      Array.from(row.cells||[]).forEach((cell)=>{
+        const px=dayWidth;
         cell.style.setProperty('width',`${px}px`,'important');
         cell.style.setProperty('min-width',`${px}px`,'important');
         cell.style.setProperty('max-width',`${px}px`,'important');
         cell.style.setProperty('box-sizing','border-box','important');
       });
     });
-    const tableWidth=firstWidth+(expected*dayWidth)+2;
-    table.style.setProperty('width',`${tableWidth}px`,'important');
-    table.style.setProperty('min-width',`${tableWidth}px`,'important');
-    table.style.setProperty('max-width',`${tableWidth}px`,'important');
+    const matrixWidth=(expected*dayWidth)+2;
+    table.style.setProperty('width',`${matrixWidth}px`,'important');
+    table.style.setProperty('min-width',`${matrixWidth}px`,'important');
+    table.style.setProperty('max-width',`${matrixWidth}px`,'important');
     table.style.setProperty('table-layout','fixed','important');
-    target.querySelectorAll('.v297-export-table-wrap,.v297-position-description-card,.v297-position-description-wrap,.v297-position-description-table').forEach(el=>{
-      el.style.setProperty('width',`${tableWidth}px`,'important');
-      el.style.setProperty('min-width',`${tableWidth}px`,'important');
-      el.style.setProperty('max-width',`${tableWidth}px`,'important');
+
+    const legend=target.querySelector('.v383-staff-legend');
+    const legendWidth=Math.max(150,Math.ceil(legend?.scrollWidth||legend?.getBoundingClientRect?.().width||150));
+    const gap=14;
+    const sheetWidth=legendWidth+gap+matrixWidth;
+
+    target.querySelectorAll('.v297-export-table-wrap').forEach(el=>{
+      el.style.setProperty('width',`${matrixWidth}px`,'important');
+      el.style.setProperty('min-width',`${matrixWidth}px`,'important');
+      el.style.setProperty('max-width',`${matrixWidth}px`,'important');
       el.style.setProperty('overflow','visible','important');
       el.style.setProperty('box-sizing','border-box','important');
     });
-    target.style.setProperty('width',`${tableWidth}px`,'important');
-    target.style.setProperty('min-width',`${tableWidth}px`,'important');
-    target.style.setProperty('max-width',`${tableWidth}px`,'important');
+    target.querySelectorAll('.v383-export-main,.v297-position-description-card,.v297-position-description-wrap,.v297-position-description-table').forEach(el=>{
+      el.style.setProperty('width',`${sheetWidth}px`,'important');
+      el.style.setProperty('min-width',`${sheetWidth}px`,'important');
+      el.style.setProperty('max-width',`${sheetWidth}px`,'important');
+      el.style.setProperty('overflow','visible','important');
+      el.style.setProperty('box-sizing','border-box','important');
+    });
+    target.style.setProperty('width',`${sheetWidth}px`,'important');
+    target.style.setProperty('min-width',`${sheetWidth}px`,'important');
+    target.style.setProperty('max-width',`${sheetWidth}px`,'important');
     const brand=target.querySelector('.v297-export-brand-header');
     if(brand){
-      brand.style.setProperty('width',`${tableWidth}px`,'important');
-      brand.style.setProperty('min-width',`${tableWidth}px`,'important');
-      brand.style.setProperty('max-width',`${tableWidth}px`,'important');
+      brand.style.setProperty('width',`${sheetWidth}px`,'important');
+      brand.style.setProperty('min-width',`${sheetWidth}px`,'important');
+      brand.style.setProperty('max-width',`${sheetWidth}px`,'important');
       brand.style.setProperty('box-sizing','border-box','important');
     }
     await nextFrames();
-    return {tableWidth,captureWidth:Math.max(tableWidth+4,target.scrollWidth,target.offsetWidth),captureHeight:Math.max(target.scrollHeight,target.offsetHeight,900)};
+    return {matrixWidth,legendWidth,sheetWidth,captureWidth:Math.max(sheetWidth+4,target.scrollWidth,target.offsetWidth),captureHeight:Math.max(target.scrollHeight,target.offsetHeight,900)};
   }
   async function exportPositionMonthImage(){
     let sandbox=null;
@@ -180,19 +196,20 @@
         try{
           const cloned=doc.querySelector('.v297-export-sheet');
           if(!cloned)return;
-          cloned.style.setProperty('width',`${layout.tableWidth}px`,'important');
-          cloned.style.setProperty('min-width',`${layout.tableWidth}px`,'important');
-          cloned.style.setProperty('max-width',`${layout.tableWidth}px`,'important');
-          cloned.querySelectorAll('.v297-export-table-wrap,.v297-position-description-card,.v297-position-description-wrap,.v297-position-description-table,.v297-export-brand-header,table').forEach(el=>{
-            el.style.setProperty('width',`${layout.tableWidth}px`,'important');
-            el.style.setProperty('min-width',`${layout.tableWidth}px`,'important');
-            el.style.setProperty('max-width',`${layout.tableWidth}px`,'important');
+          cloned.style.setProperty('width',`${layout.sheetWidth}px`,'important');
+          cloned.style.setProperty('min-width',`${layout.sheetWidth}px`,'important');
+          cloned.style.setProperty('max-width',`${layout.sheetWidth}px`,'important');
+          cloned.querySelectorAll('.v383-export-main,.v297-export-table-wrap,.v297-position-description-card,.v297-position-description-wrap,.v297-position-description-table,.v297-export-brand-header,table').forEach(el=>{
+            const widthPx=el.matches('.v297-export-table-wrap,table')?layout.matrixWidth:layout.sheetWidth;
+            el.style.setProperty('width',`${widthPx}px`,'important');
+            el.style.setProperty('min-width',`${widthPx}px`,'important');
+            el.style.setProperty('max-width',`${widthPx}px`,'important');
             el.style.setProperty('overflow','visible','important');
           });
         }catch(_){/* noop */}
       }});
       const link=document.createElement('a');link.href=canvas.toDataURL('image/png');link.download=safeFileName(built.key);document.body.appendChild(link);link.click();link.remove();
-      toast('Export ตารางตำแหน่งทั้งเดือนพร้อมคำอธิบายแล้ว');
+      toast('Export ตารางตำแหน่งทั้งเดือนพร้อมแถบชื่อเจ้าหน้าที่แล้ว');
     }catch(error){console.error(VERSION,error);toast(error?.message||'Export รูปภาพไม่สำเร็จ','error');}
     finally{sandbox?.remove();document.querySelector('[data-v297-export-sandbox="1"]')?.remove();}
   }
@@ -230,10 +247,19 @@
     .v297-export-brand-copy p{margin:0;color:#2563eb;font-weight:800}
     .v297-export-brand-copy h2{margin:2px 0;font-size:22px}
     .v297-export-brand-copy span{color:#5b6b7f;font-weight:700}
+    .v383-export-main{display:flex;align-items:flex-start;gap:14px}
+    .v383-export-legend-wrap{flex:0 0 auto}
+    .v383-staff-legend{padding:10px;border:1px solid #dce6f1;border-radius:20px;background:#fff;box-shadow:0 8px 20px rgba(15,23,42,.04)}
+    .v383-staff-legend-title{font-weight:800;font-size:14px;margin:2px 0 8px;color:#1e3a5f}
+    .v383-staff-legend-item{display:flex;flex-direction:column;gap:3px;padding:5px 6px;border-radius:12px;background:#f8fbff;border:1px solid rgba(191,215,245,.65);margin-bottom:6px}
+    .v383-staff-legend-badge{display:flex;flex-direction:column;gap:1px;padding:5px 8px;border-radius:999px;background:var(--staff-bg,#eaf2ff);color:var(--staff-fg,#17324d);font-weight:800}
+    .v383-staff-legend-badge b{font-size:11px;line-height:1.1}
+    .v383-staff-legend-badge small{font-size:8px;line-height:1.1;opacity:.88}
+    .v383-staff-legend-summary{font-size:8px;line-height:1.25;color:#667085;padding:0 2px}
     .v297-export-table-wrap{overflow:visible;width:max-content;max-width:none;background:#fff;border:1px solid #dce6f1;border-radius:20px;padding:8px;box-shadow:0 8px 20px rgba(15,23,42,.04)}
     .v297-export-table-wrap table{width:max-content!important;max-width:none!important;table-layout:auto!important;border-collapse:separate;direction:ltr!important}
-    .v297-export-table-wrap th,.v297-export-table-wrap td{position:static!important;left:auto!important;right:auto!important;z-index:auto!important}
-    .v297-export-table-wrap th:first-child,.v297-export-table-wrap td:first-child{font-weight:800}.v376-export-name-cell{position:static!important;left:auto!important;right:auto!important;transform:none!important;z-index:auto!important;text-align:left!important;direction:ltr!important;background:#f8fbff!important;border-right:2px solid #bfd7f5!important}
+    .v297-export-table-wrap th,.v297-export-table-wrap td{position:static!important;left:auto!important;right:auto!important;z-index:auto!important;text-align:center!important}
+    .v297-export-table-wrap th:first-child,.v297-export-table-wrap td:first-child{font-weight:800}
     .v297-export-position-text{display:inline-block;padding:3px 6px;border-radius:999px;background:#edf5ff;color:#2563eb;font-weight:700;white-space:nowrap}
     .v297-export-input-text{font-weight:800}
     .v297-export-sheet .v297-position-description-card{width:100%;box-sizing:border-box}
