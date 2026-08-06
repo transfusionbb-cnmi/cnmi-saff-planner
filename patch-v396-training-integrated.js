@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V410
+/* CNMI Staff Planner V412
  * Training is integrated into the existing activity form.  There is no second
  * "add training activity" page and no new-staff form in this version.
  */
@@ -232,7 +232,7 @@
     const raw=String(head?.full_name||'ปาริฉัตร อินทร์เกลี้ยง').trim();
     return /^(นาย|นางสาว|นาง|พญ\.|นพ\.|แพทย์หญิง|แพทย์ชาย)/.test(raw)?raw:`นางสาว ${raw}`;
   }
-  function annualFormStyles(){return `@page{size:A4 portrait;margin:5mm 5mm 6mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:"TH Sarabun New",Sarabun,Tahoma,sans-serif;color:#111;font-size:16pt;font-weight:400;line-height:1}.fm-page{width:200mm;height:283.5mm;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;overflow:hidden;padding-bottom:1mm;break-after:page;page-break-after:always;background:#fff}.fm-page:last-child{break-after:auto;page-break-after:auto}table{width:100%;border-collapse:collapse}.fm-header td,.fm-person td,.fm-training th,.fm-training td{border:0.3pt solid #111}.fm-header td{padding:1.2mm 2mm;font-size:16pt;font-weight:700;line-height:1}.header-label{display:inline-block;min-width:43mm;font-weight:700}.logo-cell{width:27mm;text-align:center;padding:1mm!important}.fm-logo{display:block;width:23mm;height:23mm;object-fit:contain;margin:auto}.fm-person{margin-top:1mm;table-layout:fixed}.fm-person td{width:50%;padding:1.7mm 3mm;font-size:16pt;font-weight:700;line-height:1}.fm-field{display:grid;grid-template-columns:29mm 3mm minmax(0,1fr);align-items:end;gap:1mm}.fm-field b{white-space:nowrap;font-weight:700}.fm-fill-line{display:block;text-align:center;border-bottom:0.3pt solid #111;min-height:6mm;line-height:6mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}.fm-training{margin-top:2mm;table-layout:fixed;height:100%}.fm-training thead{display:table-header-group}.fm-training tr{break-inside:avoid;page-break-inside:avoid}.fm-training th{padding:1.2mm .6mm;font-size:16pt;font-weight:700;line-height:1;text-align:center;vertical-align:middle}.fm-training td{height:7.7mm;padding:.8mm 1.4mm;vertical-align:top;font-size:16pt;font-weight:400;line-height:1}.fm-training th:nth-child(1){width:4%}.fm-training th:nth-child(2){width:35%}.fm-training th:nth-child(3){width:5%}.fm-training th:nth-child(4){width:24%}.fm-training th:nth-child(5){width:11%}.fm-training th:nth-child(6){width:11%}.fm-training th:nth-child(7){width:10%}.center{text-align:center}.blank td{height:7.7mm}.signatures{border:0.75pt solid #111;border-top:0;display:grid;grid-template-columns:1fr 1fr;gap:12mm;padding:6mm 10mm 4mm;text-align:center;font-size:16pt;font-weight:400;line-height:1.15;min-height:35mm}.signature-box{align-self:center}.signature-dots{display:inline-block;width:55mm;border-bottom:0.6pt dotted #111;transform:translateY(-1.5mm)}.signature-name{display:inline-block;min-height:6mm;margin-top:2mm}.blank-signature-name{visibility:hidden}.fm-footer{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:4mm;padding:.7mm .5mm 0;font-size:9pt;font-weight:400;line-height:1}.page-number{justify-self:center;white-space:nowrap}.form-code{justify-self:end;white-space:nowrap}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`; }
+  function annualFormStyles(){return `@page{size:A4 portrait;margin:5mm 5mm 6mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:"TH Sarabun New",Sarabun,Tahoma,sans-serif;color:#000;font-size:16pt;font-weight:400;line-height:1}.fm-page{width:200mm;height:283.5mm;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;overflow:hidden;padding-bottom:1mm;break-after:page;page-break-after:always;background:#fff}.fm-page:last-child{break-after:auto;page-break-after:auto}table{width:100%;border-collapse:collapse;border-spacing:0}.fm-header td{border:0.25pt solid #000;padding:1.05mm 2mm;font-size:16pt;font-weight:700;line-height:.98}.header-label{display:inline-block;min-width:43mm;font-weight:700}.logo-cell{width:27mm;text-align:center;padding:.8mm!important}.fm-logo{display:block;width:23mm;height:23mm;object-fit:contain;margin:auto}.fm-person{margin-top:1mm;table-layout:fixed}.fm-person td{border:0.25pt solid #000;width:50%;padding:1.45mm 3mm;font-size:16pt;font-weight:700;line-height:.98}.fm-field{display:grid;grid-template-columns:29mm 3mm minmax(0,1fr);align-items:end;gap:1mm}.fm-field b{white-space:nowrap;font-weight:700}.fm-fill-line{display:block;text-align:center;border-bottom:0.25pt solid #000;min-height:5.8mm;line-height:5.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}.fm-training{margin-top:2mm;table-layout:fixed;height:100%;border:0.25pt solid #000}.fm-training thead{display:table-header-group}.fm-training tr{break-inside:avoid;page-break-inside:avoid}.fm-training th,.fm-training td{border:0.25pt solid #000}.fm-training th{padding:.95mm .55mm;font-size:14.5pt;font-weight:700;line-height:1;text-align:center;vertical-align:middle}.fm-training td{height:7.45mm;padding:.65mm 1.15mm;vertical-align:top;font-size:14pt;font-weight:400;line-height:1.02}.fm-training th:nth-child(1){width:4%}.fm-training th:nth-child(2){width:35%}.fm-training th:nth-child(3){width:5%}.fm-training th:nth-child(4){width:24%}.fm-training th:nth-child(5){width:11%}.fm-training th:nth-child(6){width:11%}.fm-training th:nth-child(7){width:10%}.center{text-align:center}.blank td{height:7.45mm;padding:0}.signatures{border:0.5pt solid #000;border-top:0;display:grid;grid-template-columns:1fr 1fr;gap:12mm;padding:5.2mm 10mm 3.6mm;text-align:center;font-size:16pt;font-weight:400;line-height:1.12;min-height:34mm}.signature-box{align-self:center}.signature-dots{display:inline-block;width:55mm;border-bottom:0.4pt dotted #000;transform:translateY(-1.5mm)}.signature-name{display:inline-block;min-height:5.5mm;margin-top:1.8mm}.blank-signature-name{visibility:hidden}.fm-footer{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:4mm;padding:.55mm .5mm 0;font-size:8.5pt;font-weight:400;line-height:1}.page-number{justify-self:center;white-space:nowrap}.form-code{justify-self:end;white-space:nowrap}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`; }
   function annualFormDocument(items){
     const range=applyTrainingYearRange(selectedTrainingYear()),year=range.year;
     if(!items.length)return null;
@@ -337,175 +337,10 @@
         try{const blob=await downloadCertificate(item.record),kind=certificateKind(item.record,blob);if(kind==='pdf')await appendCertificatePdf(pdfDoc,blob,item,i+1,certificates.length);else if(kind==='image')await appendCertificateImage(pdfDoc,blob,item,i+1,certificates.length);else throw new Error('ชนิดไฟล์ไม่รองรับ');}catch(error){errors.push(`${item.activity.title||'Certificate'}: ${error?.message||String(error)}`);}
       }
       if(button)button.textContent='กำลังบันทึกไฟล์ PDF…';const bytes=await pdfDoc.save(),blob=new Blob([bytes],{type:'application/pdf'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=safeDownloadName(`FM-CNHR-002_${bundle.personName}_${bundle.year+543}_พร้อม-Certificate.pdf`);document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);
-      if(errors.length){console.warn('V410 certificate merge skipped',errors);showToast(`สร้าง PDF แล้ว แต่แนบ Certificate ไม่สำเร็จ ${errors.length} ไฟล์`);}else showToast(`สร้าง PDF ชุดอบรมแล้ว • แนบ Certificate ${certificates.length} ไฟล์`);
-    }catch(error){console.error('V410 annual training PDF',error);showToast(`สร้าง PDF ไม่สำเร็จ: ${error?.message||String(error)}`);}finally{frame?.remove();if(button){button.disabled=false;button.textContent=originalText||'Export PDF ชุดอบรมประจำปี';}}
+      if(errors.length){console.warn('V412 certificate merge skipped',errors);showToast(`สร้าง PDF แล้ว แต่แนบ Certificate ไม่สำเร็จ ${errors.length} ไฟล์`);}else showToast(`สร้าง PDF ชุดอบรมแล้ว • แนบ Certificate ${certificates.length} ไฟล์`);
+    }catch(error){console.error('V412 annual training PDF',error);showToast(`สร้าง PDF ไม่สำเร็จ: ${error?.message||String(error)}`);}finally{frame?.remove();if(button){button.disabled=false;button.textContent=originalText||'Export PDF ชุดอบรมประจำปี';}}
   }
-  const V411_PAGE_W=595.32,V411_PAGE_H=841.92,V411_BLACK=window.PDFLib?.rgb?PDFLib.rgb(0,0,0):undefined;
-  const V411_FONT_REGULAR_URL='https://cdn.jsdelivr.net/npm/font-th-sarabun-new@1.0.0/fonts/THSarabunNew-webfont.ttf';
-  const V411_FONT_BOLD_URL='https://cdn.jsdelivr.net/npm/font-th-sarabun-new@1.0.0/fonts/THSarabunNew_bold-webfont.ttf';
-  function v411Y(top){return V411_PAGE_H-top;}
-  function v411Line(page,x1,top1,x2,top2,thickness=.48){page.drawLine({start:{x:x1,y:v411Y(top1)},end:{x:x2,y:v411Y(top2)},thickness,color:V411_BLACK});}
-  function v411Rect(page,x,top,width,height,thickness=.48){page.drawRectangle({x,y:V411_PAGE_H-top-height,width,height,borderWidth:thickness,borderColor:V411_BLACK});}
-  function v411TextHeight(font,size){try{return font.heightAtSize(size);}catch(_){return size*1.1;}}
-  function v411TopText(page,text,x,top,size,font,options={}){
-    const value=String(text??''),height=v411TextHeight(font,size),y=V411_PAGE_H-top-height+(options.adjustY??1.2);
-    page.drawText(value,{x,y,size,font,color:V411_BLACK,opacity:1});
-    return font.widthOfTextAtSize(value,size);
-  }
-  function v411FitSize(font,text,size,maxWidth,minSize=8){let out=size;while(out>minSize&&font.widthOfTextAtSize(String(text||''),out)>maxWidth)out-=.25;return out;}
-  function v411CenteredTopText(page,text,x0,x1,top,size,font,options={}){
-    const fitted=v411FitSize(font,text,size,(x1-x0)-(options.padding??2),options.minSize??8),width=font.widthOfTextAtSize(String(text??''),fitted);
-    return v411TopText(page,text,x0+Math.max(0,((x1-x0)-width)/2),top,fitted,font,options);
-  }
-  function v411SegmentText(text){
-    const value=String(text??'').replace(/\r/g,'');
-    if(typeof Intl!=='undefined'&&Intl.Segmenter){try{return [...new Intl.Segmenter('th',{granularity:'word'}).segment(value)].map(x=>x.segment);}catch(_){}}
-    return value.split(/(\s+)/).filter(Boolean);
-  }
-  function v411BreakToken(font,token,size,maxWidth){
-    const parts=[];let line='';
-    for(const ch of [...String(token||'')]){const next=line+ch;if(line&&font.widthOfTextAtSize(next,size)>maxWidth){parts.push(line);line=ch;}else line=next;}
-    if(line)parts.push(line);return parts;
-  }
-  function v411Wrap(font,text,size,maxWidth,maxLines=3){
-    const output=[];
-    for(const paragraph of String(text??'').replace(/\r/g,'').split('\n')){
-      const tokens=v411SegmentText(paragraph);let line='';
-      for(const token of tokens){
-        const candidate=line+token;
-        if(!line||font.widthOfTextAtSize(candidate,size)<=maxWidth){line=candidate;continue;}
-        output.push(line.trimEnd());line='';
-        if(output.length>=maxLines)break;
-        if(font.widthOfTextAtSize(token,size)<=maxWidth)line=token.trimStart();
-        else{
-          const pieces=v411BreakToken(font,token,size,maxWidth);
-          while(pieces.length&&output.length<maxLines-1)output.push(pieces.shift());
-          line=pieces.join('');
-        }
-      }
-      if(output.length>=maxLines)break;
-      if(line||!tokens.length)output.push(line.trim());
-      if(output.length>=maxLines)break;
-    }
-    const lines=output.filter((x,i)=>x||i===0).slice(0,maxLines);
-    if(output.length>maxLines&&lines.length){let last=lines[lines.length-1].replace(/\s+$/,'');while(last&&font.widthOfTextAtSize(last+'…',size)>maxWidth)last=last.slice(0,-1);lines[lines.length-1]=last+'…';}
-    return lines.length?lines:['-'];
-  }
-  async function v411FetchBytes(url,label){const res=await fetch(url,{cache:'force-cache'});if(!res.ok)throw new Error(`โหลด${label}ไม่สำเร็จ (${res.status})`);return new Uint8Array(await res.arrayBuffer());}
-  async function v411RawAssets(){
-    if(!window.__V411_FM_ASSET_BYTES__)window.__V411_FM_ASSET_BYTES__=Promise.all([
-      v411FetchBytes(V411_FONT_REGULAR_URL,'ฟอนต์ TH Sarabun New'),
-      v411FetchBytes(V411_FONT_BOLD_URL,'ฟอนต์ TH Sarabun New ตัวหนา'),
-      v411FetchBytes(new URL('fm-cnhr-002-logo.png',window.location.href).href,'ตราแบบฟอร์ม')
-    ]);
-    return window.__V411_FM_ASSET_BYTES__;
-  }
-  async function v411EnsureFontkit(){
-    if(window.fontkit)return window.fontkit;
-    if(!window.__V411_FONTKIT_PROMISE__)window.__V411_FONTKIT_PROMISE__=new Promise((resolve,reject)=>{
-      const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js';script.async=true;
-      script.onload=()=>window.fontkit?resolve(window.fontkit):reject(new Error('โหลดระบบฟอนต์ PDF แล้วแต่ไม่พบ fontkit'));
-      script.onerror=()=>reject(new Error('โหลดระบบฟอนต์ PDF ไม่สำเร็จ'));document.head.appendChild(script);
-    });
-    return window.__V411_FONTKIT_PROMISE__;
-  }
-  async function v411PdfAssets(pdfDoc){
-    const loadedFontkit=await v411EnsureFontkit();
-    pdfDoc.registerFontkit(loadedFontkit);
-    const [regularBytes,boldBytes,logoBytes]=await v411RawAssets();
-    const regular=await pdfDoc.embedFont(regularBytes,{subset:true}),bold=await pdfDoc.embedFont(boldBytes,{subset:true}),logo=await pdfDoc.embedPng(logoBytes);
-    return {regular,bold,logo};
-  }
-  function v411RowLayout(item,font){
-    const size=14.04,lineHeight=19.2;
-    const title=v411Wrap(font,item?.activity?.title||'-',size,197,3),batch=v411Wrap(font,activityBatchValue(item?.activity)||'-',size,22,3),organizer=v411Wrap(font,organizerText(item?.activity),size,126,3);
-    const lines=Math.max(title.length,batch.length,organizer.length,1);
-    return {item,title,batch,organizer,height:lineHeight*lines,lineHeight};
-  }
-  function v411Paginate(items,font){
-    const available=715.42-161.9,pages=[];let rows=[],used=0;
-    for(const item of items){const row=v411RowLayout(item,font);if(rows.length&&used+row.height>available+.01){pages.push(rows);rows=[];used=0;}rows.push(row);used+=row.height;}
-    if(rows.length||!pages.length)pages.push(rows);return pages;
-  }
-  function v411DrawHeader(page,bundle,assets){
-    const {bold,logo}=assets;
-    v411Rect(page,8.52,8.52,581.52,65.88,.48);v411Line(page,8.52,30.48,590.04,30.48,.48);v411Line(page,8.52,52.32,590.04,52.32,.48);v411Line(page,65.904,8.52,65.904,74.4,.48);
-    const rawLogo=logo.scale(1),logoScale=Math.min(47/rawLogo.width,56/rawLogo.height),logoFit=logo.scale(logoScale);page.drawImage(logo,{x:13.8+(47-logoFit.width)/2,y:V411_PAGE_H-12.2-logoFit.height,width:logoFit.width,height:logoFit.height});
-    v411TopText(page,'ชื่อแบบฟอร์ม :',71.18,9.45,15.96,bold);v411TopText(page,annualFormTitle(bundle.year),166.94,9.45,15.96,bold);
-    v411TopText(page,'ฝ่าย/งาน/หน่วย :',71.18,31.29,15.96,bold);v411TopText(page,'งานพยาธิ นิติเวช และบริการโลหิต',166.94,31.29,15.96,bold);
-    v411TopText(page,'โรงพยาบาลรามาธิบดีจักรีนฤบดินทร์ คณะแพทยศาสตร์โรงพยาบาลรามาธิบดี มหาวิทยาลัยมหิดล',71.18,53.01,15.96,bold);
-  }
-  function v411DrawPerson(page,data,assets){
-    const {bold}=assets,x0=8.5,x1=588.25,mid=299.9,top=75.77,height=54;
-    v411Rect(page,x0,top,x1-x0,height,.48);v411Line(page,mid,top,mid,top+height,.48);v411Line(page,x0,102.77,x1,102.77,.48);
-    v411TopText(page,'ชื่อ สกุล',15.84,81.85,15.96,bold);v411TopText(page,':',80.8,81.85,15.96,bold);v411Line(page,87.25,94.6,293.5,94.6,.5);
-    v411TopText(page,'ตำแหน่ง',15.84,102.85,15.96,bold);v411TopText(page,':',80.8,102.85,15.96,bold);v411Line(page,87.25,115.6,293.5,115.6,.5);
-    v411TopText(page,'รหัสบุคคล',312.0,81.85,15.96,bold);v411TopText(page,':',375.9,81.85,15.96,bold);v411Line(page,431.5,93.92,567.25,93.92,.5);
-    v411TopText(page,'วันเริ่มงาน',312.0,102.85,15.96,bold);v411TopText(page,':',375.9,102.85,15.96,bold);v411Line(page,431.5,114.47,567.25,114.47,.5);
-    v411CenteredTopText(page,data.personName,87.25,293.5,80.63,15.96,bold,{padding:2,minSize:11});
-    v411CenteredTopText(page,data.position,87.25,293.5,99.47,15.96,bold,{padding:2,minSize:11});
-    v411CenteredTopText(page,data.employeeCode,431.5,567.25,79.07,15.96,bold,{padding:2,minSize:11});
-    v411CenteredTopText(page,thaiDateLong(data.startWork),431.5,567.25,100.07,15.96,bold,{padding:2,minSize:10});
-  }
-  function v411DrawTable(page,rows,offset,assets){
-    const {regular,bold}=assets,x=[8.76,29.76,235.37,263.69,398.95,462.82,531.82,586.68],tableTop=139.7,headerBottom=161.9,bodyBottom=715.42;
-    for(const xpos of x)v411Line(page,xpos,tableTop,xpos,bodyBottom,.48);
-    v411Line(page,x[0],tableTop,x[x.length-1],tableTop,.48);v411Line(page,x[0],headerBottom,x[x.length-1],headerBottom,.48);
-    const heads=['ที่','หลักสูตร/เรื่อง','รุ่น','หน่วยงานผู้จัด','วันที่เริ่มต้น','วันที่สิ้นสุด','ระยะเวลา'];
-    heads.forEach((label,i)=>v411CenteredTopText(page,label,x[i],x[i+1],140.63,15.96,bold,{padding:2,minSize:12}));
-    let rowTop=headerBottom;
-    rows.forEach((row,rowIndex)=>{
-      const item=row.item,a=item.activity,lineTop=rowTop+1.0;
-      v411CenteredTopText(page,String(offset+rowIndex+1),x[0],x[1],lineTop,14.04,regular,{padding:1,minSize:10});
-      row.title.forEach((line,i)=>v411TopText(page,line,x[1]+5.4,lineTop+i*row.lineHeight,14.04,regular));
-      row.batch.forEach((line,i)=>v411CenteredTopText(page,line,x[2],x[3],lineTop+i*row.lineHeight,14.04,regular,{padding:1,minSize:9}));
-      row.organizer.forEach((line,i)=>v411TopText(page,line,x[3]+5.1,lineTop+i*row.lineHeight,14.04,regular));
-      v411CenteredTopText(page,dateLabel(a.start_date),x[4],x[5],lineTop,14.04,regular,{padding:2,minSize:10});
-      v411CenteredTopText(page,dateLabel(a.end_date||a.start_date),x[5],x[6],lineTop,14.04,regular,{padding:2,minSize:10});
-      v411CenteredTopText(page,durationLabel(a),x[6],x[7],lineTop,14.04,regular,{padding:2,minSize:10});
-      rowTop+=row.height;v411Line(page,x[0],rowTop,x[x.length-1],rowTop,.48);
-    });
-    while(rowTop+19.2<bodyBottom-.1){rowTop+=19.2;v411Line(page,x[0],rowTop,x[x.length-1],rowTop,.48);}
-    if(Math.abs(rowTop-bodyBottom)>.1)v411Line(page,x[0],bodyBottom,x[x.length-1],bodyBottom,.48);
-  }
-  function v411DrawSignature(page,data,pageIndex,pageCount,assets){
-    const {regular}=assets,leftX0=8.25,leftX1=295.9,rightX0=295.9,rightX1=583.5;
-    v411Rect(page,8.25,730.9,575.25,92.59,1);
-    v411TopText(page,'ลงชื่อ ................................................................',15.96,745.75,15.96,regular);
-    v411TopText(page,'ลงชื่อ ...............................................................',330.0,745.75,15.96,regular);
-    v411CenteredTopText(page,`(${data.personName})`,leftX0,leftX1,767.11,15.96,regular,{padding:4,minSize:11});
-    if(data.supervisorName)v411CenteredTopText(page,`(${data.supervisorName})`,rightX0,rightX1,767.11,15.96,regular,{padding:4,minSize:11});
-    v411CenteredTopText(page,'บุคลากรผู้รับการฝึกอบรม',leftX0,leftX1,788.49,15.96,regular,{padding:4,minSize:11});
-    v411CenteredTopText(page,'หัวหน้าหน่วย/หัวหน้างาน',rightX0,rightX1,788.49,15.96,regular,{padding:4,minSize:11});
-    v411CenteredTopText(page,`หน้าที่ ${pageIndex+1} ของ ${pageCount} หน้า`,245,350,824.48,9,regular,{padding:0,minSize:8});
-    const footer='FM-CNHR-002 Rev.00  วันบังคับใช้ 1 ตุลาคม 2561',w=regular.widthOfTextAtSize(footer,9);v411TopText(page,footer,588.86-w,821.84,9,regular,{adjustY:.8});
-  }
-  async function v411DrawAnnualPages(pdfDoc,items,bundle,assets){
-    const profile=staffOf(actor()),head=(S().staff||[]).find(x=>normalizedPersonText(x.full_name).includes('ปาริฉัตรอินทร์เกลี้ยง'))||{};
-    const data={personName:profile.full_name||profile.nickname||'-',employeeCode:profile.employee_code||profile.personnel_code||'-',position:profile.position||profile.staff_type||'-',startWork:employment(actor()),supervisorName:isParichatProfile(profile)?'':headDisplayName(head)};
-    const pages=v411Paginate(items,assets.regular);let offset=0;
-    pages.forEach((rows,pageIndex)=>{const page=pdfDoc.addPage([V411_PAGE_W,V411_PAGE_H]);v411DrawHeader(page,bundle,assets);v411DrawPerson(page,data,assets);v411DrawTable(page,rows,offset,assets);v411DrawSignature(page,data,pageIndex,pages.length,assets);offset+=rows.length;});
-    return pages.length;
-  }
-  async function exportMyAnnualTrainingPackageV411(items,button){
-    const bundle=annualFormDocument(items);if(!bundle)return showToast(`ไม่พบรายการอบรมในปี ${selectedTrainingYear()+543}`);
-    if(!window.PDFLib?.PDFDocument)return showToast('ยังโหลดระบบสร้าง PDF ไม่สำเร็จ กรุณารีเฟรชแล้วลองใหม่');
-    const originalText=button?.textContent||'',certificates=items.filter(x=>x.record.certificate_path),errors=[];
-    try{
-      if(button){button.disabled=true;button.textContent='กำลังโหลดฟอนต์และสร้างแบบฟอร์ม…';}
-      const pdfDoc=await PDFLib.PDFDocument.create(),assets=await v411PdfAssets(pdfDoc);
-      await v411DrawAnnualPages(pdfDoc,items,bundle,assets);
-      for(let i=0;i<certificates.length;i++){
-        const item=certificates[i];if(button)button.textContent=`กำลังแนบ Certificate ${i+1}/${certificates.length}`;
-        try{const blob=await downloadCertificate(item.record),kind=certificateKind(item.record,blob);if(kind==='pdf')await appendCertificatePdf(pdfDoc,blob,item,i+1,certificates.length);else if(kind==='image')await appendCertificateImage(pdfDoc,blob,item,i+1,certificates.length);else throw new Error('ชนิดไฟล์ไม่รองรับ');}catch(error){errors.push(`${item.activity.title||'Certificate'}: ${error?.message||String(error)}`);}
-      }
-      if(button)button.textContent='กำลังบันทึกไฟล์ PDF…';
-      const bytes=await pdfDoc.save(),blob=new Blob([bytes],{type:'application/pdf'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=safeDownloadName(`FM-CNHR-002_${bundle.personName}_${bundle.year+543}_พร้อม-Certificate.pdf`);document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);
-      if(errors.length){console.warn('V411 certificate merge skipped',errors);showToast(`สร้าง PDF แล้ว แต่แนบ Certificate ไม่สำเร็จ ${errors.length} ไฟล์`);}else showToast(`สร้าง PDF ชุดอบรมแล้ว • แนบ Certificate ${certificates.length} ไฟล์`);
-    }catch(error){console.error('V411 annual training vector PDF',error);showToast(`สร้าง PDF ไม่สำเร็จ: ${error?.message||String(error)}`);}finally{if(button){button.disabled=false;button.textContent=originalText||'Export PDF ชุดอบรมประจำปี';}}
-  }
-
-  function printMyAnnualForm(items,button){return exportMyAnnualTrainingPackageV411(items,button);}
+  function printMyAnnualForm(items,button){return exportMyAnnualTrainingPackage(items,button);}
 
 
   function renderPageV396(){const p=S().page;if(p==='myTraining'||p==='trainingAdmin'){const item=NAV_ITEMS.find(x=>x.id===p);$('pageTitle').textContent=item.title;$('pageSubtitle').textContent=item.subtitle;renderNav();$('pageContent').innerHTML=p==='myTraining'?renderMyTraining():renderTrainingAdmin();return;}return oldRenderPage.apply(this,arguments);}
