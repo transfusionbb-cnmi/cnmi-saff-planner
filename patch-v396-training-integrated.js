@@ -232,7 +232,7 @@
     const raw=String(head?.full_name||'ปาริฉัตร อินทร์เกลี้ยง').trim();
     return /^(นาย|นางสาว|นาง|พญ\.|นพ\.|แพทย์หญิง|แพทย์ชาย)/.test(raw)?raw:`นางสาว ${raw}`;
   }
-  function annualFormStyles(){return `@page{size:A4 portrait;margin:5mm 5mm 6mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:"TH Sarabun New",Sarabun,Tahoma,sans-serif;color:#000;font-size:16pt;font-weight:400;line-height:1}.fm-page{width:200mm;height:283.5mm;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;overflow:hidden;padding-bottom:1mm;break-after:page;page-break-after:always;background:#fff}.fm-page:last-child{break-after:auto;page-break-after:auto}table{width:100%;border-collapse:collapse;border-spacing:0}.fm-header td{border:0.28px solid #111;padding:1.05mm 2mm;font-size:16pt;font-weight:700;line-height:.98}.header-label{display:inline-block;min-width:43mm;font-weight:700}.logo-cell{width:27mm;text-align:center;padding:.8mm!important}.fm-logo{display:block;width:23mm;height:23mm;object-fit:contain;margin:auto}.fm-person{margin-top:1mm;table-layout:fixed;border:0.28px solid #111}.fm-person td{border:0;width:50%;padding:1.45mm 3mm;font-size:16pt;font-weight:700;line-height:.98}.fm-field{display:grid;grid-template-columns:29mm 3mm minmax(0,1fr);align-items:end;gap:1mm}.fm-field b{white-space:nowrap;font-weight:700}.fm-fill-line{display:block;text-align:center;border-bottom:0.28px solid #111;min-height:5.8mm;line-height:5.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}.fm-training{margin-top:2mm;table-layout:fixed;height:100%;border:0.28px solid #111}.fm-training thead{display:table-header-group}.fm-training tr{break-inside:avoid;page-break-inside:avoid}.fm-training th,.fm-training td{border:0.28px solid #111}.fm-training th{padding:.95mm .55mm;font-size:14.5pt;font-weight:700;line-height:1;text-align:center;vertical-align:middle}.fm-training td{height:7.45mm;padding:.65mm 1.15mm;vertical-align:top;font-size:14pt;font-weight:400;line-height:1.02}.fm-training th:nth-child(1){width:4%}.fm-training th:nth-child(2){width:35%}.fm-training th:nth-child(3){width:5%}.fm-training th:nth-child(4){width:24%}.fm-training th:nth-child(5){width:11%}.fm-training th:nth-child(6){width:11%}.fm-training th:nth-child(7){width:10%}.center{text-align:center}.blank td{height:7.45mm;padding:0}.signatures{border:0.38px solid #111;border-top:0;display:grid;grid-template-columns:1fr 1fr;gap:12mm;padding:5.2mm 10mm 3.6mm;text-align:center;font-size:16pt;font-weight:400;line-height:1.12;min-height:34mm}.signature-box{align-self:center}.signature-dots{display:inline-block;width:55mm;border-bottom:0.28px dotted #111;transform:translateY(-1.5mm)}.signature-name{display:inline-block;min-height:5.5mm;margin-top:1.8mm}.blank-signature-name{visibility:hidden}.fm-footer{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:4mm;padding:.55mm .5mm 0;font-size:8.5pt;font-weight:400;line-height:1}.page-number{justify-self:center;white-space:nowrap}.form-code{justify-self:end;white-space:nowrap}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`; }
+  function annualFormStyles(){return `@page{size:A4 portrait;margin:5mm 5mm 6mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:"TH Sarabun New",Sarabun,Tahoma,sans-serif;color:#000;font-size:16pt;font-weight:400;line-height:1}.fm-page{width:200mm;height:283.5mm;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;overflow:hidden;padding-bottom:1mm;break-after:page;page-break-after:always;background:#fff}.fm-page:last-child{break-after:auto;page-break-after:auto}table{width:100%;border-collapse:collapse;border-spacing:0}.fm-header td{border:0.5pt solid #111;padding:1.05mm 2mm;font-size:16pt;font-weight:700;line-height:.98}.header-label{display:inline-block;min-width:43mm;font-weight:700}.logo-cell{width:27mm;text-align:center;padding:.8mm!important}.fm-logo{display:block;width:23mm;height:23mm;object-fit:contain;margin:auto}.fm-person{margin-top:1mm;table-layout:fixed;border:0.5pt solid #111}.fm-person td{border:0;width:50%;padding:1.45mm 3mm;font-size:16pt;font-weight:700;line-height:.98}.fm-field{display:grid;grid-template-columns:29mm 3mm minmax(0,1fr);align-items:end;gap:1mm}.fm-field b{white-space:nowrap;font-weight:700}.fm-fill-line{display:block;text-align:center;border-bottom:0.5pt solid #111;min-height:5.8mm;line-height:5.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}.fm-training{margin-top:2mm;table-layout:fixed;height:100%;border:0.5pt solid #111}.fm-training thead{display:table-header-group}.fm-training tr{break-inside:avoid;page-break-inside:avoid}.fm-training th,.fm-training td{border:0.5pt solid #111}.fm-training th{padding:.95mm .55mm;font-size:14.5pt;font-weight:700;line-height:1;text-align:center;vertical-align:middle}.fm-training td{height:7.45mm;padding:.65mm 1.15mm;vertical-align:top;font-size:14pt;font-weight:400;line-height:1.02}.fm-training th:nth-child(1){width:4%}.fm-training th:nth-child(2){width:35%}.fm-training th:nth-child(3){width:5%}.fm-training th:nth-child(4){width:24%}.fm-training th:nth-child(5){width:11%}.fm-training th:nth-child(6){width:11%}.fm-training th:nth-child(7){width:10%}.center{text-align:center}.blank td{height:7.45mm;padding:0}.signatures{border:0.5pt solid #111;border-top:0;display:grid;grid-template-columns:1fr 1fr;gap:12mm;padding:5.2mm 10mm 3.6mm;text-align:center;font-size:16pt;font-weight:400;line-height:1.12;min-height:34mm}.signature-box{align-self:center}.signature-dots{display:inline-block;width:55mm;border-bottom:0.5pt dotted #111;transform:translateY(-1.5mm)}.signature-name{display:inline-block;min-height:5.5mm;margin-top:1.8mm}.blank-signature-name{visibility:hidden}.fm-footer{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:4mm;padding:.55mm .5mm 0;font-size:8.5pt;font-weight:400;line-height:1}.page-number{justify-self:center;white-space:nowrap}.form-code{justify-self:end;white-space:nowrap}.fm-vector-line-capture .fm-header td,.fm-vector-line-capture .fm-person,.fm-vector-line-capture .fm-training,.fm-vector-line-capture .fm-training th,.fm-vector-line-capture .fm-training td{border-color:transparent!important}.fm-vector-line-capture .fm-fill-line{border-bottom-color:transparent!important}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`; }
   function annualFormDocument(items){
     const range=applyTrainingYearRange(selectedTrainingYear()),year=range.year;
     if(!items.length)return null;
@@ -320,6 +320,57 @@
     const image=await blobToPngEmbed(pdfDoc,blob),header=await certificateHeaderImage(pdfDoc,item,index,total),A4W=595.28,A4H=841.89,margin=28,headerH=68,gap=10,maxW=A4W-margin*2,maxH=A4H-margin*2-headerH-gap,fit=fitBox(image.width,image.height,maxW,maxH),page=pdfDoc.addPage([A4W,A4H]);
     page.drawImage(header,{x:margin,y:A4H-margin-headerH,width:maxW,height:headerH});page.drawImage(image,{x:(A4W-fit.width)/2,y:margin+(maxH-fit.height)/2,width:fit.width,height:fit.height});
   }
+  function fmMergeLineSegments(raw){
+    const groups=new Map(),round=v=>Math.round(v*4)/4;
+    for(const seg of raw){
+      const horizontal=Math.abs(seg.y2-seg.y1)<=0.5;
+      const fixed=round(horizontal?(seg.y1+seg.y2)/2:(seg.x1+seg.x2)/2);
+      const start=round(horizontal?Math.min(seg.x1,seg.x2):Math.min(seg.y1,seg.y2));
+      const end=round(horizontal?Math.max(seg.x1,seg.x2):Math.max(seg.y1,seg.y2));
+      const key=`${horizontal?'h':'v'}:${fixed}`;
+      if(!groups.has(key))groups.set(key,{horizontal,fixed,ranges:[]});
+      groups.get(key).ranges.push([start,end]);
+    }
+    const merged=[];
+    for(const group of groups.values()){
+      group.ranges.sort((a,b)=>a[0]-b[0]);
+      const ranges=[];
+      for(const range of group.ranges){
+        const last=ranges[ranges.length-1];
+        if(last&&range[0]<=last[1]+0.75)last[1]=Math.max(last[1],range[1]);
+        else ranges.push(range.slice());
+      }
+      for(const [start,end] of ranges){
+        merged.push(group.horizontal?{x1:start,y1:group.fixed,x2:end,y2:group.fixed}:{x1:group.fixed,y1:start,x2:group.fixed,y2:end});
+      }
+    }
+    return merged;
+  }
+  function fmVectorLineGeometry(pageElement){
+    const pageRect=pageElement.getBoundingClientRect(),raw=[];
+    const addLine=(x1,y1,x2,y2)=>raw.push({x1:x1-pageRect.left,y1:y1-pageRect.top,x2:x2-pageRect.left,y2:y2-pageRect.top});
+    const addRect=element=>{
+      const r=element.getBoundingClientRect();
+      addLine(r.left,r.top,r.right,r.top);addLine(r.right,r.top,r.right,r.bottom);
+      addLine(r.left,r.bottom,r.right,r.bottom);addLine(r.left,r.top,r.left,r.bottom);
+    };
+    pageElement.querySelectorAll('.fm-header td,.fm-training th,.fm-training td').forEach(addRect);
+    const person=pageElement.querySelector('.fm-person');if(person)addRect(person);
+    pageElement.querySelectorAll('.fm-fill-line').forEach(element=>{const r=element.getBoundingClientRect();addLine(r.left,r.bottom,r.right,r.bottom);});
+    return {width:pageRect.width,height:pageRect.height,segments:fmMergeLineSegments(raw)};
+  }
+  function drawFmVectorLines(pdfPage,geometry,fit,x,y){
+    if(!geometry?.segments?.length||!geometry.width||!geometry.height)return;
+    const scaleX=fit.width/geometry.width,scaleY=fit.height/geometry.height,color=window.PDFLib.rgb(0,0,0);
+    for(const seg of geometry.segments){
+      pdfPage.drawLine({
+        start:{x:x+seg.x1*scaleX,y:y+fit.height-seg.y1*scaleY},
+        end:{x:x+seg.x2*scaleX,y:y+fit.height-seg.y2*scaleY},
+        thickness:0.5,
+        color
+      });
+    }
+  }
   async function exportMyAnnualTrainingPackage(items,button){
     const bundle=annualFormDocument(items);if(!bundle)return showToast(`ไม่พบรายการอบรมในปี ${selectedTrainingYear()+543}`);
     if(!window.PDFLib?.PDFDocument||typeof window.html2canvas!=='function')return showToast('ยังโหลดระบบสร้าง PDF ไม่สำเร็จ กรุณารีเฟรชแล้วลองใหม่');
@@ -329,16 +380,22 @@
       const pdfDoc=await PDFLib.PDFDocument.create();frame=await createAnnualFrame(bundle);const pages=[...frame.contentDocument.querySelectorAll('.fm-page')];if(!pages.length)throw new Error('ไม่พบหน้าตาราง FM-CNHR-002 สำหรับสร้าง PDF');const MM=72/25.4,A4W=210*MM,A4H=297*MM,marginX=5*MM,top=5*MM,maxW=200*MM,maxH=286*MM;
       for(let i=0;i<pages.length;i++){
         if(button)button.textContent=`กำลังสร้างตาราง PDF ${i+1}/${pages.length}`;
-        const canvas=await window.html2canvas(pages[i],{scale:3,backgroundColor:'#fff',useCORS:true,logging:false,scrollX:0,scrollY:0,width:pages[i].scrollWidth,height:pages[i].scrollHeight,windowWidth:pages[i].scrollWidth,windowHeight:pages[i].scrollHeight});
-        const image=await pdfDoc.embedPng(canvasPngBytes(canvas)),fit=fitBox(image.width,image.height,maxW,maxH),page=pdfDoc.addPage([A4W,A4H]);page.drawImage(image,{x:marginX,y:A4H-top-fit.height,width:fit.width,height:fit.height});
+        const pageElement=pages[i],lineGeometry=fmVectorLineGeometry(pageElement);
+        pageElement.classList.add('fm-vector-line-capture');
+        let canvas;
+        try{canvas=await window.html2canvas(pageElement,{scale:3,backgroundColor:'#fff',useCORS:true,logging:false,scrollX:0,scrollY:0,width:pageElement.scrollWidth,height:pageElement.scrollHeight,windowWidth:pageElement.scrollWidth,windowHeight:pageElement.scrollHeight});}
+        finally{pageElement.classList.remove('fm-vector-line-capture');}
+        const image=await pdfDoc.embedPng(canvasPngBytes(canvas)),fit=fitBox(image.width,image.height,maxW,maxH),pdfPage=pdfDoc.addPage([A4W,A4H]),imageY=A4H-top-fit.height;
+        pdfPage.drawImage(image,{x:marginX,y:imageY,width:fit.width,height:fit.height});
+        drawFmVectorLines(pdfPage,lineGeometry,fit,marginX,imageY);
       }
       for(let i=0;i<certificates.length;i++){
         const item=certificates[i];if(button)button.textContent=`กำลังแนบ Certificate ${i+1}/${certificates.length}`;
         try{const blob=await downloadCertificate(item.record),kind=certificateKind(item.record,blob);if(kind==='pdf')await appendCertificatePdf(pdfDoc,blob,item,i+1,certificates.length);else if(kind==='image')await appendCertificateImage(pdfDoc,blob,item,i+1,certificates.length);else throw new Error('ชนิดไฟล์ไม่รองรับ');}catch(error){errors.push(`${item.activity.title||'Certificate'}: ${error?.message||String(error)}`);}
       }
       if(button)button.textContent='กำลังบันทึกไฟล์ PDF…';const bytes=await pdfDoc.save(),blob=new Blob([bytes],{type:'application/pdf'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=safeDownloadName(`FM-CNHR-002_${bundle.personName}_${bundle.year+543}_พร้อม-Certificate.pdf`);document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);
-      if(errors.length){console.warn('V414 certificate merge skipped',errors);showToast(`สร้าง PDF แล้ว แต่แนบ Certificate ไม่สำเร็จ ${errors.length} ไฟล์`);}else showToast(`สร้าง PDF ชุดอบรมแล้ว • แนบ Certificate ${certificates.length} ไฟล์`);
-    }catch(error){console.error('V414 annual training PDF',error);showToast(`สร้าง PDF ไม่สำเร็จ: ${error?.message||String(error)}`);}finally{frame?.remove();if(button){button.disabled=false;button.textContent=originalText||'Export PDF ชุดอบรมประจำปี';}}
+      if(errors.length){console.warn('V415 certificate merge skipped',errors);showToast(`สร้าง PDF แล้ว แต่แนบ Certificate ไม่สำเร็จ ${errors.length} ไฟล์`);}else showToast(`สร้าง PDF ชุดอบรมแล้ว • แนบ Certificate ${certificates.length} ไฟล์`);
+    }catch(error){console.error('V415 annual training PDF',error);showToast(`สร้าง PDF ไม่สำเร็จ: ${error?.message||String(error)}`);}finally{frame?.remove();if(button){button.disabled=false;button.textContent=originalText||'Export PDF ชุดอบรมประจำปี';}}
   }
   function printMyAnnualForm(items,button){return exportMyAnnualTrainingPackage(items,button);}
 
