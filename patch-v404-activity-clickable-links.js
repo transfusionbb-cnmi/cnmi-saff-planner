@@ -11,6 +11,7 @@
 
   const LINK_RE = /(?:https?:\/\/|www\.)[^\s<>"']+|(?:[a-z0-9-]+\.)+(?:com|org|net|io|app|me|ly|co\.th|ac\.th|go\.th|or\.th|in\.th|th)(?:\/[^\s<>"']*)?/gi;
   const TRAILING_PUNCTUATION_RE = /[),.;!?\]}>'"”’。、，；：]+$/;
+  const ORGANIZER_MARKER_RE = /\[\[FM-CNHR-002-ORGANIZER:[^\]]*\]\]\s*/gi;
   const ACTIVITY_SELECTORS = [
     '.v397-detail-note',
     '.v397-activity-item',
@@ -36,7 +37,9 @@
 
   function linkifyTextNode(node) {
     if (!node || node.nodeType !== Node.TEXT_NODE || node.parentElement?.closest('a,script,style,textarea,input,select,option,button,code,pre')) return;
-    const text = node.nodeValue || '';
+    const originalText = node.nodeValue || '';
+    const text = String(originalText).replace(ORGANIZER_MARKER_RE, '');
+    if (text !== originalText) node.nodeValue = text;
     LINK_RE.lastIndex = 0;
     if (!LINK_RE.test(text)) return;
     LINK_RE.lastIndex = 0;
