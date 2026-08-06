@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V404
+/* CNMI Staff Planner V408
  * Clickable links for unit activities.
  * - Converts web links in activity notes/details into safe external links.
  * - target="_blank" lets installed PWA hand the link to Chrome/Safari.
@@ -11,7 +11,7 @@
 
   const LINK_RE = /(?:https?:\/\/|www\.)[^\s<>"']+|(?:[a-z0-9-]+\.)+(?:com|org|net|io|app|me|ly|co\.th|ac\.th|go\.th|or\.th|in\.th|th)(?:\/[^\s<>"']*)?/gi;
   const TRAILING_PUNCTUATION_RE = /[),.;!?\]}>'"”’。、，；：]+$/;
-  const ORGANIZER_MARKER_RE = /\[\[FM-CNHR-002-ORGANIZER:[^\]]*\]\]\s*/gi;
+  const ORGANIZER_MARKER_RE = /\[\[FM-CNHR-002-(?:ORGANIZER|BATCH):[^\]]*\]\]\s*/gi;
   const ACTIVITY_SELECTORS = [
     '.v397-detail-note',
     '.v397-activity-item',
