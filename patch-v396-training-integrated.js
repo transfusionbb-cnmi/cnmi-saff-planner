@@ -225,7 +225,7 @@
     const selected=myTrainingStatus(),rows=myTrainingAnnualRows();
     return selected==='all'?rows:rows.filter(x=>status(x.record)===selected);
   }
-  const MY_TRAINING_PAGE_SIZE=2;
+  const MY_TRAINING_PAGE_SIZE=1;
   function myTrainingPage(){const page=Number(S().v417MyTrainingPage);return Number.isInteger(page)&&page>0?page:1;}
   function myTrainingPagination(totalRows,currentPage,totalPages){
     if(totalPages<=1)return '';
