@@ -355,6 +355,17 @@
         const page=pages[i];normalizeAnnualPageRows(page);
         if(!annualTrainingOverflows(page))continue;
         const actual=annualActualRows(page),tbody=page.querySelector('.fm-training tbody');
+        const blankRows=[...tbody.querySelectorAll('tr.blank')];
+        const currentTarget=Number(page.dataset.fmSlotTarget||20);
+        // V423: blank rows are only visual fillers. Shrink those first when the
+        // real content becomes taller. Moving a real training row before
+        // removing fillers caused one training item per PDF page in V420-V422.
+        if(blankRows.length&&currentTarget>actual.length){
+          page.dataset.fmSlotTarget=String(currentTarget-1);
+          normalizeAnnualPageRows(page);changed=true;break;
+        }
+        // Only split actual training rows after every removable blank row has
+        // been exhausted and the real content still cannot fit above signatures.
         if(actual.length>1){
           const moving=actual[actual.length-1];
           let next=pages[i+1];
@@ -364,12 +375,6 @@
           if(nextBody)nextBody.insertBefore(moving,nextBody.firstChild);
           normalizeAnnualPageRows(page);normalizeAnnualPageRows(next);
           changed=true;break;
-        }
-        const blankRows=[...tbody.querySelectorAll('tr.blank')];
-        const currentTarget=Number(page.dataset.fmSlotTarget||20);
-        if(blankRows.length&&currentTarget>actual.length){
-          page.dataset.fmSlotTarget=String(currentTarget-1);
-          normalizeAnnualPageRows(page);changed=true;break;
         }
       }
       if(!changed)break;
