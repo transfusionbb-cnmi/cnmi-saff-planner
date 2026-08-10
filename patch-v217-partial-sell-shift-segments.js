@@ -248,6 +248,17 @@
     const cfg = PARTS[part] || PARTS[defaultPartFor(a)];
     return cfg.short || cfg.label || 'รับเวร';
   }
+  function baseSegmentsForAssignment(a){
+    const full=assignmentFullHours(a);
+    if(full>=24)return ['morning','afternoon','night'];
+    if(full>=16)return ['afternoon','night'];
+    return ['morning'];
+  }
+  function remainingSegmentsFor(a,trades){
+    const sold=new Set();
+    (trades||[]).forEach(x=>(PARTS[x.part]?.segments||[]).forEach(s=>sold.add(s)));
+    return baseSegmentsForAssignment(a).filter(s=>!sold.has(s));
+  }
   function effectiveEntriesForStaffDate(staffId, date, assignments){
     const d = normDate(date);
     const rows = [];
@@ -257,18 +268,30 @@
       if (String(a.staff_id) === String(staffId)) {
         if (trades.length) {
           const label = remainingLabelFor(a, trades);
-          if (label) rows.push({ kind:'owner-remain', assignment:a, label, sort:sortDuty(a.duty_code), className:'v217-remain' });
+          const full=assignmentFullHours(a),soldHours=trades.reduce((sum,x)=>sum+Number(x.hours||0),0),hours=Math.max(0,full-soldHours),segments=remainingSegmentsFor(a,trades);
+          if (label) rows.push({ kind:'owner-remain', assignment:a, label, hours, segments, trades, sort:sortDuty(a.duty_code), className:'v217-remain' });
         } else {
-          rows.push({ kind:'owner', assignment:a, label:labelDuty(a.duty_code), sort:sortDuty(a.duty_code), className:'' });
+          rows.push({ kind:'owner', assignment:a, label:labelDuty(a.duty_code), hours:assignmentFullHours(a), segments:baseSegmentsForAssignment(a), sort:sortDuty(a.duty_code), className:'' });
         }
       }
       trades.forEach(x => {
         if (String(x.r?.receiver_id || '') === String(staffId)) {
-          rows.push({ kind:'receiver-part', assignment:a, request:x.r, label:entryLabelForReceived(x.part, a), sort:sortDuty(a.duty_code) + 0.1, className:'v217-received' });
+          rows.push({ kind:'receiver-part', assignment:a, request:x.r, part:x.part, label:entryLabelForReceived(x.part, a), hours:Number(x.hours||partHours(x.part,a)||0), segments:[...(PARTS[x.part]?.segments||[])], sort:sortDuty(a.duty_code) + 0.1, className:'v217-received' });
         }
       });
     });
     return rows.sort((a,b) => (a.sort - b.sort) || String(a.label).localeCompare(String(b.label), 'th'));
+  }
+  function effectiveAssignmentsForStaffDate(staffId,date,assignments){
+    return effectiveEntriesForStaffDate(staffId,date,assignments).map(e=>({
+      ...e.assignment,
+      staff_id:staffId,
+      _effective_label:e.label,
+      _effective_kind:e.kind,
+      _effective_hours:Number(e.hours||0),
+      _effective_segments:[...(e.segments||[])],
+      _effective_trade_request_id:e.request?.id||''
+    }));
   }
   function tradePartsInSlot(a){
     const trades = completedTradesForAssignment(a);
@@ -570,6 +593,6 @@
   `;
   document.head.appendChild(style);
 
-  window.cnmiTradeSegmentsV217 = { PARTS, partFromNote, partHours, coversWholeSlot, effectiveEntriesForStaffDate };
+  window.cnmiTradeSegmentsV217 = { PARTS, partFromNote, partHours, coversWholeSlot, effectiveEntriesForStaffDate, effectiveAssignmentsForStaffDate };
   console.info(`${VERSION} loaded`);
 })();

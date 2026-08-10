@@ -54,24 +54,45 @@
     try{return (typeof isWeekend==='function'&&isWeekend(date))||(typeof isHolidayDate==='function'&&isHolidayDate(date));}
     catch(_){const d=new Date(`${norm(date)}T00:00:00`).getDay();return d===0||d===6;}
   }
-  function timeText(date,codes){
+  function timeText(date,codes,duties=[]){
+    const effective=(duties||[]).filter(x=>Array.isArray(x?._effective_segments)&&x._effective_segments.length&&Number(x?._effective_hours)>0&&!isCh4(x?.duty_code));
+    if(effective.length){
+      const order=['morning','afternoon','night'],set=new Set(),hours=Math.round(effective.reduce((sum,x)=>sum+Number(x._effective_hours||0),0)*100)/100;
+      effective.forEach(x=>(x._effective_segments||[]).forEach(s=>set.add(s)));
+      const key=order.filter(s=>set.has(s)).join(',');
+      if(codes.some(isCh3))return '08:00 - 16:00 (เวรหลัก 8 ชม.) + เวลาปั่นเลือดตามจริง';
+      if(key==='morning')return '08:00 - 16:00';
+      if(key==='afternoon')return '16:00 - 00:00';
+      if(key==='night')return '00:00 - 08:00';
+      if(key==='morning,afternoon')return '08:00 - 00:00';
+      if(key==='afternoon,night')return '16:00 - 08:00 (+1 วัน)';
+      if(key==='morning,night')return `ดึก-เช้า • ${hours} ชม.`;
+      if(key==='morning,afternoon,night')return '08:00 - 08:00 (+1 วัน)';
+      return `${hours} ชม.`;
+    }
     if(codes.some(c=>/^ชบด/.test(c)))return weekendHoliday(date)?'08:00 - 08:00 (+1 วัน)':'16:00 - 08:00 (+1 วัน)';
     if(codes.some(isCh3))return '08:00 - 16:00 (เวรหลัก 8 ชม.) + เวลาปั่นเลือดตามจริง';
     if(codes.every(isCh4))return 'กรอกเวลาทำจริงในข้อ 3';
     return '08:00 - 16:00 (เวรหลัก 8 ชม.)';
   }
   function groupedDuties(){
-    const staffId=sid();
-    const month=selectedMonth();
-    const rows=(S()?.rosterAssignments||[])
-      .filter(a=>String(a?.staff_id||'')===staffId&&norm(a?.duty_date).startsWith(month))
-      .sort((a,b)=>norm(a?.duty_date).localeCompare(norm(b?.duty_date))||String(a?.duty_code||'').localeCompare(String(b?.duty_code||''),'th'));
+    const staffId=sid(),month=selectedMonth(),assignments=S()?.rosterAssignments||[];
+    let rows=[],usedEffective=false;
+    try{
+      const fn=window.cnmiTradeSegmentsV217?.effectiveAssignmentsForStaffDate;
+      if(typeof fn==='function'){
+        usedEffective=true;
+        const [y,m]=month.split('-').map(Number),last=new Date(y,m,0).getDate();
+        for(let day=1;day<=last;day++){
+          const date=`${month}-${String(day).padStart(2,'0')}`;
+          rows.push(...(fn(staffId,date,assignments)||[]));
+        }
+      }
+    }catch(_){rows=[];}
+    if(!usedEffective)rows=assignments.filter(a=>String(a?.staff_id||'')===staffId&&norm(a?.duty_date).startsWith(month));
+    rows.sort((a,b)=>norm(a?.duty_date).localeCompare(norm(b?.duty_date))||String(a?.duty_code||'').localeCompare(String(b?.duty_code||''),'th'));
     const map=new Map();
-    rows.forEach(row=>{
-      const date=norm(row?.duty_date);
-      if(!map.has(date))map.set(date,[]);
-      map.get(date).push(row);
-    });
+    rows.forEach(row=>{const date=norm(row?.duty_date);if(!map.has(date))map.set(date,[]);map.get(date).push(row);});
     return {month,entries:[...map.entries()]};
   }
   function attendanceFor(staffId,date){
@@ -94,7 +115,7 @@
       const mainStatus=!hasMain?'ไม่มีเวรหลักที่ต้องแตะ':(mainRequest?statusText(mainRequest):(attendance.length?'แตะแล้ว แต่ยังไม่พบรายการ OT':'ยังไม่ได้แตะยืนยันเวร'));
       const extraStatus=extraRequest?statusText(extraRequest):'ยังไม่ได้ขอ OT เพิ่ม';
       return `<article class="v377-duty-card">
-        <div class="v377-duty-head"><div><span class="v377-duty-date">${esc(thaiDate(date))}</span><div class="v377-duty-codes">${codes.map(code=>`<span>${esc(dutyLabel(code))}</span>`).join('')}</div></div><span class="v377-time">${esc(timeText(date,codes))}</span></div>
+        <div class="v377-duty-head"><div><span class="v377-duty-date">${esc(thaiDate(date))}</span><div class="v377-duty-codes">${duties.map(a=>`<span>${esc(a?._effective_label||dutyLabel(a?.duty_code))}</span>`).join('')}</div></div><span class="v377-time">${esc(timeText(date,codes,duties))}</span></div>
         <div class="v377-status-list">
           ${hasMain?`<div class="v377-status-row"><span>เวรหลัก — แตะยืนยันแล้วหรือยัง</span>${statusBadge(mainStatus)}</div>`:''}
           ${needsExtra?`<div class="v377-status-row"><span>ข้อ 3 ขอ OT เพิ่ม / เวรปั่นเลือด</span>${statusBadge(extraStatus)}</div>`:''}

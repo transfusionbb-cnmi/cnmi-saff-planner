@@ -39,6 +39,13 @@
   function isAutoDuty(code){ return !!String(code || '').trim() && !isManualDuty(code); }
   function dutiesOn(staffId, date){
     const d = norm(date);
+    try{
+      const fn=window.cnmiTradeSegmentsV217?.effectiveAssignmentsForStaffDate;
+      if(typeof fn==='function'){
+        const rows=fn(staffId,d,state.rosterAssignments||[]);
+        if(Array.isArray(rows))return rows;
+      }
+    }catch(_){ }
     return (state.rosterAssignments || [])
       .filter(a => String(a?.staff_id || '') === String(staffId || '') && norm(a?.duty_date) === d)
       .sort((a,b) => {
@@ -64,8 +71,21 @@
   function latest(rows){ return (rows || []).slice().sort((a,b) => String(b?.created_at || '').localeCompare(String(a?.created_at || '')))[0] || null; }
   function hasChbd(duties){ return (duties || []).some(x => /^ชบด/.test(String(x?.duty_code || ''))); }
   function shiftWindowForDuties(date, duties){
-    const d = norm(date);
-    const list = duties || [];
+    const d = norm(date),list=duties||[];
+    const effective=list.filter(x=>Array.isArray(x?._effective_segments)&&x._effective_segments.length&&Number(x?._effective_hours)>0);
+    if(effective.length){
+      const order=['morning','afternoon','night'],set=new Set(),hours=Math.round(effective.reduce((sum,x)=>sum+Number(x._effective_hours||0),0)*100)/100;
+      effective.forEach(x=>(x._effective_segments||[]).forEach(s=>set.add(s)));
+      const key=order.filter(s=>set.has(s)).join(',');
+      if(key==='morning')return {start_time:'08:00',end_date:d,end_time:'16:00',hours,label:'08:00 - 16:00'};
+      if(key==='afternoon')return {start_time:'16:00',end_date:addDays(d,1),end_time:'00:00',hours,label:'16:00 - 00:00 (+1 วัน)'};
+      if(key==='night')return {start_time:'00:00',end_date:d,end_time:'08:00',hours,label:'00:00 - 08:00'};
+      if(key==='morning,afternoon')return {start_time:'08:00',end_date:addDays(d,1),end_time:'00:00',hours,label:'08:00 - 00:00 (+1 วัน)'};
+      if(key==='afternoon,night')return {start_time:'16:00',end_date:addDays(d,1),end_time:'08:00',hours,label:'16:00 - 08:00 (+1 วัน)'};
+      if(key==='morning,night')return {start_time:'00:00',end_date:d,end_time:'16:00',hours,label:'ดึก-เช้า รวม 16 ชม.'};
+      if(key==='morning,afternoon,night')return {start_time:'08:00',end_date:addDays(d,1),end_time:'08:00',hours,label:'08:00 - 08:00 (+1 วัน)'};
+      return {start_time:'08:00',end_date:d,end_time:'16:00',hours:hours||8,label:`${hours||8} ชั่วโมง`};
+    }
     if (hasChbd(list)) {
       const hol = isWeekendHoliday(d);
       return { start_time: hol ? '08:00' : '16:00', end_date:addDays(d, 1), end_time:'08:00', hours:hol ? 24 : 16, label:hol ? '08:00 - 08:00 (+1 วัน)' : '16:00 - 08:00 (+1 วัน)' };
@@ -113,7 +133,7 @@
     if (m && m[1].trim()) return m[1].trim();
     m = text.match(/ประเภทเวร\s*:?\s*([^|]+)/i);
     if (m && m[1].trim() && m[1].trim() !== '-') return m[1].trim();
-    const auto = autoDuties(row?.staff_id, row?.work_date).map(a => label(a?.duty_code)).filter(Boolean).join(', ');
+    const auto = autoDuties(row?.staff_id, row?.work_date).map(a => a?._effective_label || label(a?.duty_code)).filter(Boolean).join(', ');
     return auto || '';
   }
   function cleanNonAttendanceDetail(note){
@@ -271,7 +291,7 @@
     else if (att.length && auto.length) status = 'ยืนยันแล้ว แต่ยังไม่มีรายการ OT';
     else if (!auto.length && manual.length) status = 'ต้องกรอกเวลาจริง/เลือกสถานะ';
     else if (!duties.length) status = 'ไม่มีเวรที่ต้องยืนยัน';
-    const dutyNames = duties.length ? duties.map(a => label(a.duty_code)).join(' / ') : '-';
+    const dutyNames = duties.length ? duties.map(a => a?._effective_label || label(a.duty_code)).join(' / ') : '-';
     const timeText = auto.length ? (ch3.length ? `${win.label} (เวรหลัก 8 ชม.)` : win.label) : (manual.length ? 'เวลาจริงในส่วนที่ 2' : '-');
     const canCheck = auto.length && !latestOt && d <= today();
     return `<div class="card ot-card my-duty-today-card v222-ot-card">
@@ -287,9 +307,12 @@
   function renderMyMonthDutiesV222(){
     const staffId = sid();
     const key = state.myDutyMonthFilter || state.monthKey || today().slice(0,7);
-    const rows = (state.rosterAssignments || [])
-      .filter(a => String(a?.staff_id || '') === String(staffId || '') && norm(a?.duty_date).startsWith(key))
-      .sort((a,b) => norm(a?.duty_date).localeCompare(norm(b?.duty_date)) || String(a?.duty_code || '').localeCompare(String(b?.duty_code || ''), 'th'));
+    const rows = (()=>{
+      const out=[];
+      const [y,m]=String(key).split('-').map(Number),last=new Date(y,m,0).getDate();
+      for(let day=1;day<=last;day++)out.push(...dutiesOn(staffId,`${key}-${String(day).padStart(2,'0')}`));
+      return out.sort((a,b)=>norm(a?.duty_date).localeCompare(norm(b?.duty_date))||String(a?.duty_code||'').localeCompare(String(b?.duty_code||''),'th'));
+    })();
     const body = rows.map(a => {
       const d = norm(a.duty_date);
       const auto = isAutoDuty(a.duty_code);
@@ -297,7 +320,7 @@
       const att = attendanceRows(staffId, d).length;
       const st = isCh4(a.duty_code) ? ch4Status(a) : (ot ? statusText(ot) : (att && auto ? 'ยืนยันแล้ว แต่ยังไม่มีรายการ OT' : (auto ? 'ยังไม่ได้ยืนยัน' : 'บันทึกเวลาจริงถ้าจะเบิก')));
       const time = auto ? (isCh3Composite(a.duty_code) ? `${shiftWindowForDuties(d, [a]).label} + ช4 ตามเวลาจริง` : shiftWindowForDuties(d, [a]).label) : 'เวลาจริง';
-      return `<tr><td>${thDate(d)}</td><td><b>${esc(label(a.duty_code))}</b></td><td>${esc(time)}</td><td>${b(st, statusCls(st))}</td></tr>`;
+      return `<tr><td>${thDate(d)}</td><td><b>${esc(a?._effective_label || label(a.duty_code))}</b></td><td>${esc(time)}</td><td>${b(st, statusCls(st))}</td></tr>`;
     }).join('');
     return `<div class="card wide-card v222-my-month-card" style="grid-column:1/-1;"><div class="section-title"><div><h3>เวรของฉันเดือนนี้</h3></div><label>เดือน <input id="myDutyMonthFilter" type="month" value="${esc(key)}"></label></div><div class="table-wrap"><table><thead><tr><th>วันที่</th><th>เวร</th><th>เวลา</th><th>สถานะ</th></tr></thead><tbody>${body || '<tr><td colspan="4">ยังไม่มีเวรเดือนนี้</td></tr>'}</tbody></table></div></div>`;
   }

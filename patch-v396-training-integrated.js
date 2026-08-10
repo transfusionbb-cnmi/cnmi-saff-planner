@@ -285,7 +285,7 @@
     const raw=String(head?.full_name||'ปาริฉัตร อินทร์เกลี้ยง').trim();
     return /^(นาย|นางสาว|นาง|พญ\.|นพ\.|แพทย์หญิง|แพทย์ชาย)/.test(raw)?raw:`นางสาว ${raw}`;
   }
-  function annualFormStyles(){return `@page{size:A4 portrait;margin:5mm 5mm 6mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:"TH Sarabun New",Sarabun,Tahoma,sans-serif;color:#000;font-size:16pt;font-weight:400;line-height:1}.fm-page{width:200mm;height:283.5mm;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;overflow:hidden;padding-bottom:1mm;break-after:page;page-break-after:always;background:#fff}.fm-page:last-child{break-after:auto;page-break-after:auto}table{width:100%;border-collapse:collapse;border-spacing:0}.fm-header td{border:0.5pt solid #111;padding:1.05mm 2mm;font-size:16pt;font-weight:700;line-height:.98}.header-label{display:inline-block;min-width:43mm;font-weight:700}.logo-cell{width:27mm;text-align:center;padding:.8mm!important}.fm-logo{display:block;width:23mm;height:23mm;object-fit:contain;margin:auto}.fm-person{margin-top:1mm;table-layout:fixed;border:0.5pt solid #111}.fm-person td{border:0;width:50%;padding:1.45mm 3mm;font-size:16pt;font-weight:700;line-height:.98}.fm-field{display:grid;grid-template-columns:29mm 3mm minmax(0,1fr);align-items:end;gap:1mm}.fm-field b{white-space:nowrap;font-weight:700}.fm-fill-line{display:block;text-align:center;border-bottom:0.5pt solid #111;min-height:5.8mm;line-height:5.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}.fm-training{margin-top:2mm;table-layout:fixed;height:100%;border:0.5pt solid #111}.fm-training thead{display:table-header-group}.fm-training tr{break-inside:avoid;page-break-inside:avoid}.fm-training th,.fm-training td{border:0.5pt solid #111}.fm-training th{padding:.95mm .55mm;font-size:14.5pt;font-weight:700;line-height:1;text-align:center;vertical-align:middle}.fm-training td{height:7.45mm;padding:.65mm 1.15mm;vertical-align:top;font-size:14pt;font-weight:400;line-height:1.02}.fm-training th:nth-child(1){width:4%}.fm-training th:nth-child(2){width:35%}.fm-training th:nth-child(3){width:5%}.fm-training th:nth-child(4){width:24%}.fm-training th:nth-child(5){width:11%}.fm-training th:nth-child(6){width:11%}.fm-training th:nth-child(7){width:10%}.center{text-align:center}.blank td{height:7.45mm;padding:0}.signatures{border:0.5pt solid #111;border-top:0;display:grid;grid-template-columns:1fr 1fr;gap:12mm;padding:5.2mm 10mm 3.6mm;text-align:center;font-size:16pt;font-weight:400;line-height:1.12;min-height:34mm}.signature-box{align-self:center}.signature-dots{display:inline-block;width:55mm;border-bottom:0.5pt dotted #111;vertical-align:baseline;transform:none}.signature-name{display:inline-block;min-height:5.5mm;margin-top:1.8mm}.manual-supervisor-name{white-space:nowrap}.signature-name-dots{display:inline-block;width:46mm;min-height:4.7mm;border-bottom:0.5pt dotted #111;vertical-align:baseline}.fm-footer{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:4mm;padding:.55mm .5mm 0;font-size:8.5pt;font-weight:400;line-height:1}.page-number{justify-self:center;white-space:nowrap}.form-code{justify-self:end;white-space:nowrap}.fm-vector-line-capture .fm-header td,.fm-vector-line-capture .fm-person,.fm-vector-line-capture .fm-training,.fm-vector-line-capture .fm-training th,.fm-vector-line-capture .fm-training td{border-color:transparent!important}.fm-vector-line-capture .fm-fill-line{border-bottom-color:transparent!important}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`; }
+  function annualFormStyles(){return `@page{size:A4 portrait;margin:5mm 5mm 6mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{font-family:"TH Sarabun New",Sarabun,Tahoma,sans-serif;color:#000;font-size:16pt;font-weight:400;line-height:1}.fm-page{width:200mm;height:283.5mm;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;overflow:hidden;padding-bottom:1mm;break-after:page;page-break-after:always;background:#fff}.fm-page:last-child{break-after:auto;page-break-after:auto}table{width:100%;border-collapse:collapse;border-spacing:0}.fm-header td{border:0.5pt solid #111;padding:1.05mm 2mm;font-size:16pt;font-weight:700;line-height:.98}.header-label{display:inline-block;min-width:43mm;font-weight:700}.logo-cell{width:27mm;text-align:center;padding:.8mm!important}.fm-logo{display:block;width:23mm;height:23mm;object-fit:contain;margin:auto}.fm-person{margin-top:1mm;table-layout:fixed;border:0.5pt solid #111}.fm-person td{border:0;width:50%;padding:1.45mm 3mm;font-size:16pt;font-weight:700;line-height:.98}.fm-field{display:grid;grid-template-columns:29mm 3mm minmax(0,1fr);align-items:end;gap:1mm}.fm-field b{white-space:nowrap;font-weight:700}.fm-fill-line{display:block;text-align:center;border-bottom:0.5pt solid #111;min-height:5.8mm;line-height:5.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}.fm-training{margin-top:2mm;table-layout:fixed;height:100%;border:0.5pt solid #111}.fm-page.fm-natural-measure .fm-training{height:auto!important;align-self:start!important}.fm-page.fm-natural-measure .fm-training tr.blank{display:none!important}.fm-training thead{display:table-header-group}.fm-training tr{break-inside:avoid;page-break-inside:avoid}.fm-training th,.fm-training td{border:0.5pt solid #111}.fm-training th{padding:.95mm .55mm;font-size:14.5pt;font-weight:700;line-height:1;text-align:center;vertical-align:middle}.fm-training td{height:7.45mm;padding:.65mm 1.15mm;vertical-align:top;font-size:14pt;font-weight:400;line-height:1.02}.fm-training th:nth-child(1){width:4%}.fm-training th:nth-child(2){width:35%}.fm-training th:nth-child(3){width:5%}.fm-training th:nth-child(4){width:24%}.fm-training th:nth-child(5){width:11%}.fm-training th:nth-child(6){width:11%}.fm-training th:nth-child(7){width:10%}.center{text-align:center}.blank td{height:7.45mm;padding:0}.signatures{border:0.5pt solid #111;border-top:0;display:grid;grid-template-columns:1fr 1fr;gap:12mm;padding:5.2mm 10mm 3.6mm;text-align:center;font-size:16pt;font-weight:400;line-height:1.12;min-height:34mm}.signature-box{align-self:center}.signature-dots{display:inline-block;width:55mm;border-bottom:0.5pt dotted #111;vertical-align:baseline;transform:none}.signature-name{display:inline-block;min-height:5.5mm;margin-top:1.8mm}.manual-supervisor-name{white-space:nowrap}.signature-name-dots{display:inline-block;width:46mm;min-height:4.7mm;border-bottom:0.5pt dotted #111;vertical-align:baseline}.fm-footer{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:4mm;padding:.55mm .5mm 0;font-size:8.5pt;font-weight:400;line-height:1}.page-number{justify-self:center;white-space:nowrap}.form-code{justify-self:end;white-space:nowrap}.fm-vector-line-capture .fm-header td,.fm-vector-line-capture .fm-person,.fm-vector-line-capture .fm-training,.fm-vector-line-capture .fm-training th,.fm-vector-line-capture .fm-training td{border-color:transparent!important}.fm-vector-line-capture .fm-fill-line{border-bottom-color:transparent!important}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`; }
   function annualFormDocument(items,options={}){
     const year=Number(options.year)||selectedTrainingYear(),staffId=options.staffId||items?.[0]?.record?.staff_id||actor();
     if(!year||!staffId)return null;
@@ -317,25 +317,38 @@
   function normalizeAnnualPageRows(page){
     const tbody=page?.querySelector('.fm-training tbody');if(!tbody)return;
     tbody.querySelectorAll('tr.blank').forEach(row=>row.remove());
-    const actual=annualActualRows(page),requestedRaw=Number(page.dataset.fmSlotTarget||20),requested=Number.isFinite(requestedRaw)?Math.max(1,Math.min(20,Math.round(requestedRaw))):20,slotTarget=Math.max(actual.length,requested);
+    const actual=annualActualRows(page),requestedRaw=Number(page.dataset.fmSlotTarget ?? 20),requested=Number.isFinite(requestedRaw)?Math.max(0,Math.min(20,Math.round(requestedRaw))):20,slotTarget=Math.max(actual.length,requested);
     page.dataset.fmSlotTarget=String(requested);
     for(let i=actual.length;i<slotTarget;i++)tbody.appendChild(annualBlankRow(page.ownerDocument));
   }
-  function annualTrainingOverflows(page){
-    const actual=annualActualRows(page);if(actual.length>20)return true;
-    const table=page?.querySelector('.fm-training'),thead=table?.querySelector('thead'),tbody=table?.querySelector('tbody'),signatures=page?.querySelector('.signatures');
-    if(!table||!thead||!tbody||!signatures)return false;
-    const tableRect=table.getBoundingClientRect(),signatureRect=signatures.getBoundingClientRect(),capacity=Math.max(0,signatureRect.top-tableRect.top);
-    const bodyRows=[...tbody.querySelectorAll('tr')];
-    const contentHeight=thead.getBoundingClientRect().height+bodyRows.reduce((sum,row)=>sum+row.getBoundingClientRect().height,0);
-    const lastRow=bodyRows[bodyRows.length-1],lastBottom=lastRow?lastRow.getBoundingClientRect().bottom:tableRect.top;
-    return contentHeight>capacity+1.5||lastBottom>signatureRect.top+1.5;
+  function annualNaturalMetrics(page){
+    const actual=annualActualRows(page),table=page?.querySelector('.fm-training'),thead=table?.querySelector('thead'),signatures=page?.querySelector('.signatures');
+    if(!table||!thead||!signatures)return {actual,capacity:0,contentHeight:0,blankMin:28.2,overflow:false};
+    page.classList.add('fm-natural-measure');
+    let metrics;
+    try{
+      const tableRect=table.getBoundingClientRect(),signatureRect=signatures.getBoundingClientRect();
+      const capacity=Math.max(0,signatureRect.top-tableRect.top);
+      const headHeight=thead.getBoundingClientRect().height;
+      const rowHeights=actual.map(row=>row.getBoundingClientRect().height);
+      const contentHeight=headHeight+rowHeights.reduce((sum,h)=>sum+h,0);
+      const blankMin=7.45*96/25.4;
+      metrics={actual,capacity,contentHeight,blankMin,rowHeights,overflow:actual.length>20||contentHeight>capacity+1.5};
+    }finally{page.classList.remove('fm-natural-measure');}
+    return metrics;
+  }
+  function annualBestSlotTarget(page){
+    const m=annualNaturalMetrics(page),actualCount=m.actual.length;
+    if(actualCount<=10)return 20;
+    if(!m.capacity)return Math.min(20,Math.max(actualCount,20));
+    const free=Math.max(0,m.capacity-m.contentHeight);
+    const blanks=Math.max(0,Math.min(20-actualCount,Math.floor((free+0.5)/Math.max(1,m.blankMin))));
+    return Math.max(actualCount,Math.min(20,actualCount+blanks));
   }
   function createAnnualContinuationPage(sourcePage){
     const page=sourcePage.cloneNode(true),tbody=page.querySelector('.fm-training tbody');
     if(tbody)tbody.innerHTML='';
-    page.dataset.fmSlotTarget='20';
-    normalizeAnnualPageRows(page);
+    page.dataset.fmSlotTarget='0';
     return page;
   }
   function refreshAnnualPageLabels(doc){
@@ -348,24 +361,19 @@
   }
   async function rebalanceAnnualTrainingPages(doc){
     let guard=0;
-    [...doc.querySelectorAll('.fm-page')].forEach(page=>{page.dataset.fmSlotTarget='20';normalizeAnnualPageRows(page);});
-    while(guard++<240){
+    // Measure only the natural height of real training rows. The visual blank
+    // rows are added after the page split is stable; otherwise a 100%-height
+    // table makes each real row look artificially tall and causes 1 item/page.
+    [...doc.querySelectorAll('.fm-page')].forEach(page=>{page.dataset.fmSlotTarget=String(annualActualRows(page).length);normalizeAnnualPageRows(page);});
+    while(guard++<120){
       const pages=[...doc.querySelectorAll('.fm-page')];let changed=false;
       for(let i=0;i<pages.length;i++){
-        const page=pages[i];normalizeAnnualPageRows(page);
-        if(!annualTrainingOverflows(page))continue;
-        const actual=annualActualRows(page),tbody=page.querySelector('.fm-training tbody');
-        const blankRows=[...tbody.querySelectorAll('tr.blank')];
-        const currentTarget=Number(page.dataset.fmSlotTarget||20);
-        // V423: blank rows are only visual fillers. Shrink those first when the
-        // real content becomes taller. Moving a real training row before
-        // removing fillers caused one training item per PDF page in V420-V422.
-        if(blankRows.length&&currentTarget>actual.length){
-          page.dataset.fmSlotTarget=String(currentTarget-1);
-          normalizeAnnualPageRows(page);changed=true;break;
-        }
-        // Only split actual training rows after every removable blank row has
-        // been exhausted and the real content still cannot fit above signatures.
+        const page=pages[i],metrics=annualNaturalMetrics(page),actual=metrics.actual;
+        if(!metrics.overflow)continue;
+        // V424: FM-CNHR-002 is a table form, not one course per sheet.
+        // Keep at least 10 real training rows together (the current 10-row HR example fits on one page),
+        // then split only when there are more rows and the natural content truly exceeds the table area.
+        if(actual.length<=10)continue;
         if(actual.length>1){
           const moving=actual[actual.length-1];
           let next=pages[i+1];
@@ -373,6 +381,8 @@
           const nextBody=next.querySelector('.fm-training tbody');
           nextBody?.querySelectorAll('tr.blank').forEach(row=>row.remove());
           if(nextBody)nextBody.insertBefore(moving,nextBody.firstChild);
+          page.dataset.fmSlotTarget=String(annualActualRows(page).length);
+          next.dataset.fmSlotTarget=String(annualActualRows(next).length);
           normalizeAnnualPageRows(page);normalizeAnnualPageRows(next);
           changed=true;break;
         }
@@ -380,6 +390,10 @@
       if(!changed)break;
       await wait(12);
     }
+    [...doc.querySelectorAll('.fm-page')].forEach(page=>{
+      page.dataset.fmSlotTarget=String(annualBestSlotTarget(page));
+      normalizeAnnualPageRows(page);
+    });
     const count=refreshAnnualPageLabels(doc);
     await wait(60);
     return count;

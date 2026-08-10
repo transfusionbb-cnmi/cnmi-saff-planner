@@ -48,6 +48,13 @@
   function isAutoDuty(code){ return !!String(code || '').trim() && !isManualDuty(code); }
   function dutiesOn(staffId, date){
     const d = norm(date);
+    try{
+      const fn=window.cnmiTradeSegmentsV217?.effectiveAssignmentsForStaffDate;
+      if(typeof fn==='function'){
+        const rows=fn(staffId,d,state.rosterAssignments||[]);
+        if(Array.isArray(rows))return rows;
+      }
+    }catch(_){ }
     return (state.rosterAssignments || [])
       .filter(a => String(a?.staff_id || '') === String(staffId || '') && norm(a?.duty_date) === d)
       .sort((a,b) => {
@@ -90,17 +97,30 @@
   function shiftWindowForDuties(date, duties){
     const d = norm(date);
     const list = duties || [];
+    const effective=list.filter(x=>Array.isArray(x?._effective_segments)&&x._effective_segments.length&&Number(x?._effective_hours)>0);
+    if(effective.length){
+      const order=['morning','afternoon','night'],set=new Set(),hours=Math.round(effective.reduce((sum,x)=>sum+Number(x._effective_hours||0),0)*100)/100;
+      effective.forEach(x=>(x._effective_segments||[]).forEach(s=>set.add(s)));
+      const segs=order.filter(s=>set.has(s)),key=segs.join(',');
+      if(key==='morning')return {start_time:'08:00',end_date:d,end_time:'16:00',hours,label:'08:00 - 16:00'};
+      if(key==='afternoon')return {start_time:'16:00',end_date:addDays(d,1),end_time:'00:00',hours,label:'16:00 - 00:00 (+1 วัน)'};
+      if(key==='night')return {start_time:'00:00',end_date:d,end_time:'08:00',hours,label:'00:00 - 08:00'};
+      if(key==='morning,afternoon')return {start_time:'08:00',end_date:addDays(d,1),end_time:'00:00',hours,label:'08:00 - 00:00 (+1 วัน)'};
+      if(key==='afternoon,night')return {start_time:'16:00',end_date:addDays(d,1),end_time:'08:00',hours,label:'16:00 - 08:00 (+1 วัน)'};
+      if(key==='morning,night')return {start_time:'00:00',end_date:d,end_time:'16:00',hours,label:'ดึก-เช้า รวม 16 ชม.'};
+      if(key==='morning,afternoon,night')return {start_time:'08:00',end_date:addDays(d,1),end_time:'08:00',hours,label:'08:00 - 08:00 (+1 วัน)'};
+      return {start_time:'08:00',end_date:d,end_time:'16:00',hours:hours||8,label:`${hours||8} ชั่วโมง`};
+    }
     if (hasChbd(list)) {
       const holiday = isWeekendHoliday(d);
       return { start_time: holiday ? '08:00' : '16:00', end_date: addDays(d, 1), end_time: '08:00', hours: holiday ? 24 : 16, label: holiday ? '08:00 - 08:00 (+1 วัน)' : '16:00 - 08:00 (+1 วัน)' };
     }
-    // ช9 or other 8-hour automatic duty.
     return { start_time: '08:00', end_date: d, end_time: '16:00', hours: 8, label: '08:00 - 16:00' };
   }
   function shiftWindowForStaffDate(staffId, date){ return shiftWindowForDuties(date, autoDuties(staffId, date)); }
   function autoNote(staffId, date, source){
     const duties = autoDuties(staffId, date);
-    const labels = duties.map(a => dutyName(a.duty_code)).filter(Boolean).join(', ');
+    const labels = duties.map(a => a?._effective_label || dutyName(a.duty_code)).filter(Boolean).join(', ');
     const win = shiftWindowForDuties(date, duties);
     return [`จำนวนเวลา OT: ${win.hours} ชั่วโมง`, `สร้างจากส่วนที่ 1 ยืนยันอยู่เวร${labels ? ` | เวรที่คิดอัตโนมัติ: ${labels}` : ''}`, `เวลาเวร ${win.label}`, source || VERSION].filter(Boolean).join(' | ').slice(0, 900);
   }
@@ -188,8 +208,9 @@
     if (!duties.length) return row;
     const win = shiftWindowForDuties(d, duties);
     const out = { ...row, start_time: win.start_time, end_date: win.end_date, end_time: win.end_time };
-    const note = String(out.note || '');
-    if (!/จำนวนเวลา\s*OT/i.test(note)) out.note = autoNote(row.staff_id, d, 'ปรับเวลาแสดงผล V221');
+    // V424: attendance OT must follow the effective owner after partial trade.
+    // Rebuild the explicit-hours note so seller/receiver does not keep the old full-shift hours.
+    out.note = autoNote(row.staff_id, d, 'ปรับตามเวรปัจจุบัน/ขายเวร V424');
     return out;
   }
   function normalizeOtStateRows(){
@@ -211,7 +232,7 @@
         const st = String(r.status || '').trim().toLowerCase();
         if (!['รออนุมัติ','pending',''].includes(st)) return false;
         const fixed = correctedOtRow(r);
-        return fixed.start_time !== r.start_time || norm(fixed.end_date) !== norm(r.end_date) || fixed.end_time !== r.end_time || (!/V221_DUTY_DATE/i.test(String(r.note || '')) && !/จำนวนเวลา\s*OT/i.test(String(r.note || '')));
+        return fixed.start_time !== r.start_time || norm(fixed.end_date) !== norm(r.end_date) || fixed.end_time !== r.end_time || String(fixed.note||'') !== String(r.note||'');
       });
       for (const r of rows.slice(0, 30)) {
         try {
@@ -246,7 +267,7 @@
     else if (att.length && auto.length) status = 'ยืนยันแล้ว แต่ยังไม่มีรายการ OT';
     else if (!auto.length && manual.length) status = 'ต้องกรอกเวลาจริง';
     else if (!duties.length) status = 'ไม่มีเวรที่ต้องยืนยัน';
-    const dutyNames = duties.length ? duties.map(a => dutyName(a.duty_code)).join(' / ') : '-';
+    const dutyNames = duties.length ? duties.map(a => a?._effective_label || dutyName(a.duty_code)).join(' / ') : '-';
     const timeText = auto.length ? (ch3.length ? `${win.label} (เวรหลัก 8 ชม.)` : win.label) : (manual.length ? 'กรอกเวลาจริงในส่วนที่ 2' : '-');
     const missingOt = att.length && !ot.length && auto.length;
     const canCheck = auto.length && !latestOt && d <= today();
@@ -270,9 +291,12 @@
   function renderMyMonthDuties(){
     const staffId = sid();
     const key = state.myDutyMonthFilter || state.monthKey || today().slice(0,7);
-    const rows = (state.rosterAssignments || [])
-      .filter(a => String(a?.staff_id || '') === String(staffId || '') && norm(a?.duty_date).startsWith(key))
-      .sort((a,b) => norm(a?.duty_date).localeCompare(norm(b?.duty_date)) || String(a?.duty_code || '').localeCompare(String(b?.duty_code || ''), 'th'));
+    const rows = (()=>{
+      const out=[];
+      const [y,m]=String(key).split('-').map(Number),last=new Date(y,m,0).getDate();
+      for(let day=1;day<=last;day++)out.push(...dutiesOn(staffId,`${key}-${String(day).padStart(2,'0')}`));
+      return out.sort((a,b)=>norm(a?.duty_date).localeCompare(norm(b?.duty_date))||String(a?.duty_code||'').localeCompare(String(b?.duty_code||''),'th'));
+    })();
     const body = rows.map(a => {
       const d = norm(a.duty_date);
       const auto = isAutoDuty(a.duty_code);
@@ -281,7 +305,7 @@
       const st = ot ? statusText(ot) : (att && auto ? 'ยืนยันแล้ว แต่ยังไม่มีรายการ OT' : (auto ? 'ยังไม่ได้ยืนยัน' : 'บันทึกเวลาจริงถ้าจะเบิก'));
       const time = auto ? shiftWindowForDuties(d, [a]).label : 'เวลาจริง';
       const hint = isCh3Composite(a.duty_code) ? 'ช3A/ช3B: เวรหลัก 8 ชม. + ส่วน ช4 กรอกเวลาจริงเพิ่ม' : (auto ? 'เวรหลัก: ต้องมีรายการรอ Admin อนุมัติ' : 'ช4: ไม่คิด 8 ชม. อัตโนมัติ');
-      return `<tr><td>${thDate(d)}</td><td><b>${esc(dutyName(a.duty_code))}</b></td><td>${esc(time)}</td><td>${b(st, statusCls(st))}<br><span class="muted">${esc(hint)}</span></td></tr>`;
+      return `<tr><td>${thDate(d)}</td><td><b>${esc(a?._effective_label || dutyName(a.duty_code))}</b></td><td>${esc(time)}</td><td>${b(st, statusCls(st))}<br><span class="muted">${esc(hint)}</span></td></tr>`;
     }).join('');
     return `<div class="card wide-card v221-my-month-card" style="grid-column:1/-1;">
       <div class="section-title"><div><h3>เวรของฉันเดือนนี้</h3><p class="hint">เลือกวันที่ในส่วนที่ 1 เพื่อกดยืนยันย้อนหลังได้</p></div><label>เดือน <input id="myDutyMonthFilter" type="month" value="${esc(key)}"></label></div>
