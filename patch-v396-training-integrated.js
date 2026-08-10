@@ -308,6 +308,77 @@
     if(doc.fonts?.ready)await Promise.race([doc.fonts.ready,wait(2500)]);
     await wait(120);
   }
+  function annualActualRows(page){return [...(page?.querySelectorAll('.fm-training tbody tr:not(.blank)')||[])];}
+  function annualBlankRow(doc){
+    const tr=doc.createElement('tr');tr.className='blank';
+    tr.innerHTML='<td></td><td></td><td></td><td></td><td></td><td></td><td></td>';
+    return tr;
+  }
+  function normalizeAnnualPageRows(page){
+    const tbody=page?.querySelector('.fm-training tbody');if(!tbody)return;
+    tbody.querySelectorAll('tr.blank').forEach(row=>row.remove());
+    const actual=annualActualRows(page),requestedRaw=Number(page.dataset.fmSlotTarget||20),requested=Number.isFinite(requestedRaw)?Math.max(1,Math.min(20,Math.round(requestedRaw))):20,slotTarget=Math.max(actual.length,requested);
+    page.dataset.fmSlotTarget=String(requested);
+    for(let i=actual.length;i<slotTarget;i++)tbody.appendChild(annualBlankRow(page.ownerDocument));
+  }
+  function annualTrainingOverflows(page){
+    const actual=annualActualRows(page);if(actual.length>20)return true;
+    const table=page?.querySelector('.fm-training'),thead=table?.querySelector('thead'),tbody=table?.querySelector('tbody'),signatures=page?.querySelector('.signatures');
+    if(!table||!thead||!tbody||!signatures)return false;
+    const tableRect=table.getBoundingClientRect(),signatureRect=signatures.getBoundingClientRect(),capacity=Math.max(0,signatureRect.top-tableRect.top);
+    const bodyRows=[...tbody.querySelectorAll('tr')];
+    const contentHeight=thead.getBoundingClientRect().height+bodyRows.reduce((sum,row)=>sum+row.getBoundingClientRect().height,0);
+    const lastRow=bodyRows[bodyRows.length-1],lastBottom=lastRow?lastRow.getBoundingClientRect().bottom:tableRect.top;
+    return contentHeight>capacity+1.5||lastBottom>signatureRect.top+1.5;
+  }
+  function createAnnualContinuationPage(sourcePage){
+    const page=sourcePage.cloneNode(true),tbody=page.querySelector('.fm-training tbody');
+    if(tbody)tbody.innerHTML='';
+    page.dataset.fmSlotTarget='20';
+    normalizeAnnualPageRows(page);
+    return page;
+  }
+  function refreshAnnualPageLabels(doc){
+    const pages=[...doc.querySelectorAll('.fm-page')];let rowNo=1;
+    pages.forEach((page,index)=>{
+      annualActualRows(page).forEach(row=>{const first=row.querySelector('td');if(first)first.textContent=String(rowNo++);});
+      const number=page.querySelector('.page-number');if(number)number.textContent=`หน้าที่ ${index+1} ของ ${pages.length} หน้า`;
+    });
+    return pages.length;
+  }
+  async function rebalanceAnnualTrainingPages(doc){
+    let guard=0;
+    [...doc.querySelectorAll('.fm-page')].forEach(page=>{page.dataset.fmSlotTarget='20';normalizeAnnualPageRows(page);});
+    while(guard++<240){
+      const pages=[...doc.querySelectorAll('.fm-page')];let changed=false;
+      for(let i=0;i<pages.length;i++){
+        const page=pages[i];normalizeAnnualPageRows(page);
+        if(!annualTrainingOverflows(page))continue;
+        const actual=annualActualRows(page),tbody=page.querySelector('.fm-training tbody');
+        if(actual.length>1){
+          const moving=actual[actual.length-1];
+          let next=pages[i+1];
+          if(!next){next=createAnnualContinuationPage(page);page.after(next);}
+          const nextBody=next.querySelector('.fm-training tbody');
+          nextBody?.querySelectorAll('tr.blank').forEach(row=>row.remove());
+          if(nextBody)nextBody.insertBefore(moving,nextBody.firstChild);
+          normalizeAnnualPageRows(page);normalizeAnnualPageRows(next);
+          changed=true;break;
+        }
+        const blankRows=[...tbody.querySelectorAll('tr.blank')];
+        const currentTarget=Number(page.dataset.fmSlotTarget||20);
+        if(blankRows.length&&currentTarget>actual.length){
+          page.dataset.fmSlotTarget=String(currentTarget-1);
+          normalizeAnnualPageRows(page);changed=true;break;
+        }
+      }
+      if(!changed)break;
+      await wait(12);
+    }
+    const count=refreshAnnualPageLabels(doc);
+    await wait(60);
+    return count;
+  }
   async function createAnnualFrame(bundle){
     const frame=document.createElement('iframe');
     frame.setAttribute('aria-hidden','true');
@@ -318,6 +389,7 @@
     doc.write(`<html><head><meta charset="utf-8"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"><style>${bundle.styles}</style></head><body>${bundle.sections}</body></html>`);
     doc.close();
     await waitForFrameAssets(doc);
+    bundle.pageCount=await rebalanceAnnualTrainingPages(doc);
     return frame;
   }
   function dataUrlBytes(dataUrl){
