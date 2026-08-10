@@ -357,7 +357,39 @@
   }
   function assignmentRowsForMonth(month){
     const key = String(month || '').slice(0,7);
-    return (state.rosterAssignments || []).filter(a => normDate(a?.duty_date).startsWith(key) && a?.staff_id).sort((a,b) => normDate(a?.duty_date).localeCompare(normDate(b?.duty_date)) || staffName(a?.staff_id).localeCompare(staffName(b?.staff_id), 'th'));
+    const base = (state.rosterAssignments || []).filter(a => normDate(a?.duty_date).startsWith(key) && a?.staff_id);
+    // V425: the Admin tracking page must use the same effective owner/segment
+    // view as the monthly roster after a partial shift sale.  A completed
+    // partial sale keeps the original roster row in Supabase, so reading only
+    // rosterAssignments incorrectly shows the seller as owning the full shift.
+    try {
+      const fn = window.cnmiTradeSegmentsV217?.effectiveAssignmentsForStaffDate;
+      if (typeof fn === 'function' && base.length) {
+        const staffIds = new Set();
+        base.forEach(a => { if (a?.staff_id) staffIds.add(String(a.staff_id)); });
+        (state.tradeRequests || []).forEach(r => {
+          if (String(r?.status || '') !== 'completed') return;
+          if (r?.requester_id) staffIds.add(String(r.requester_id));
+          if (r?.receiver_id) staffIds.add(String(r.receiver_id));
+        });
+        const dates = [...new Set(base.map(a => normDate(a?.duty_date)).filter(Boolean))].sort();
+        const effective = [];
+        dates.forEach(date => staffIds.forEach(staffId => {
+          const rows = fn(staffId, date, state.rosterAssignments || []);
+          if (Array.isArray(rows) && rows.length) effective.push(...rows);
+        }));
+        // Deduplicate defensively.  Effective rows may share the source
+        // assignment id, but seller/receiver/kind/segments are distinct.
+        const seen = new Set();
+        const dedup = effective.filter(a => {
+          const k = [a?.id || '', normDate(a?.duty_date), a?.staff_id || '', a?.duty_code || '', a?._effective_kind || '', (a?._effective_segments || []).join(','), a?._effective_trade_request_id || ''].join('|');
+          if (seen.has(k)) return false;
+          seen.add(k); return true;
+        });
+        if (dedup.length) return dedup.sort((a,b) => normDate(a?.duty_date).localeCompare(normDate(b?.duty_date)) || staffName(a?.staff_id).localeCompare(staffName(b?.staff_id), 'th'));
+      }
+    } catch (err) { console.warn('V425 effective Admin tracking fallback', err); }
+    return base.sort((a,b) => normDate(a?.duty_date).localeCompare(normDate(b?.duty_date)) || staffName(a?.staff_id).localeCompare(staffName(b?.staff_id), 'th'));
   }
   function actionButtonsForCh4(a, options={}){
     if (!isCh4(a?.duty_code)) return '-';
@@ -389,7 +421,7 @@
       const nameCell = isCoverForFilter
         ? `<button class="link-btn v234-staff-link" type="button" data-v234-show-staff="${esc(staffFilter)}">${staffPillSafe(staffFilter)}</button><br><span class="muted">รับแทน ${esc(staffName(a.staff_id))}</span>`
         : `<button class="link-btn v234-staff-link" type="button" data-v234-show-staff="${esc(a.staff_id)}">${staffPillSafe(a.staff_id)}</button>`;
-      return `<tr data-v234-duty-row="${esc(focusStaffId)}"><td>${fmtDate(d)}</td><td>${nameCell}</td><td><b>${esc(dutyLabel(a.duty_code))}</b>${isCh4Row ? '<br><span class="muted">งานปั่นเลือด / ไม่คิด 8 ชม. อัตโนมัติ</span>' : ''}</td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${buildDutyNoteCell(a, info, focusStaffId)}</td><td>${isCh4Row ? actionButtonsForCh4(a) : '<span class="muted">-</span>'}</td></tr>`;
+      return `<tr data-v234-duty-row="${esc(focusStaffId)}"><td>${fmtDate(d)}</td><td>${nameCell}</td><td><b>${esc(a?._effective_label || dutyLabel(a.duty_code))}</b>${a?._effective_kind === 'receiver-part' ? '<br><span class="muted">รับช่วงเวรที่ขายมา</span>' : (a?._effective_kind === 'owner-remain' ? '<br><span class="muted">ช่วงเวรที่เหลือหลังขาย</span>' : '')}${isCh4Row ? '<br><span class="muted">งานปั่นเลือด / ไม่คิด 8 ชม. อัตโนมัติ</span>' : ''}</td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${buildDutyNoteCell(a, info, focusStaffId)}</td><td>${isCh4Row ? actionButtonsForCh4(a) : '<span class="muted">-</span>'}</td></tr>`;
     }).join('');
     const stat = ['ยังไม่ยืนยัน','ยืนยันแล้ว','รออนุมัติ','อนุมัติแล้ว','มีคนอยู่แทน','ไม่เบิก'].map(k => `<span class="badge ${statusClass(k)}">${esc(k)} ${Number(counts[k] || 0)}</span>`).join(' ');
     const activeHint = staffFilter ? `<span class="badge blue">กำลังดู: ${esc(staffName(staffFilter))}</span>` : '';
@@ -411,7 +443,7 @@
     const body = rows.map(a => {
       const d = normDate(a.duty_date);
       const info = dutyStatusInfo(a);
-      return `<tr><td>${fmtDate(d)}</td><td><b>${esc(dutyLabel(a.duty_code))}</b></td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${buildDutyNoteCell(a, info, staffId)}</td><td>${isCh4(a.duty_code) ? actionButtonsForCh4(a) : '-'}</td></tr>`;
+      return `<tr><td>${fmtDate(d)}</td><td><b>${esc(a?._effective_label || dutyLabel(a.duty_code))}</b>${a?._effective_kind === 'receiver-part' ? '<br><span class="muted">รับช่วงเวรที่ขายมา</span>' : (a?._effective_kind === 'owner-remain' ? '<br><span class="muted">ช่วงเวรที่เหลือหลังขาย</span>' : '')}</td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${buildDutyNoteCell(a, info, staffId)}</td><td>${isCh4(a.duty_code) ? actionButtonsForCh4(a) : '-'}</td></tr>`;
     }).join('');
     return `<div id="v234StaffDutyDetail" class="v234-staff-detail"><div class="table-wrap"><table><thead><tr><th>วันที่</th><th>เวร</th><th>สถานะ</th><th>หมายเหตุ/OT</th><th>จัดการ</th></tr></thead><tbody>${body || '<tr><td colspan="5">ไม่มีเวรในเดือนนี้</td></tr>'}</tbody></table></div></div>`;
   }
@@ -426,7 +458,7 @@
     const body = ch4Rows.map(a => {
       const info = ch4StatusInfo(a);
       const rec = info.rec || {};
-      return `<tr><td>${fmtDate(a.duty_date)}</td><td>${staffPillSafe(a.staff_id)}</td><td><b>${esc(dutyLabel(a.duty_code))}</b></td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${rec.covered_by_staff_id ? staffPillSafe(rec.covered_by_staff_id) : '-'}</td><td>${buildDutyNoteCell(a, info, a.staff_id)}</td><td>${actionButtonsForCh4(a, { readOnly })}</td></tr>`;
+      return `<tr><td>${fmtDate(a.duty_date)}</td><td>${staffPillSafe(a.staff_id)}</td><td><b>${esc(a?._effective_label || dutyLabel(a.duty_code))}</b>${a?._effective_kind === 'receiver-part' ? '<br><span class="muted">รับช่วงเวรที่ขายมา</span>' : (a?._effective_kind === 'owner-remain' ? '<br><span class="muted">ช่วงเวรที่เหลือหลังขาย</span>' : '')}</td><td>${badgeSafe(info.text, statusClass(info.text))}</td><td>${rec.covered_by_staff_id ? staffPillSafe(rec.covered_by_staff_id) : '-'}</td><td>${buildDutyNoteCell(a, info, a.staff_id)}</td><td>${actionButtonsForCh4(a, { readOnly })}</td></tr>`;
     }).join('');
     return `<div class="card wide-card v234-ch4-shared-card" style="grid-column:1/-1;">
       <div class="section-title"><div><h3>สถานะ ช4 / งานปั่นเลือด รายเดือน</h3><p class="hint">${readOnly ? 'หน้านี้เป็นภาพรวมอ่านอย่างเดียว หากต้องบันทึก ช4 ให้ใช้การ์ดเวรของฉัน/รายการที่ระบบเปิดให้ดำเนินการโดยตรง' : 'Admin สามารถแก้สถานะ ช4 ได้จากหน้านี้'}</p></div></div>
