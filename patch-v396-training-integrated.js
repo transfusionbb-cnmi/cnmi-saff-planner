@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V421
+/* CNMI Staff Planner V426
  * Training is integrated into the existing activity form.  There is no second
  * "add training activity" page and no new-staff form in this version.
  */
@@ -339,8 +339,10 @@
   }
   function annualBestSlotTarget(page){
     const m=annualNaturalMetrics(page),actualCount=m.actual.length;
-    if(actualCount<=10)return 20;
-    if(!m.capacity)return Math.min(20,Math.max(actualCount,20));
+    // V426: blank rows are decorative only. Add them only when the remaining
+    // table area can really hold them, so a tall course row can never push
+    // into the reserved signature area.
+    if(!m.capacity)return actualCount;
     const free=Math.max(0,m.capacity-m.contentHeight);
     const blanks=Math.max(0,Math.min(20-actualCount,Math.floor((free+0.5)/Math.max(1,m.blankMin))));
     return Math.max(actualCount,Math.min(20,actualCount+blanks));
@@ -370,10 +372,10 @@
       for(let i=0;i<pages.length;i++){
         const page=pages[i],metrics=annualNaturalMetrics(page),actual=metrics.actual;
         if(!metrics.overflow)continue;
-        // V424: FM-CNHR-002 is a table form, not one course per sheet.
-        // Keep at least 10 real training rows together (the current 10-row HR example fits on one page),
-        // then split only when there are more rows and the natural content truly exceeds the table area.
-        if(actual.length<=10)continue;
+        // V426: the signature block is a hard reserved area. If the natural
+        // height of the real rows exceeds the table area, move the last row
+        // to the next page regardless of row count. This prevents long titles
+        // or organizer names from growing downward over the signature fields.
         if(actual.length>1){
           const moving=actual[actual.length-1];
           let next=pages[i+1];
