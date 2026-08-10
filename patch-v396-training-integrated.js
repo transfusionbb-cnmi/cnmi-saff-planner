@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V419
+/* CNMI Staff Planner V421
  * Training is integrated into the existing activity form.  There is no second
  * "add training activity" page and no new-staff form in this version.
  */
@@ -308,6 +308,77 @@
     if(doc.fonts?.ready)await Promise.race([doc.fonts.ready,wait(2500)]);
     await wait(120);
   }
+  function annualActualRows(page){return [...(page?.querySelectorAll('.fm-training tbody tr:not(.blank)')||[])];}
+  function annualBlankRow(doc){
+    const tr=doc.createElement('tr');tr.className='blank';
+    tr.innerHTML='<td></td><td></td><td></td><td></td><td></td><td></td><td></td>';
+    return tr;
+  }
+  function normalizeAnnualPageRows(page){
+    const tbody=page?.querySelector('.fm-training tbody');if(!tbody)return;
+    tbody.querySelectorAll('tr.blank').forEach(row=>row.remove());
+    const actual=annualActualRows(page),requestedRaw=Number(page.dataset.fmSlotTarget||20),requested=Number.isFinite(requestedRaw)?Math.max(1,Math.min(20,Math.round(requestedRaw))):20,slotTarget=Math.max(actual.length,requested);
+    page.dataset.fmSlotTarget=String(requested);
+    for(let i=actual.length;i<slotTarget;i++)tbody.appendChild(annualBlankRow(page.ownerDocument));
+  }
+  function annualTrainingOverflows(page){
+    const actual=annualActualRows(page);if(actual.length>20)return true;
+    const table=page?.querySelector('.fm-training'),thead=table?.querySelector('thead'),tbody=table?.querySelector('tbody'),signatures=page?.querySelector('.signatures');
+    if(!table||!thead||!tbody||!signatures)return false;
+    const tableRect=table.getBoundingClientRect(),signatureRect=signatures.getBoundingClientRect(),capacity=Math.max(0,signatureRect.top-tableRect.top);
+    const bodyRows=[...tbody.querySelectorAll('tr')];
+    const contentHeight=thead.getBoundingClientRect().height+bodyRows.reduce((sum,row)=>sum+row.getBoundingClientRect().height,0);
+    const lastRow=bodyRows[bodyRows.length-1],lastBottom=lastRow?lastRow.getBoundingClientRect().bottom:tableRect.top;
+    return contentHeight>capacity+1.5||lastBottom>signatureRect.top+1.5;
+  }
+  function createAnnualContinuationPage(sourcePage){
+    const page=sourcePage.cloneNode(true),tbody=page.querySelector('.fm-training tbody');
+    if(tbody)tbody.innerHTML='';
+    page.dataset.fmSlotTarget='20';
+    normalizeAnnualPageRows(page);
+    return page;
+  }
+  function refreshAnnualPageLabels(doc){
+    const pages=[...doc.querySelectorAll('.fm-page')];let rowNo=1;
+    pages.forEach((page,index)=>{
+      annualActualRows(page).forEach(row=>{const first=row.querySelector('td');if(first)first.textContent=String(rowNo++);});
+      const number=page.querySelector('.page-number');if(number)number.textContent=`หน้าที่ ${index+1} ของ ${pages.length} หน้า`;
+    });
+    return pages.length;
+  }
+  async function rebalanceAnnualTrainingPages(doc){
+    let guard=0;
+    [...doc.querySelectorAll('.fm-page')].forEach(page=>{page.dataset.fmSlotTarget='20';normalizeAnnualPageRows(page);});
+    while(guard++<240){
+      const pages=[...doc.querySelectorAll('.fm-page')];let changed=false;
+      for(let i=0;i<pages.length;i++){
+        const page=pages[i];normalizeAnnualPageRows(page);
+        if(!annualTrainingOverflows(page))continue;
+        const actual=annualActualRows(page),tbody=page.querySelector('.fm-training tbody');
+        if(actual.length>1){
+          const moving=actual[actual.length-1];
+          let next=pages[i+1];
+          if(!next){next=createAnnualContinuationPage(page);page.after(next);}
+          const nextBody=next.querySelector('.fm-training tbody');
+          nextBody?.querySelectorAll('tr.blank').forEach(row=>row.remove());
+          if(nextBody)nextBody.insertBefore(moving,nextBody.firstChild);
+          normalizeAnnualPageRows(page);normalizeAnnualPageRows(next);
+          changed=true;break;
+        }
+        const blankRows=[...tbody.querySelectorAll('tr.blank')];
+        const currentTarget=Number(page.dataset.fmSlotTarget||20);
+        if(blankRows.length&&currentTarget>actual.length){
+          page.dataset.fmSlotTarget=String(currentTarget-1);
+          normalizeAnnualPageRows(page);changed=true;break;
+        }
+      }
+      if(!changed)break;
+      await wait(12);
+    }
+    const count=refreshAnnualPageLabels(doc);
+    await wait(60);
+    return count;
+  }
   async function createAnnualFrame(bundle){
     const frame=document.createElement('iframe');
     frame.setAttribute('aria-hidden','true');
@@ -318,6 +389,7 @@
     doc.write(`<html><head><meta charset="utf-8"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"><style>${bundle.styles}</style></head><body>${bundle.sections}</body></html>`);
     doc.close();
     await waitForFrameAssets(doc);
+    bundle.pageCount=await rebalanceAnnualTrainingPages(doc);
     return frame;
   }
   function dataUrlBytes(dataUrl){
@@ -455,8 +527,8 @@
       if(button)button.disabled=true;
       const built=await buildAnnualTrainingPdf(items,{staffId:actor(),year:selectedTrainingYear()},text=>{if(button)button.textContent=text;});
       triggerBlobDownload(new Blob([built.bytes],{type:'application/pdf'}),`FM-CNHR-002_${built.bundle.personName}_${built.bundle.year+543}_พร้อม-Certificate.pdf`);
-      if(built.errors.length){console.warn('V419 certificate merge skipped',built.errors);showToast(`สร้าง PDF แล้ว แต่แนบ Certificate ไม่สำเร็จ ${built.errors.length} ไฟล์`);}else showToast(`สร้าง PDF ชุดอบรมแล้ว • แนบ Certificate ${built.certificateCount} ไฟล์`);
-    }catch(error){console.error('V419 annual training PDF',error);showToast(`สร้าง PDF ไม่สำเร็จ: ${error?.message||String(error)}`);}finally{if(button){button.disabled=false;button.textContent=originalText||'Export PDF ชุดอบรมประจำปี';}}
+      if(built.errors.length){console.warn('V421 certificate merge skipped',built.errors);showToast(`สร้าง PDF แล้ว แต่แนบ Certificate ไม่สำเร็จ ${built.errors.length} ไฟล์`);}else showToast(`สร้าง PDF ชุดอบรมแล้ว • แนบ Certificate ${built.certificateCount} ไฟล์`);
+    }catch(error){console.error('V421 annual training PDF',error);showToast(`สร้าง PDF ไม่สำเร็จ: ${error?.message||String(error)}`);}finally{if(button){button.disabled=false;button.textContent=originalText||'Export PDF ชุดอบรมประจำปี';}}
   }
   function adminExportYear(){const from=Number(String(S().v396From||'').slice(0,4)),to=Number(String(S().v396To||'').slice(0,4));return from&&from===to?from:0;}
   async function exportAdminAnnualTrainingPackage(button){
@@ -481,8 +553,8 @@
         }
         if(button)button.textContent='กำลังรวมไฟล์ ZIP…';const zipBlob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});triggerBlobDownload(zipBlob,`FM-CNHR-002_เจ้าหน้าที่ทุกคน_${year+543}_พร้อม-Certificate.zip`);
       }
-      if(errors.length){console.warn('V419 admin certificate merge skipped',errors);showToast(`Export สำเร็จ แต่แนบ Certificate ไม่สำเร็จ ${errors.length} ไฟล์`);}else showToast(`Export FM-CNHR-002 สำเร็จ ${groups.length} คน`);
-    }catch(error){console.error('V419 admin annual training export',error);showToast(`Export ไม่สำเร็จ: ${error?.message||String(error)}`);}finally{if(button){button.disabled=false;button.textContent=originalText||(allPeople?'Export PDF ทุกคน':'Export PDF บุคลากรที่เลือก');}}
+      if(errors.length){console.warn('V421 admin certificate merge skipped',errors);showToast(`Export สำเร็จ แต่แนบ Certificate ไม่สำเร็จ ${errors.length} ไฟล์`);}else showToast(`Export FM-CNHR-002 สำเร็จ ${groups.length} คน`);
+    }catch(error){console.error('V421 admin annual training export',error);showToast(`Export ไม่สำเร็จ: ${error?.message||String(error)}`);}finally{if(button){button.disabled=false;button.textContent=originalText||(allPeople?'Export PDF ทุกคน':'Export PDF บุคลากรที่เลือก');}}
   }
   function printMyAnnualForm(items,button){return exportMyAnnualTrainingPackage(items,button);}
 
