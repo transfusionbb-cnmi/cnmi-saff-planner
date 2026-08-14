@@ -37,7 +37,8 @@
   function trainingRows() { return Array.isArray(S().trainingRecords) ? S().trainingRecords.filter(x => x.is_included !== false && x.form_type === 'existing') : []; }
   function activity(id) { return (S().activities || []).find(x => idEq(x.id,id)); }
   function rowItems() { return trainingRows().map(r => ({ record:r, activity:activity(r.activity_id) })).filter(x => x.activity); }
-  function status(r) { return r.result_text || r.application_text || r.certificate_path ? 'กรอกข้อมูลแล้ว' : 'รอกรอกข้อมูล'; }
+  function trainingRecordComplete(r) { return Boolean(String(r?.result_text||'').trim() && String(r?.application_text||'').trim()); }
+  function status(r) { return trainingRecordComplete(r) ? 'กรอกข้อมูลแล้ว' : 'รอกรอกข้อมูล'; }
   function employment(id) { const x=staffOf(id); return x.employment_start_date || x.start_date || ''; }
   const ORGANIZER_MARKER_RE = /\[\[FM-CNHR-002-ORGANIZER:([^\]]*)\]\]\s*/i;
   const BATCH_MARKER_RE = /\[\[FM-CNHR-002-BATCH:([^\]]*)\]\]\s*/i;
@@ -184,7 +185,7 @@
         </div>
         <div class="v416-record-bottom">
           <label class="v416-certificate-field"><span class="v416-field-title">Certificate <small>(ไม่บังคับ)</small></span><input type="file" name="certificate" accept=".pdf,image/*">${r.certificate_name?`<small class="v416-file-current">ไฟล์ปัจจุบัน: ${esc(r.certificate_name)}</small>`:'<small>รองรับ PDF หรือรูปภาพ</small>'}</label>
-          <div class="v416-save-area"><small>${pending?'กรอกอย่างน้อย 1 ช่อง แล้วกดบันทึก':'แก้ไขข้อมูลแล้วกดบันทึกได้ทันที'}</small><button class="primary-btn" type="submit">${pending?'บันทึกผลการอบรม':'บันทึกการแก้ไข'}</button></div>
+          <div class="v416-save-area"><small>${pending?'กรอก “ผล/สิ่งที่ได้รับ” และ “การนำความรู้ไปใช้” ให้ครบ จึงจะ Export PDF ประจำปีได้':'ข้อมูลรายการนี้ครบแล้ว • แก้ไขแล้วกดบันทึกได้ทันที'}</small><button class="primary-btn" type="submit">${pending?'บันทึกผลการอบรม':'บันทึกการแก้ไข'}</button></div>
         </div>
       </form>
     </article>`;
@@ -213,11 +214,12 @@
     return rowItems().filter(x=>{if(!idEq(x.record.staff_id,actor()))return false;const start=dateKey(x.activity.start_date),end=dateKey(x.activity.end_date)||start;return end>=range.from&&start<=range.to;}).sort((a,b)=>dateKey(a.activity.start_date).localeCompare(dateKey(b.activity.start_date)));
   }
   function myTrainingFilters(){
-    const selected=myTrainingStatus(),year=selectedTrainingYear(),ready=isMyTrainingFilterReady(),annualRows=ready?myTrainingAnnualRows():[],canExport=ready&&annualRows.length>0;
+    const selected=myTrainingStatus(),year=selectedTrainingYear(),ready=isMyTrainingFilterReady(),annualRows=ready?myTrainingAnnualRows():[],incomplete=annualRows.filter(x=>!trainingRecordComplete(x.record)),canExport=ready&&annualRows.length>0&&incomplete.length===0;
+    const exportGate=!ready?'':!annualRows.length?'<small class="v439-export-gate v439-export-gate-warn">ยังไม่มีรายการอบรมในปีที่เลือก</small>':incomplete.length?`<small class="v439-export-gate v439-export-gate-warn">ยัง Export ไม่ได้ • กรุณากรอกให้ครบทั้งปี (ค้าง ${incomplete.length}/${annualRows.length} รายการ)</small>`:`<small class="v439-export-gate v439-export-gate-ok">กรอกครบ ${annualRows.length}/${annualRows.length} รายการ • พร้อม Export</small>`;
     return `<div class="toolbar compact-filter v396-filters v402-my-training-filters v407-year-filter v416-filter-gate v417-my-training-filters">
       <label><span class="v417-control-label">สถานะข้อมูล</span><select id="v402MyStatus"><option value="รอกรอกข้อมูล" ${selected==='รอกรอกข้อมูล'?'selected':''}>รอกรอกข้อมูล</option><option value="กรอกข้อมูลแล้ว" ${selected==='กรอกข้อมูลแล้ว'?'selected':''}>กรอกข้อมูลแล้ว</option><option value="all" ${selected==='all'?'selected':''}>ทั้งหมด</option></select></label>
       <label><span class="v417-control-label">ปีแบบฟอร์ม</span><select id="v407TrainingYear"><option value="" ${!year?'selected':''} disabled>เลือกปีแบบฟอร์ม</option>${trainingYearOptions().map(y=>`<option value="${y}" ${y===year?'selected':''}>พ.ศ. ${y+543}</option>`).join('')}</select></label>
-      <div class="v402-export-wrap"><span class="v417-control-label">ส่งออกเอกสาร</span><button class="primary-btn" type="button" data-v402-my-export ${canExport?'':'disabled'}>Export PDF ชุดอบรมประจำปี</button></div>
+      <div class="v402-export-wrap"><span class="v417-control-label">ส่งออกเอกสาร</span><button class="primary-btn" type="button" data-v402-my-export ${canExport?'':'disabled'}>Export PDF ชุดอบรมประจำปี</button>${exportGate}</div>
     </div>`;
   }
   function myTrainingRows(){
@@ -552,6 +554,12 @@
   async function exportMyAnnualTrainingPackage(items,button){
     if(!isMyTrainingFilterReady())return showToast('กรุณาเลือกสถานะข้อมูลและปีแบบฟอร์มก่อน');
     if(!items.length)return showToast(`ไม่พบรายการอบรมในปี ${selectedTrainingYear()+543}`);
+    const incomplete=items.filter(x=>!trainingRecordComplete(x.record));
+    if(incomplete.length){
+      const year=selectedTrainingYear()+543;
+      const examples=incomplete.slice(0,2).map(x=>String(x.activity?.title||'').trim()).filter(Boolean);
+      return showToast(`ยัง Export PDF ไม่ได้ • กรุณากรอก “ผล/สิ่งที่ได้รับ” และ “การนำความรู้ไปใช้” ให้ครบทุกกิจกรรมในปี พ.ศ. ${year} • ค้าง ${incomplete.length} รายการ${examples.length?' เช่น '+examples.join(', '):''}`);
+    }
     const originalText=button?.textContent||'';
     try{
       if(button)button.disabled=true;
@@ -613,6 +621,7 @@
   const oldEventText=window.eventText||eventText;window.eventText=function(type){return oldEventText(type);};
   const style=document.createElement('style');style.textContent=`
     .v396-participants{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:240px;overflow:auto}.v396-participant{display:flex;gap:8px;padding:8px;border:1px solid #d9e4ed;border-radius:10px;background:#fff}.v396-participant input{width:auto}.v396-participant span{display:grid}.v396-participant small{color:#68798a}.v405-training-meta-grid{display:grid;grid-template-columns:minmax(260px,1.15fr) minmax(220px,1fr) minmax(170px,.72fr);gap:12px;align-items:stretch}.v396-training-check{display:flex;gap:9px;align-items:flex-start;padding:12px;border:1px solid #9bc8e2;border-radius:12px;background:#f2faff;font-weight:700;margin:0}.v396-training-check input{width:auto;margin-top:4px}.v396-training-check small{display:block;font-weight:400;color:#587087}.v405-training-field{display:grid;align-content:start;gap:5px;padding:10px 12px;border:1px solid #d9e4ed;border-radius:12px;background:#fff;margin:0}.v405-training-field input{margin-top:0}.v405-required-mark{display:none;color:#c93b52}.v405-training-field.v405-required{border-color:#75bce6;background:#f8fcff}.v405-training-field.v405-required .v405-required-mark{display:inline}
+    .v439-export-gate{display:block;margin-top:7px;font-size:12px;line-height:1.35;font-weight:700}.v439-export-gate-warn{color:#a85a00}.v439-export-gate-ok{color:#18794e}
     .v396-record-list{display:grid;gap:16px;margin-top:16px}.v396-record textarea{width:100%;resize:vertical}.v396-filters{align-items:end}.v401-my-training-filters{grid-template-columns:repeat(2,minmax(180px,260px));justify-content:start}.v402-my-training-filters{display:grid;grid-template-columns:minmax(180px,230px) minmax(200px,250px) minmax(280px,1fr);align-items:end;gap:12px}.v402-export-wrap{display:grid;gap:5px;align-content:end}.v402-export-wrap button{width:100%}.v402-export-wrap button:disabled,.section-title button:disabled{opacity:.48;cursor:not-allowed}.v396-halfday{display:block;font-size:10px;font-weight:700}
     .v417-my-training-filters{align-items:start}.v417-my-training-filters>label,.v417-my-training-filters>.v402-export-wrap{display:grid;grid-template-rows:auto 42px;gap:6px;align-content:start;margin:0}.v417-control-label{display:block;font-weight:700;color:#263e50;line-height:1.2}.v417-my-training-filters select,.v417-my-training-filters button{height:42px;min-height:42px;margin:0}.v417-training-pagination{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:14px}.v417-training-pagination span{min-width:78px;text-align:center;color:#607789;font-size:.86rem;font-weight:700}.v417-page-btn{min-height:32px!important;padding:5px 12px!important;border-radius:9px!important;font-size:.84rem!important}.v417-page-btn:disabled{opacity:.42;cursor:not-allowed}
     .v416-filter-gate,.v416-admin-training-filters{border:1px solid #d7e6f0;background:#f8fbfd;border-radius:14px;padding:12px}.v416-admin-training-filters{display:grid;grid-template-columns:repeat(4,minmax(170px,1fr));gap:12px}.v416-selection-prompt{margin-top:16px;min-height:150px;border:1px dashed #9fc6de;border-radius:16px;background:linear-gradient(180deg,#f8fcff,#fff);display:flex;align-items:center;justify-content:center;gap:14px;padding:24px;color:#24455f;text-align:left}.v416-selection-prompt b{display:block;font-size:1.05rem}.v416-selection-prompt small{display:block;margin-top:4px;color:#6b7f90}.v416-selection-icon{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#e4f4ff;color:#1681bf;font-size:28px;font-weight:700}

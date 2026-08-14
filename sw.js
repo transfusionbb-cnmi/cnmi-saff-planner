@@ -1,6 +1,6 @@
-/* CNMI Staff Planner PWA service worker — V442 */
+/* CNMI Staff Planner PWA service worker — V439 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v442`;
+const CACHE_NAME = `${CACHE_PREFIX}v439`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
   './pwa-install-v303.css', './pwa-install-v303.js',
@@ -29,10 +29,6 @@ const APP_SHELL = [
   './patch-v436-no-duty-sequence.js',
   './patch-v437-hr-leave-period-pending-summary.js',
   './patch-v438-no-duty-full-day-roster-sequence.js',
-  './patch-v439-dashboard-leave-position-my-leave.js',
-  './patch-v440-leave-dashboard-history-fix.js',
-  './patch-v441-hr-status-dashboard-sync.js',
-  './patch-v442-holiday-wrap-and-trade-after-checkin-lock.js',
   './patch-v333-physician-direct-leave.js',
   './patch-v335-daily-position-save-route-lock.js',
   './patch-v336-continuous-balance-staff-color.js',
