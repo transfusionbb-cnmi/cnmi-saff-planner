@@ -98,7 +98,7 @@
     const people=activeStaff().filter(x=>txt(x.id)!==txt(assignment.staff_id));
     const options='<option value="">เลือกผู้ที่อยู่แทน</option>'+people.map(x=>`<option value="${esc(x.id)}">${esc(staffName(x.id))}${employeeCode(x)?` — ${esc(employeeCode(x))}`:''}</option>`).join('');
     const chips=people.map(x=>`<button type="button" class="v331-cover-person" data-v331-cover-person="${esc(x.id)}">${esc(staffName(x.id))}</button>`).join('');
-    modal(`<div class="v331-ch4-modal"><h2>เลือกผู้ที่อยู่แทน ช4</h2><p class="hint">เลือกจากรายชื่อหรือแตะปุ่มชื่อด้านล่าง แล้วกดบันทึก</p><form id="ch4CoverFormV331" class="form-grid"><input type="hidden" name="assignment_key" value="${esc(key)}"><label>เจ้าของ ช4 <input value="${esc(staffName(assignment.staff_id))}" disabled></label><label>วันที่ <input value="${esc(normalizeDate(assignment.duty_date))}" disabled></label><label class="wide">ผู้ที่อยู่แทน <select name="covered_by_staff_id" required>${options}</select></label><div class="wide v331-cover-grid">${chips||'<span class="muted">ไม่พบรายชื่อที่เลือกได้</span>'}</div><label class="wide">หมายเหตุ <textarea name="covered_note" rows="3" placeholder="เช่น ปั่นเลือดแทน / อยู่แทนช่วงเย็น"></textarea></label><div class="actions wide"><button class="ghost-btn" type="button" data-close-modal>ยกเลิก</button><button class="primary-btn" type="submit">บันทึกคนอยู่แทน</button></div></form></div>`);
+    modal(`<div class="v331-ch4-modal"><h2>ย้าย ช4 ให้คนอยู่แทน</h2><p class="hint">ไม่สร้าง OT อัตโนมัติ</p><form id="ch4CoverFormV331" class="form-grid"><input type="hidden" name="assignment_key" value="${esc(key)}"><label>เจ้าของ ช4 <input value="${esc(staffName(assignment.staff_id))}" disabled></label><label>วันที่ <input value="${esc(normalizeDate(assignment.duty_date))}" disabled></label><label class="wide">ผู้ที่อยู่แทน <select name="covered_by_staff_id" required>${options}</select></label><div class="wide v331-cover-grid">${chips||'<span class="muted">ไม่พบรายชื่อที่เลือกได้</span>'}</div><label class="wide">หมายเหตุ <textarea name="covered_note" rows="3" placeholder="เช่น ปั่นเลือดแทน / อยู่แทนช่วงเย็น"></textarea></label><div class="actions wide"><button class="ghost-btn" type="button" data-close-modal>ยกเลิก</button><button class="primary-btn" type="submit">ย้าย ช4</button></div></form></div>`);
   }
   async function saveCover(form){
     const fd=new FormData(form),assignment=assignmentFromKey(fd.get('assignment_key'));
@@ -130,9 +130,17 @@
     if(!Array.isArray(s.shiftConfirmations))s.shiftConfirmations=[];
     s.shiftConfirmations=s.shiftConfirmations.filter(r=>!(normalizeDate(r?.work_date||r?.duty_date)===base.work_date&&txt(r?.owner_staff_id||r?.staff_id)===txt(base.owner_staff_id)&&txt(r?.duty_code||'ช4')===txt(base.duty_code)));
     s.shiftConfirmations.push(saved);
+    try{
+      const mover=window.cnmiV441Ch4Transfer?.transferCh4Assignment;
+      if(typeof mover==='function')await mover(assignment,coveredBy,{ownerStaffId:base.owner_staff_id});
+    }catch(err){
+      console.error('[V441] transfer CH4 after V331 cover',err);
+      closeModalSafe();
+      return toast('บันทึกคนอยู่แทนแล้ว แต่ย้าย ช4 ไม่สำเร็จ','error');
+    }
     closeModalSafe();
     try{if(typeof window.renderPage==='function')window.renderPage();}catch(_){}
-    toast(`บันทึกแล้ว: ${staffName(coveredBy)} อยู่แทน`,'success');
+    toast(`ย้าย ช4 ให้ ${staffName(coveredBy)} แล้ว • ไม่สร้าง OT อัตโนมัติ`,'success');
   }
 
   function positionRows(){return window.__CNMI_V226_DAILY_POSITION_ROWS__||window.__CNMI_V225_DAILY_POSITION_ROWS__||[];}

@@ -317,7 +317,7 @@
   function coverModal(key){
     const assignment=assignmentFromKey(key);
     if(!assignment) return toast('ไม่พบรายการ ช4 นี้ กรุณารีเฟรชหน้า');
-    modal(`<div class="v314-ch4-cover-modal"><h2>มีคนอยู่แทน</h2><p class="hint">บันทึกผู้ที่ทำ ช4 แทนเจ้าของเดิม โดยไม่สร้าง OT อัตโนมัติ ผู้ที่อยู่แทนต้องบันทึก OT ตามเวลาจริงแยกต่างหาก</p><form id="ch4CoverFormV314" class="form-grid"><input type="hidden" name="assignment_key" value="${esc(key)}"><label>เจ้าของ ช4 <input value="${esc(staffName(assignment.staff_id))}" disabled></label><label>วันที่ <input value="${esc(normDate(assignment.duty_date))}" disabled></label><label class="wide">ผู้ที่อยู่แทน <select name="covered_by_staff_id" required>${staffOptions('',assignment.staff_id)}</select></label><label class="wide">หมายเหตุ <textarea name="covered_note" rows="3" placeholder="เช่น ปั่นเลือดแทน / อยู่แทนช่วงเย็น"></textarea></label><div class="actions wide"><button class="ghost-btn" type="button" data-close-modal>ยกเลิก</button><button class="primary-btn" type="submit">บันทึกผู้ที่อยู่แทน</button></div></form></div>`,{small:true});
+    modal(`<div class="v314-ch4-cover-modal"><h2>ย้าย ช4 ให้คนอยู่แทน</h2><p class="hint">ไม่สร้าง OT อัตโนมัติ</p><form id="ch4CoverFormV314" class="form-grid"><input type="hidden" name="assignment_key" value="${esc(key)}"><label>เจ้าของ ช4 <input value="${esc(staffName(assignment.staff_id))}" disabled></label><label>วันที่ <input value="${esc(normDate(assignment.duty_date))}" disabled></label><label class="wide">ผู้ที่อยู่แทน <select name="covered_by_staff_id" required>${staffOptions('',assignment.staff_id)}</select></label><label class="wide">หมายเหตุ <textarea name="covered_note" rows="3" placeholder="เช่น ปั่นเลือดแทน / อยู่แทนช่วงเย็น"></textarea></label><div class="actions wide"><button class="ghost-btn" type="button" data-close-modal>ยกเลิก</button><button class="primary-btn" type="submit">ย้าย ช4</button></div></form></div>`,{small:true});
   }
   async function saveCover(form){
     const fd=new FormData(form);
@@ -328,9 +328,10 @@
     busy(true,'กำลังบันทึกผู้ที่อยู่แทน');
     try{
       await upsertCh4(assignment,'covered_by_other',coveredBy,note||`มีคนอยู่แทน: ${staffName(coveredBy)}`);
+      if(typeof window.cnmiV441Ch4Transfer?.transferCh4Assignment==='function') await window.cnmiV441Ch4Transfer.transferCh4Assignment(assignment,coveredBy,{ownerStaffId:assignment.staff_id});
       close();
       await refresh();
-      toast(`บันทึกแล้ว: ${staffName(coveredBy)} อยู่แทน`,'success');
+      toast(`ย้าย ช4 ให้ ${staffName(coveredBy)} แล้ว • ไม่สร้าง OT อัตโนมัติ`,'success');
     }catch(error){
       console.error(`[${VERSION}] save cover`,error);
       toast(error?.message||'บันทึกผู้ที่อยู่แทนไม่สำเร็จ');

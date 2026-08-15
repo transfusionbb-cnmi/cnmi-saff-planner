@@ -249,14 +249,15 @@
     const a = findAssignmentByKey(key);
     if (!coveredBy) return toast('กรุณาเลือกคนอยู่แทนก่อน', 'error');
     const ok = typeof confirmDialog === 'function'
-      ? await confirmDialog(`บันทึกว่า ${staffName(coveredBy)} อยู่แทน ช4 ใช่ไหม? คนอยู่แทนต้องไปกรอก OT จริงในส่วนที่ 2 เอง`, 'ยืนยันคนอยู่แทน')
+      ? await confirmDialog(`ย้าย ช4 ให้ ${staffName(coveredBy)} ใช่ไหม?`, 'ยืนยันย้าย ช4')
       : window.confirm(`บันทึกว่า ${staffName(coveredBy)} อยู่แทน ช4 ใช่ไหม?`);
     if (!ok) return;
     try { if (typeof setBusy === 'function') setBusy(true, 'กำลังบันทึกคนอยู่แทน'); } catch (_) {}
     try {
       await saveCh4Confirmation(a, 'covered_by_other', coveredBy, `มีคนอยู่แทน: ${staffName(coveredBy)}`);
+      if(typeof window.cnmiV441Ch4Transfer?.transferCh4Assignment==='function') await window.cnmiV441Ch4Transfer.transferCh4Assignment(a,coveredBy,{ownerStaffId:a.staff_id});
       await loadAllData(); renderPage();
-      toast(`บันทึกคนอยู่แทนแล้ว ให้ ${staffName(coveredBy)} ไปกรอก OT จริงในส่วนที่ 2`);
+      toast(`ย้าย ช4 ให้ ${staffName(coveredBy)} แล้ว • ไม่สร้าง OT อัตโนมัติ`);
     } catch (err) { toast('บันทึกคนอยู่แทนไม่สำเร็จ: ' + friendly(err), 'error'); }
     finally { try { if (typeof setBusy === 'function') setBusy(false); } catch (_) {} }
   }
@@ -267,7 +268,7 @@
     return `<div class="v222-ch4-action-row">
       <button class="primary-btn" type="button" data-ch4-self-v222="${esc(key)}">ทำ ช4 เอง</button>
       <label class="v222-cover-select">คนอยู่แทน <select data-ch4-cover-select-v222="${esc(key)}"><option value="">เลือกคนอยู่แทน</option>${activeStaffOptions('', a.staff_id)}</select></label>
-      <button class="ghost-btn" type="button" data-ch4-cover-v222="${esc(key)}">บันทึกคนอยู่แทน / ไม่เบิก</button>
+      <button class="ghost-btn" type="button" data-ch4-cover-v222="${esc(key)}">ย้าย ช4</button>
     </div>`;
   }
   function renderCh4Box(rows){
