@@ -84,6 +84,34 @@
     const raw=Object.prototype.hasOwnProperty.call(p,'active')?p.active:p.is_active;
     return !explicitFalse(raw) && raw != null;
   }
+  function monthBounds(key){
+    const safe=/^\d{4}-\d{2}$/.test(String(key||''))?String(key):(S()?.monthKey||new Date().toISOString().slice(0,7));
+    return {first:`${safe}-01`,last:monthDates(safe).slice(-1)[0],key:safe};
+  }
+  function employmentStart(p){ return normDate(p?.employment_start_date||p?.start_date||''); }
+  function employmentEnd(p){ return normDate(p?.employment_end_date||''); }
+  function employmentOn(p,date){
+    const d=normDate(date),start=employmentStart(p),end=employmentEnd(p);
+    if(!d) return true;
+    if(start&&d<start) return false;
+    if(end&&d>end) return false;
+    return true;
+  }
+  function employmentOverlapsMonth(p,key){
+    const b=monthBounds(key),start=employmentStart(p),end=employmentEnd(p);
+    return (!start||start<=b.last)&&(!end||end>=b.first);
+  }
+  function dailyPositionStart(p){ return normDate(p?.daily_position_start_date||''); }
+  function dailyPositionOn(p,date){ const d=normDate(date),start=dailyPositionStart(p); return employmentOn(p,d)&&(!start||!d||d>=start); }
+  function hasRosterRowsInMonth(p,key){ return (S()?.rosterAssignments||[]).some(r=>normId(r?.staff_id)===normId(p?.id)&&normDate(r?.duty_date).startsWith(String(key||''))); }
+  function hasPositionRowsInMonth(p,key){ return (S()?.positions||[]).some(r=>normId(r?.staff_id)===normId(p?.id)&&normDate(r?.work_date).startsWith(String(key||''))); }
+  function lifecycleLabel(p,date){
+    const d=normDate(date),start=employmentStart(p),end=employmentEnd(p),dp=dailyPositionStart(p);
+    if(start&&d<start)return 'ยังไม่เริ่มงาน';
+    if(end&&d>end)return 'สิ้นสุดการใช้งานแล้ว';
+    if(dp&&d<dp)return 'ยังไม่เริ่มเป็นตัวจริง';
+    return '';
+  }
   function allActiveStaff(){
     const rows=(S()?.staff||[]).filter(p=>isActivePerson(p));
     try { return orderedStaff(rows); }
@@ -122,23 +150,35 @@
     return { ids, names };
   }
   function normalPositionStaff(key){
-    const traineeKeys=activeTraineeKeysForMonth(key);
-    return allActiveStaff().filter(p=>{
-      const pid=normId(p?.id), nick=normName(p?.nickname), full=normName(p?.full_name);
-      if (traineeKeys.ids.has(pid) || (nick && traineeKeys.names.has(nick)) || (full && traineeKeys.names.has(full))) return false;
-      if (String(p?.staff_type||'').trim()==='แพทย์') return false;
-      if (p?.maternity_status) return false;
-      if (explicitFalse(p?.daily_position_enabled)) return false;
-      return String(p?.position_training_status||'ใช้งานปกติ').trim()==='ใช้งานปกติ';
+    const monthKey=/^\d{4}-\d{2}$/.test(String(key||''))?String(key):(S()?.positionMonthKey||S()?.positionMonthViewKey||S()?.monthKey||new Date().toISOString().slice(0,7));
+    const traineeKeys=activeTraineeKeysForMonth(monthKey),source=(S()?.staff||[]);
+    const rows=source.filter(p=>{
+      if(!p?.id||String(p?.staff_type||'').trim()==='แพทย์'||p?.maternity_status)return false;
+      const saved=hasPositionRowsInMonth(p,monthKey);
+      if(saved)return true; // ประวัติที่บันทึกแล้วต้องไม่หาย แม้เปลี่ยนสถานะน้องใหม่/Inactive ภายหลัง
+      if(!employmentOverlapsMonth(p,monthKey))return false;
+      if(!isActivePerson(p)&&!employmentEnd(p))return false; // คนที่กำหนดวันสิ้นสุดยังคงเห็นชื่อในเดือนประวัติเดิม
+      const pid=normId(p?.id),nick=normName(p?.nickname),full=normName(p?.full_name);
+      if(traineeKeys.ids.has(pid)||(nick&&traineeKeys.names.has(nick))||(full&&traineeKeys.names.has(full)))return false;
+      if(explicitFalse(p?.daily_position_enabled))return false;
+      if(String(p?.position_training_status||'ใช้งานปกติ').trim()!=='ใช้งานปกติ')return false;
+      const start=dailyPositionStart(p),last=monthBounds(monthKey).last;
+      if(start&&start>last)return false;
+      return true;
     });
+    try{return orderedStaff(rows);}catch(_){return rows;}
   }
-  function rosterEnabledStaff(){
-    return allActiveStaff().filter(p=>{
-      if (String(p?.staff_type||'').trim()==='แพทย์') return false;
-      if (p?.maternity_status) return false;
+  function rosterEnabledStaff(key){
+    const monthKey=/^\d{4}-\d{2}$/.test(String(key||''))?String(key):(S()?.monthKey||new Date().toISOString().slice(0,7));
+    const rows=(S()?.staff||[]).filter(p=>{
+      if(!p?.id||String(p?.staff_type||'').trim()==='แพทย์'||p?.maternity_status)return false;
+      const saved=hasRosterRowsInMonth(p,monthKey);
+      if(saved)return true; // เก็บแถวประวัติเดิมไว้ แม้ปิดบัญชีหลังพ้นเดือนนั้นแล้ว
+      if(!isActivePerson(p)||!employmentOverlapsMonth(p,monthKey))return false;
       const value=p?.roster_enabled ?? p?.duty_enabled ?? p?.can_roster ?? p?.is_roster_enabled ?? p?.schedule_enabled ?? p?.is_schedule_enabled ?? p?.['สถานะจัดเวร'];
       return !explicitFalse(value);
     });
+    try{return orderedStaff(rows);}catch(_){return rows;}
   }
   function leaveEffective(row){
     try { return isLeaveEffective(row); }
@@ -307,11 +347,14 @@
     if(isWeekendSafe(date)||isHolidaySafe(date))return `<td class="v275-position-day off"></td>`;
     const leave=leaveOn(person.id,date,{hideNoDuty:true});
     const row=positionRow(rows,person.id,date),code=row?.position_code||'';
+    const allowed=dailyPositionOn(person,date),life=lifecycleLabel(person,date);
     const leaveType=leave?leaveText(leave):'';
     const leaveClassName=leave?leaveClass(leave):'';
     const leaveAttrs=leave?` data-v291-leave-label="${esc(leaveType)}" title="${esc(`${leaveType} · Admin ยังเลือกตำแหน่งหรือเว้นว่างได้`)}"`:'';
-    const cellClass=`v275-position-day${leave?` leave v291-leave-dropdown ${leaveClassName}`:''}`;
-    if(!editable)return `<td class="${esc(cellClass)}"${leaveAttrs}>${leave?leaveBadge(leave):''}${code?`<button type="button" class="v275-position-pill" data-v275-job="${esc(code)}">${esc(code)}</button>`:''}</td>`;
+    const cellClass=`v275-position-day${leave?` leave v291-leave-dropdown ${leaveClassName}`:''}${!allowed?' v462-lifecycle-off':''}`;
+    if(!allowed&&!code)return `<td class="${esc(cellClass)}"><span class="v462-lifecycle-cell">${esc(life||'ไม่อยู่ในช่วงใช้งาน')}</span></td>`;
+    if(!editable)return `<td class="${esc(cellClass)}"${leaveAttrs}>${leave?leaveBadge(leave):''}${code?`<button type="button" class="v275-position-pill" data-v275-job="${esc(code)}">${esc(code)}</button>`:''}${!allowed&&code?`<small class="v462-preserved-note">เก็บจากตารางเดิม</small>`:''}</td>`;
+    if(!allowed&&code)return `<td class="${esc(cellClass)}"${leaveAttrs}>${leave?leaveBadge(leave):''}<button type="button" class="v275-position-pill" data-v275-job="${esc(code)}">${esc(code)}</button><small class="v462-preserved-note">เก็บจากตารางเดิม • ${esc(life||'นอกช่วงใช้งาน')}</small></td>`;
     return `<td class="${esc(cellClass)}"${leaveAttrs}><div class="v275-position-cell" data-v275-position-cell data-date="${esc(date)}" data-staff-id="${esc(person.id)}"><select data-v275-position-select aria-label="เลือกตำแหน่ง ${esc(staffName(person))} วันที่ ${esc(date)}${leave?` (${esc(leaveType)})`:''}">${positionOptions(code)}</select>${code?`<button type="button" class="v275-info" data-v275-job="${esc(code)}">i</button>`:''}<small data-v275-status></small></div></td>`;
   }
   function traineeCell(item,date,rows,editable){
@@ -372,18 +415,19 @@
   function dutyLabel(code){return DUTIES.find(d=>d.code===code)?.label||String(code||'');}
   function rosterDateHead(date){return `<th class="v275-roster-date ${isWeekendSafe(date)?'off':''} ${isHolidaySafe(date)?'holiday':''}"><b>${Number(date.slice(8))}</b><small>${esc(thaiDow(date))}</small>${isHolidaySafe(date)?`<em>${esc(holidayTitle(date))}</em>`:''}</th>`;}
   function rosterCell(person,date,rows){
-    const own=rowsForPersonDate(rows,person.id,date),leave=leaveOn(person.id,date,{hideNoDuty:false}),bg=staffColorSafe(person),fg=textColorSafe(bg);
-    return `<td class="v275-roster-day"><div class="v275-roster-drop" data-v275-roster-cell data-date="${esc(date)}" data-staff-id="${esc(person.id)}" tabindex="0">${leaveBadge(leave)}<div class="v275-duty-list">${own.map(r=>`<span class="v275-duty-pill" draggable="true" data-v275-existing-duty="${esc(r.duty_code)}" style="--duty-bg:${esc(bg)};--duty-fg:${esc(fg)}"><b>${esc(dutyLabel(r.duty_code))}</b><button type="button" data-v275-remove-duty="${esc(r.duty_code)}" aria-label="ลบ">×</button></span>`).join('')}</div></div></td>`;
+    const own=rowsForPersonDate(rows,person.id,date),leave=leaveOn(person.id,date,{hideNoDuty:false}),bg=staffColorSafe(person),fg=textColorSafe(bg),allowed=employmentOn(person,date),life=lifecycleLabel(person,date);
+    if(!allowed&&!own.length)return `<td class="v275-roster-day v462-lifecycle-off"><div class="v462-lifecycle-cell">${esc(life||'ไม่อยู่ในช่วงใช้งาน')}</div></td>`;
+    return `<td class="v275-roster-day${!allowed?' v462-lifecycle-off':''}"><div class="v275-roster-drop" ${allowed?'data-v275-roster-cell':''} data-date="${esc(date)}" data-staff-id="${esc(person.id)}" tabindex="0">${leaveBadge(leave)}<div class="v275-duty-list">${own.map(r=>`<span class="v275-duty-pill" draggable="${allowed?'true':'false'}" ${allowed?'data-v275-existing-duty="'+esc(r.duty_code)+'"':''} style="--duty-bg:${esc(bg)};--duty-fg:${esc(fg)}"><b>${esc(dutyLabel(r.duty_code))}</b>${allowed?`<button type="button" data-v275-remove-duty="${esc(r.duty_code)}" aria-label="ลบ">×</button>`:''}</span>`).join('')}</div>${!allowed&&own.length?`<small class="v462-preserved-note">เก็บจากตารางเดิม • ${esc(life||'นอกช่วงใช้งาน')}</small>`:''}</div></td>`;
   }
   function rosterMatrix(key,rows){
-    const dates=monthDates(key),people=rosterEnabledStaff();
+    const dates=monthDates(key),people=rosterEnabledStaff(key);
     return `<div class="v275-roster-wrap"><table class="v275-roster-table"><thead><tr><th class="v275-roster-name">เจ้าหน้าที่</th>${dates.map(rosterDateHead).join('')}</tr></thead><tbody>${people.map(p=>`<tr><th class="v275-roster-name" style="--staff-bg:${esc(staffColorSafe(p))};--staff-fg:${esc(textColorSafe(staffColorSafe(p)))}"><b>${esc(staffName(p))}</b></th>${dates.map(d=>rosterCell(p,d,rows)).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
   function fallbackBalance(key,rows){
-    const people=rosterEnabledStaff(),data=people.map(p=>{const own=rows.filter(r=>normId(r.staff_id)===normId(p.id)),count=c=>own.filter(r=>r.duty_code===c).length;return{p,total:own.length,c1:count('ชบด1'),c2:count('ชบด2'),c3:count('ชบด3'),a:count('ช3A'),b:count('ช3B'),c4:own.filter(r=>String(r.duty_code||'').startsWith('ช4')).length,c9:own.filter(r=>String(r.duty_code||'').startsWith('ช9')).length};});
+    const people=rosterEnabledStaff(key),data=people.map(p=>{const own=rows.filter(r=>normId(r.staff_id)===normId(p.id)),count=c=>own.filter(r=>r.duty_code===c).length;return{p,total:own.length,c1:count('ชบด1'),c2:count('ชบด2'),c3:count('ชบด3'),a:count('ช3A'),b:count('ช3B'),c4:own.filter(r=>String(r.duty_code||'').startsWith('ช4')).length,c9:own.filter(r=>String(r.duty_code||'').startsWith('ช9')).length};});
     return `<div class="card"><h3>สถิติสรุปรายเดือน</h3><div class="table-wrap"><table><thead><tr><th>เจ้าหน้าที่</th><th>เวรรวม</th><th>ชบด1</th><th>ชบด2</th><th>ชบด3</th><th>ช3A</th><th>ช3B</th><th>ช4</th><th>ช9</th></tr></thead><tbody>${data.map(r=>`<tr><td><b>${esc(staffName(r.p))}</b></td><td>${r.total}</td><td>${r.c1}</td><td>${r.c2}</td><td>${r.c3}</td><td>${r.a}</td><td>${r.b}</td><td>${r.c4}</td><td>${r.c9}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
-  function balanceSummary(key,rows){try{if(typeof renderBalanceDashboard==='function')return `<div class="card v275-balance-card"><div class="section-title"><h3>สถิติสรุปรายเดือน</h3><span class="badge blue">รูปแบบเดียวกับสรุปสมดุลเวร</span></div>${renderBalanceDashboard(rosterEnabledStaff(),rows,key)}</div>`;}catch(e){console.warn(VERSION,e);}return fallbackBalance(key,rows);}
+  function balanceSummary(key,rows){try{if(typeof renderBalanceDashboard==='function')return `<div class="card v275-balance-card"><div class="section-title"><h3>สถิติสรุปรายเดือน</h3><span class="badge blue">รูปแบบเดียวกับสรุปสมดุลเวร</span></div>${renderBalanceDashboard(rosterEnabledStaff(key),rows,key)}</div>`;}catch(e){console.warn(VERSION,e);}return fallbackBalance(key,rows);}
   function holidayRuleSuffix(title){const raw=String(title||''),at=raw.indexOf(':::');return at>=0?raw.slice(at):'';}
   function holidayPanel(key){
     const list=(S()?.holidays||[]).filter(h=>String(h?.holiday_date||'').startsWith(key)).sort((a,b)=>String(a.holiday_date).localeCompare(String(b.holiday_date))),last=monthDates(key).slice(-1)[0];
