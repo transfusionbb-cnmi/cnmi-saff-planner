@@ -129,6 +129,30 @@
   }
   function staffColorSafe(person){ try { return staffColor(person); } catch (_) { return person?.color||'#e2e8f0'; } }
   function textColorSafe(color){ try { return textColorFor(color); } catch (_) { return '#0f172a'; } }
+  function linkedStaffForTraineeRow(row){
+    if(!row) return null;
+    const staffId=normId(row.trainee_staff_id);
+    const label=staffId ? staffName(staffId) : (row.trainee_name || '');
+    return staffId
+      ? ((S()?.staff||[]).find(p=>normId(p?.id)===staffId) || findStaffByName(label))
+      : findStaffByName(label);
+  }
+  function directoryRowAppliesToMonth(row,key){
+    if(!row || row.active===false) return false;
+    const linked=linkedStaffForTraineeRow(row);
+    // External Intern/trainee names have no staff profile, so the directory remains the source of truth.
+    if(!linked) return true;
+    const b=monthBounds(key),start=dailyPositionStart(linked);
+    // A linked new staff member is trainee only before the configured regular-position start date.
+    // Once that date is reached, the directory is merely historical registration and must not
+    // keep the person in the trainee row forever. Actual mentorship rows still apply by date range.
+    if(start){
+      if(b.last < start) return true;
+      if(b.first >= start) return false;
+      return false; // transition inside this month: regular row handles pre-start dates per-cell.
+    }
+    return String(linked?.position_training_status||'ใช้งานปกติ').trim()!=='ใช้งานปกติ';
+  }
   function activeTraineeKeysForMonth(key){
     const monthKey=/^\d{4}-\d{2}$/.test(String(key||''))?String(key):(S()?.positionMonthKey||S()?.positionMonthViewKey||S()?.monthKey||new Date().toISOString().slice(0,7));
     const first=`${monthKey}-01`,last=monthDates(monthKey).slice(-1)[0],ids=new Set(),names=new Set();
@@ -136,14 +160,16 @@
       if(!row || row.active===false) return;
       const staffId=normId(row.trainee_staff_id);
       const label=staffId ? staffName(staffId) : (row.trainee_name || '');
-      const linked=staffId ? ((S()?.staff||[]).find(p=>normId(p?.id)===staffId) || findStaffByName(label)) : findStaffByName(label);
+      const linked=linkedStaffForTraineeRow(row);
       if(staffId) ids.add(staffId);
       if(linked?.id) ids.add(normId(linked.id));
       if(label) names.add(normName(label));
       if(linked?.nickname) names.add(normName(linked.nickname));
       if(linked?.full_name) names.add(normName(linked.full_name));
     };
-    (Array.isArray(S()?.traineeDirectoryV273)?S().traineeDirectoryV273:[]).forEach(collect);
+    (Array.isArray(S()?.traineeDirectoryV273)?S().traineeDirectoryV273:[])
+      .filter(r=>directoryRowAppliesToMonth(r,monthKey))
+      .forEach(collect);
     (Array.isArray(S()?.trainingAssignmentsV271)?S().trainingAssignmentsV271:[])
       .filter(r=>r&&r.active!==false&&normDate(r.start_date)<=last&&normDate(r.end_date)>=first)
       .forEach(collect);
@@ -306,7 +332,7 @@
       }
       map.set(keyPart,{...item,identity:keyPart,staffId:item.staffId || linked?.id || null,linkedStaffId:linked?.id || item.staffId || null,label:item.label || staffName(linked) || '-'});
     };
-    directoryRows().filter(r=>r.active!==false).forEach(r=>upsert({identity:identityOf(r),label:traineeLabel(r),type:r.trainee_type||'intern',staffId:r.trainee_staff_id||null,row:r}));
+    directoryRows().filter(r=>directoryRowAppliesToMonth(r,key)).forEach(r=>upsert({identity:identityOf(r),label:traineeLabel(r),type:r.trainee_type||'intern',staffId:r.trainee_staff_id||null,row:r}));
     trainingRows().filter(r=>r.active!==false&&normDate(r.start_date)<=last&&normDate(r.end_date)>=first).forEach(r=>upsert({identity:identityOf(r),label:traineeLabel(r),type:r.trainee_type||'intern',staffId:r.trainee_staff_id||null,row:r}));
     const all=allActiveStaff();
     return Array.from(map.values()).sort((a,b)=>{
