@@ -229,7 +229,7 @@
     }
   }
 
-  function findPositionByCode(code){
+  function findPositionByCode(code, referenceDate=''){
     const value=String(code||'').trim();
     const st=appState();
     if(!value) return {};
@@ -262,12 +262,20 @@
     let template=null;
     try{
       const monthKey=String(st?.positionMonthKey || st?.positionMonthViewKey || st?.monthKey || '').slice(0,7);
-      const referenceDate=/^\d{4}-\d{2}$/.test(monthKey) ? `${monthKey}-01` : undefined;
-      const fn=window.positionTemplateByCode;
-      if(typeof fn==='function') template=fn(value,referenceDate)||null;
+      const refDate=/^\d{4}-\d{2}-\d{2}$/.test(String(referenceDate||''))
+        ? String(referenceDate).slice(0,10)
+        : (/^\d{4}-\d{2}$/.test(monthKey) ? `${monthKey}-01` : undefined);
+      try{
+        if(refDate && window.cnmiV381?.templateFor) template=window.cnmiV381.templateFor(value,refDate)||null;
+      }catch(_){}
+      if(!template){
+        const fn=window.positionTemplateByCode;
+        if(typeof fn==='function') template=fn(value,refDate)||null;
+      }
     }catch(_){}
 
-    if(master || template) return mergeUseful(template,master);
+    /* Current Slot configuration is authoritative; master is fallback only. */
+    if(master || template) return mergeUseful(master,template);
 
     try{
       const fn=window.positionByCode;
@@ -286,10 +294,39 @@
     return assignment || {};
   }
 
+  function positionMonthKeySafe(){
+    const st=appState();
+    return String(
+      document.getElementById('positionMonthViewInput')?.value
+      || document.getElementById('positionMonthInput')?.value
+      || st?.positionMonthViewKey
+      || st?.positionMonthKey
+      || st?.monthKey
+      || ''
+    ).slice(0,7);
+  }
+
+  function dateFromPositionButton(button){
+    const direct=button?.closest?.('[data-date]')?.getAttribute?.('data-date');
+    if(/^\d{4}-\d{2}-\d{2}$/.test(String(direct||''))) return String(direct).slice(0,10);
+
+    const cell=button?.closest?.('td');
+    const row=button?.closest?.('tr');
+    const key=positionMonthKeySafe();
+    const dates=monthDates(key);
+    if(!cell || !row || !dates.length) return '';
+    const children=Array.from(row.children||[]);
+    const index=children.indexOf(cell);
+    const frozenCount=Math.max(0,children.length-dates.length);
+    const date=dates[index-frozenCount] || '';
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '';
+  }
+
   function openPosition(button){
     const code=String(button?.getAttribute?.('data-v275-job') || button?.getAttribute?.('data-v273-job-code') || '').trim();
     if(!code) return;
-    const row=findPositionByCode(code);
+    const date=dateFromPositionButton(button);
+    const row=findPositionByCode(code,date);
     const zone=row?.zone || '-';
     const breakTime=row?.break_time || '-';
     const rule=row?.main_rule || '-';
@@ -305,7 +342,8 @@
     const position=target.closest('[data-v275-job],[data-v273-job-code]');
     if(position){
       const code=position.getAttribute('data-v275-job') || position.getAttribute('data-v273-job-code') || '';
-      return {type:'position',node:position,key:`position:${code}`};
+      const date=dateFromPositionButton(position);
+      return {type:'position',node:position,key:`position:${code}:${date||'-'}`};
     }
     const trade=target.closest('[data-trade-duty],#scheduleTable .clean-shift-pill,.clean-schedule-grid .clean-shift-pill');
     if(trade) return {type:'trade',node:trade,key:`trade:${trade.getAttribute('data-trade-duty')||trade.textContent||''}`};
@@ -537,6 +575,6 @@
   else installObserver();
   window.addEventListener('pageshow',queueEnhance);
 
-  window.cnmiV311={enhance,openCalendar,openTrade,openPosition,repairDailySummary,keepDailyDutyText,removeObsoleteCh4};
+  window.cnmiV311={enhance,openCalendar,openTrade,openPosition,repairDailySummary,keepDailyDutyText,removeObsoleteCh4,findPositionByCode,dateFromPositionButton};
   console.info(`[${VERSION}] loaded`);
 })();
