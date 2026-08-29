@@ -12,7 +12,6 @@
     'หน่วยบริการพยาธิวิทยา',
     'หน่วยพยาธิวิทยากายวิภาค',
     'หน่วยพยาธิวิทยาคลินิก',
-    'หน่วยเวชศาสตร์บริการโลหิต',
   ];
   let client = null;
   let rows = [];
@@ -145,6 +144,7 @@
     const raw=String(error?.message||error||'ดำเนินการไม่สำเร็จ');
     if(/function .* does not exist|Could not find the function|schema cache|get_donor_helper_month_public_v327/i.test(raw)) return 'ระบบยังไม่พร้อมใช้งาน กรุณาแจ้งผู้ดูแลให้ติดตั้งฐานข้อมูล V327';
     if(/ช่องนี้มีผู้ลงชื่อแล้ว/i.test(raw)) return 'ช่องนี้มีผู้ลงชื่อแล้ว กรุณารีเฟรชและเลือกช่องอื่น';
+    if(/เจ้าหน้าที่หน่วยเวชศาสตร์บริการโลหิต|Staff Planner.*ลงชื่อของฉัน|คนในหน่วย/i.test(raw)) return 'พบว่าเป็นเจ้าหน้าที่หน่วยเวชศาสตร์บริการโลหิต กรุณาใช้ Staff Planner → คนมาช่วยห้องบริจาคโลหิต → ลงชื่อของฉัน';
     return raw.replace(/^.*?:\s*/,'');
   }
   function loadTokens(){
