@@ -1,11 +1,11 @@
 /* CNMI Staff Planner V481
- * Staff HR self-confirmation + restore Admin pending center.
+ * Staff HR self-confirmation + 7-day reminder window + Admin pending center.
  *
  * - V480 is intentionally NOT loaded in index.html anymore.
  * - Admin keeps the original "รอดำเนินการ Admin" center from V460/V464/V465.
- * - Staff gets a separate HC iService reminder that is independent of the
- *   Dashboard's selected day, so an upcoming leave is still visible even when
- *   today itself has no leave.
+ * - Staff gets a separate HC iService reminder starting 7 calendar days
+ *   before the leave start date. It is independent of the Dashboard selected
+ *   day, so the reminder is visible even when today itself has no leave.
  * - Staff can press "ลาในระบบแล้ว". A locked-down RPC records only the staff's
  *   own leave as HR-reported and moves it to "รอตรวจสอบ" for Admin.
  * - All real leave types are reminded; "ไม่รับเวร" is excluded.
@@ -17,10 +17,10 @@
  */
 (function(){
   'use strict';
-  const VERSION='V481_STAFF_HR_CONFIRM_ADMIN_PENDING';
+  const VERSION='V482_STAFF_HR_REMINDER_7_DAYS';
   const LEAVE_URL='https://www3.ra.mahidol.ac.th/leaveRama/';
   const VACATION_ADVANCE_DAYS=3;
-  const FUTURE_WINDOW_DAYS=60;
+  const FUTURE_WINDOW_DAYS=7;
   const RECENT_WINDOW_DAYS=7;
   if(window.__CNMI_V481_STAFF_HR_CONFIRM_ADMIN_PENDING__)return;
   window.__CNMI_V481_STAFF_HR_CONFIRM_ADMIN_PENDING__=true;
@@ -114,7 +114,7 @@
     if(effectiveAdmin())return'';
     const rows=actionableRows(),shown=rows.slice(0,6),extra=Math.max(0,rows.length-shown.length);
     const head=`<div class="v481-reminder-head"><div><h3>ลาออนไลน์ HC iService</h3><p>Staff Planner มีรายการลาแล้ว แต่ต้องลาในระบบโรงพยาบาลแยกอีกครั้ง • เมื่อลาออนไลน์เสร็จให้กด “ลาในระบบแล้ว”</p></div><a class="v481-head-link" href="${LEAVE_URL}" target="_blank" rel="noopener noreferrer external">เปิด HC iService ↗</a></div>`;
-    if(!rows.length)return `<section class="card v481-staff-hr-reminder is-clear" data-v481-staff-hr-reminder>${head}<div class="v481-clear"><span>✓</span><div><b>ตอนนี้ไม่มีรายการลาที่รอยืนยัน HC iService</b><small>ถ้ามีรายการลาใหม่ ระบบจะเตือนตรงนี้โดยไม่ยึดว่าวันที่ Dashboard กำลังเปิดคือวันไหน</small></div></div></section>`;
+    if(!rows.length)return `<section class="card v481-staff-hr-reminder is-clear" data-v481-staff-hr-reminder>${head}<div class="v481-clear"><span>✓</span><div><b>ตอนนี้ไม่มีรายการลาที่รอยืนยัน HC iService</b><small>ถ้ามีรายการลาใหม่ ระบบจะเริ่มเตือนเมื่อเหลือ 7 วันก่อนวันลา โดยไม่ยึดว่าวันที่ Dashboard กำลังเปิดคือวันไหน</small></div></div></section>`;
     return `<section class="card v481-staff-hr-reminder" data-v481-staff-hr-reminder>${head}<div class="v481-reminder-list">${shown.map(rowHtml).join('')}</div>${extra?`<div class="v481-more">และอีก ${extra} รายการ • ดูรายการลาเพิ่มเติมได้ที่เมนู แจ้งลา / ไม่รับเวร</div>`:''}<div class="v481-footnote">“ลาในระบบแล้ว” = Staff ยืนยันว่าได้บันทึกใน HC iService แล้ว จากนั้นสถานะจะเปลี่ยนเป็น <b>รอตรวจสอบ HR</b> เพื่อให้ Admin ตรวจต่อ</div></section>`;
   }
 
