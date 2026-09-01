@@ -246,7 +246,7 @@
       const leaveId=btn.getAttribute('data-v481-mark-hr');
       const leave=(S().leaves||[]).find(r=>String(r?.id||'')===String(leaveId||''));
       if(!leave||!isRetry(leave))return;
-      const item=btn.closest('.v481-reminder-item');if(!item||item.querySelector('[data-v484-retry-note]'))return;
+      const item=btn.closest('.v481-reminder-item');if(!item||item.querySelector('[data-v484-retry-note], .v481-month-status.is-retry'))return;
       const main=item.querySelector('.v481-reminder-main');
       if(main)main.insertAdjacentHTML('beforeend','<div class="v484-staff-retry" data-v484-retry-note><b>⚠ Admin ตรวจไม่พบใน HC iService</b><span>กรุณาตรวจสอบ/บันทึกลาในระบบให้เรียบร้อย แล้วกด “ลาในระบบแล้ว” อีกครั้ง</span></div>');
     });

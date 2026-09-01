@@ -1,11 +1,10 @@
 /* CNMI Staff Planner V481
- * Staff HR self-confirmation + 7-day reminder window + Admin pending center.
+ * Staff HR self-confirmation + monthly leave checklist + Admin pending center.
  *
  * - V480 is intentionally NOT loaded in index.html anymore.
  * - Admin keeps the original "รอดำเนินการ Admin" center from V460/V464/V465.
- * - Staff gets a separate HC iService reminder starting 7 calendar days
- *   before the leave start date. It is independent of the Dashboard selected
- *   day, so the reminder is visible even when today itself has no leave.
+ * - Staff gets a separate HC iService checklist showing every real leave in
+ *   the month selected on Dashboard, not only the 7-day reminder window.
  * - Staff can press "ลาในระบบแล้ว". A locked-down RPC records only the staff's
  *   own leave as HR-reported and moves it to "รอตรวจสอบ" for Admin.
  * - All real leave types are reminded; "ไม่รับเวร" is excluded.
@@ -17,11 +16,9 @@
  */
 (function(){
   'use strict';
-  const VERSION='V482_STAFF_HR_REMINDER_7_DAYS';
+  const VERSION='V485_STAFF_HR_MONTH_VIEW';
   const LEAVE_URL='https://www3.ra.mahidol.ac.th/leaveRama/';
   const VACATION_ADVANCE_DAYS=3;
-  const FUTURE_WINDOW_DAYS=7;
-  const RECENT_WINDOW_DAYS=7;
   if(window.__CNMI_V481_STAFF_HR_CONFIRM_ADMIN_PENDING__)return;
   window.__CNMI_V481_STAFF_HR_CONFIRM_ADMIN_PENDING__=true;
 
@@ -38,6 +35,20 @@
   function localToday(){
     try{if(typeof todayStr==='function')return norm(todayStr());}catch(_){}
     const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  function selectedDashboardDate(){
+    try{return norm(window.cnmiDashboardDateV443?.selectedDate?.())||norm(S()?.dashboardDateV443)||localToday();}catch(_){return norm(S()?.dashboardDateV443)||localToday();}
+  }
+  function selectedMonthKey(){return selectedDashboardDate().slice(0,7);}
+  function monthBounds(monthKey){
+    const m=String(monthKey||'');if(!/^\d{4}-\d{2}$/.test(m))return {first:'',last:''};
+    const [y,mo]=m.split('-').map(Number);const lastDay=new Date(y,mo,0).getDate();
+    return {first:`${m}-01`,last:`${m}-${String(lastDay).padStart(2,'0')}`};
+  }
+  function thaiMonthYear(monthKey){
+    const m=String(monthKey||'');if(!/^\d{4}-\d{2}$/.test(m))return m;
+    const [y,mo]=m.split('-').map(Number);const names=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    return `${names[mo-1]||''} ${y+543}`;
   }
   function dateObj(date){const d=norm(date);return d?new Date(`${d}T12:00:00`):null;}
   function addDays(date,days){const d=dateObj(date);if(!d)return'';d.setDate(d.getDate()+Number(days||0));return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
@@ -65,25 +76,26 @@
   function vacation(row){const t=typeOf(row);return t==='ลาพักผ่อน'||t==='ลาพักร้อน';}
   function hrRow(row){const id=String(row?.id||'');return (S().hrChecks||[]).find(h=>String(h?.leave_request_id||'')===id)||null;}
   function reported(row){const h=hrRow(row),status=txt(h?.status);return !!h?.hr_reported_date||status==='ตรวจสอบแล้ว';}
+  function checked(row){return txt(hrRow(row)?.status)==='ตรวจสอบแล้ว';}
+  function retry(row){const h=hrRow(row);return !!h&&!h?.hr_reported_date&&txt(h?.status)==='รอเอกสาร';}
+  function pendingAdmin(row){const h=hrRow(row);return !!h?.hr_reported_date&&!checked(row);}
+  function overlapsMonth(row,monthKey){
+    const {first,last}=monthBounds(monthKey);if(!first||!last)return false;
+    const a=norm(row?.start_date),b=norm(row?.end_date||row?.start_date)||a;if(!a)return false;
+    return a<=last&&b>=first;
+  }
 
   function actionableRows(){
     if(effectiveAdmin())return [];
     const mine=currentId();if(!mine)return[];
-    const today=localToday(),futureEnd=addDays(today,FUTURE_WINDOW_DAYS),recentStart=addDays(today,-RECENT_WINDOW_DAYS);
+    const month=selectedMonthKey(),today=localToday();
     return (S().leaves||[])
-      .filter(r=>String(r?.staff_id||'')===String(mine)&&realLeave(r)&&!reported(r))
-      .filter(r=>{
-        const s=norm(r?.start_date),e=norm(r?.end_date||r?.start_date);if(!s)return false;
-        return s<=futureEnd&&(e||s)>=recentStart;
-      })
+      .filter(r=>String(r?.staff_id||'')===String(mine)&&realLeave(r)&&overlapsMonth(r,month))
       .map(r=>{
         const start=norm(r?.start_date),deadline=vacation(r)?addDays(start,-VACATION_ADVANCE_DAYS):'',daysToDeadline=deadline?diffDays(deadline,today):null;
         return {...r,_v481Deadline:deadline,_v481DaysToDeadline:daysToDeadline};
       })
-      .sort((a,b)=>{
-        const ad=a._v481Deadline||norm(a.start_date),bd=b._v481Deadline||norm(b.start_date);
-        return String(ad).localeCompare(String(bd))||String(a.start_date||'').localeCompare(String(b.start_date||''));
-      });
+      .sort((a,b)=>String(a.start_date||'').localeCompare(String(b.start_date||''))||String(a.created_at||'').localeCompare(String(b.created_at||'')));
   }
 
   function vacationMeta(row){
@@ -95,27 +107,44 @@
     return {key:'plan',label:`ต้องยื่นภายใน ${deadline}`,detail:'ลาพักผ่อนต้องลาออนไลน์ล่วงหน้าอย่างน้อย 3 วันปฏิทิน'};
   }
 
+  function statusBlock(row){
+    if(checked(row))return `<div class="v481-month-status is-checked"><b>✓ ตรวจสอบ HR แล้ว</b><span>Admin ตรวจรายการใน HC iService แล้ว</span></div>`;
+    if(pendingAdmin(row))return `<div class="v481-month-status is-pending"><b>✓ ลาในระบบแล้ว</b><span>ส่งให้ Admin แล้ว • รอตรวจสอบ HR</span></div>`;
+    if(retry(row))return `<div class="v481-month-status is-retry"><b>⚠ Admin ตรวจไม่พบใน HC iService</b><span>ตรวจ/บันทึกใน HC iService ใหม่ แล้วกดยืนยันอีกครั้ง</span></div>`;
+    return '';
+  }
+  function actionBlock(row){
+    if(checked(row)||pendingAdmin(row))return '';
+    return `<div class="v481-reminder-actions">
+      <a class="v481-open-link" href="${LEAVE_URL}" target="_blank" rel="noopener noreferrer external"><span class="v481-step-no">1</span> เปิด HC iService ↗</a>
+      <button type="button" class="v481-confirm-btn" data-v481-mark-hr="${esc(row.id)}"><span class="v481-step-no">2</span> ✓ ลาในระบบแล้ว</button>
+    </div>`;
+  }
   function rowHtml(row){
-    const m=vacationMeta(row),type=typeOf(row),period=periodOf(row);
-    return `<div class="v481-reminder-item tone-${esc(m.key)}">
+    const m=vacationMeta(row),type=typeOf(row),period=periodOf(row),done=checked(row),pending=pendingAdmin(row),again=retry(row);
+    const tone=done?'checked':pending?'pending':again?'retry':m.key;
+    return `<div class="v481-reminder-item tone-${esc(tone)}">
       <div class="v481-reminder-main">
-        <div class="v481-reminder-title"><b>${esc(type)}</b><span class="v481-period">${esc(period)}</span>${vacation(row)?'<span class="v481-vacation">กติกา 3 วัน</span>':''}</div>
+        <div class="v481-reminder-title"><b>${esc(type)}</b><span class="v481-period">${esc(period)}</span>${vacation(row)?'<span class="v481-vacation">ล่วงหน้า 3 วัน</span>':''}</div>
         <div class="v481-reminder-date"><b>วันลา</b> ${esc(thaiRange(row))}</div>
-        <div class="v481-reminder-rule"><strong>${esc(m.label)}</strong><span>${esc(m.detail)}</span></div>
+        ${done||pending||again?'':`<div class="v481-reminder-rule"><strong>${esc(m.label)}</strong><span>${esc(m.detail)}</span></div>`}
+        ${statusBlock(row)}
       </div>
-      <div class="v481-reminder-actions">
-        <a class="v481-open-link" href="${LEAVE_URL}" target="_blank" rel="noopener noreferrer external">เปิด HC iService ↗</a>
-        <button type="button" class="v481-confirm-btn" data-v481-mark-hr="${esc(row.id)}">✓ ลาในระบบแล้ว</button>
-      </div>
+      ${actionBlock(row)}
     </div>`;
   }
 
   function panelHtml(){
     if(effectiveAdmin())return'';
-    const rows=actionableRows(),shown=rows.slice(0,6),extra=Math.max(0,rows.length-shown.length);
-    const head=`<div class="v481-reminder-head"><div><h3>ลาออนไลน์ HC iService</h3><p>Staff Planner มีรายการลาแล้ว แต่ต้องลาในระบบโรงพยาบาลแยกอีกครั้ง • เมื่อลาออนไลน์เสร็จให้กด “ลาในระบบแล้ว”</p></div><a class="v481-head-link" href="${LEAVE_URL}" target="_blank" rel="noopener noreferrer external">เปิด HC iService ↗</a></div>`;
-    if(!rows.length)return `<section class="card v481-staff-hr-reminder is-clear" data-v481-staff-hr-reminder>${head}<div class="v481-clear"><span>✓</span><div><b>ตอนนี้ไม่มีรายการลาที่รอยืนยัน HC iService</b><small>ถ้ามีรายการลาใหม่ ระบบจะเริ่มเตือนเมื่อเหลือ 7 วันก่อนวันลา โดยไม่ยึดว่าวันที่ Dashboard กำลังเปิดคือวันไหน</small></div></div></section>`;
-    return `<section class="card v481-staff-hr-reminder" data-v481-staff-hr-reminder>${head}<div class="v481-reminder-list">${shown.map(rowHtml).join('')}</div>${extra?`<div class="v481-more">และอีก ${extra} รายการ • ดูรายการลาเพิ่มเติมได้ที่เมนู แจ้งลา / ไม่รับเวร</div>`:''}<div class="v481-footnote">“ลาในระบบแล้ว” = Staff ยืนยันว่าได้บันทึกใน HC iService แล้ว จากนั้นสถานะจะเปลี่ยนเป็น <b>รอตรวจสอบ HR</b> เพื่อให้ Admin ตรวจต่อ</div></section>`;
+    const month=selectedMonthKey(),rows=actionableRows();
+    const waiting=rows.filter(r=>!reported(r)).length,pending=rows.filter(pendingAdmin).length,done=rows.filter(checked).length;
+    const head=`<div class="v481-reminder-head"><div><h3>ลาออนไลน์ HC iService</h3><p>รายการลาของคุณในเดือน <b>${esc(thaiMonthYear(month))}</b> • ทำ HC iService แล้วให้กด “ลาในระบบแล้ว” ที่รายการนั้น</p></div></div>`;
+    if(!rows.length)return `<section class="card v481-staff-hr-reminder is-clear" data-v481-staff-hr-reminder>${head}<div class="v481-clear"><span>✓</span><div><b>เดือนนี้ไม่มีรายการลา</b><small>เมื่อมีการบันทึกลาใน Staff Planner รายการจะขึ้นที่กล่องนี้ทันที</small></div></div></section>`;
+    return `<section class="card v481-staff-hr-reminder" data-v481-staff-hr-reminder>${head}
+      <div class="v481-month-summary"><span><b>${rows.length}</b> รายการ</span><span class="is-waiting"><b>${waiting}</b> รอยืนยัน</span><span class="is-pending"><b>${pending}</b> รอ Admin</span><span class="is-done"><b>${done}</b> ตรวจแล้ว</span></div>
+      <div class="v481-reminder-list">${rows.map(rowHtml).join('')}</div>
+      <div class="v481-footnote"><b>ทำตามรายการ:</b> ① กด “เปิด HC iService” → บันทึกลาในระบบโรงพยาบาล → กลับมาที่ Staff Planner → ② กด “ลาในระบบแล้ว”</div>
+    </section>`;
   }
 
   function mutateDashboard(html){
@@ -256,11 +285,13 @@
     .v481-reminder-list{display:grid;gap:8px;margin-top:12px}.v481-reminder-item{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 12px;border:1px solid #e0e9f0;border-radius:13px;background:#fff}.v481-reminder-item.tone-late{border-color:#ffc8c3;background:#fff8f7}.v481-reminder-item.tone-today{border-color:#ffd795;background:#fffaf1}.v481-reminder-item.tone-soon{border-color:#cfe2f0;background:#fbfdff}
     .v481-reminder-main{display:grid;gap:5px;min-width:0}.v481-reminder-title{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:#29465b}.v481-reminder-title b{font-size:13px}.v481-period,.v481-vacation{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:850}.v481-period{background:#eaf3ff;color:#275f94}.v481-vacation{background:#e8f7ed;color:#317e56}.v481-reminder-date{font-size:10px;color:#6c8091}.v481-reminder-date b{color:#3c566a}.v481-reminder-rule{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-size:10px}.v481-reminder-rule strong{color:#2877a9}.v481-reminder-rule span{color:#788b9a}.tone-late .v481-reminder-rule strong{color:#b33228}.tone-today .v481-reminder-rule strong{color:#a86100}
     .v481-reminder-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:255px}.v481-confirm-btn{appearance:none;border:1px solid #9ed7ba;border-radius:10px;background:#eaf8f0;color:#187449;font:inherit;font-size:10px;font-weight:900;padding:7px 9px;cursor:pointer}.v481-confirm-btn:hover{filter:brightness(.98)}.v481-confirm-btn:disabled{opacity:.55;cursor:wait}
+    .v481-month-summary{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.v481-month-summary>span{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:999px;background:#f2f6f9;color:#607687;font-size:10px;font-weight:800}.v481-month-summary .is-waiting{background:#fff7e8;color:#8a5a08}.v481-month-summary .is-pending{background:#eef6ff;color:#2b6795}.v481-month-summary .is-done{background:#eaf8ef;color:#23724a}
+    .v481-step-no{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:999px;background:rgba(255,255,255,.9);font-size:10px;font-weight:950}.v481-open-link{background:#eaf6ff;border-color:#b9dbf0;color:#176f9f}.v481-confirm-btn{background:#e9f8ef;border-color:#9bd3b4;color:#176f47}.v481-month-status{display:grid;gap:2px;margin-top:2px;padding:7px 9px;border-radius:9px;font-size:10px}.v481-month-status b{font-size:10px}.v481-month-status span{font-size:9px}.v481-month-status.is-checked{background:#eaf8ef;color:#236d49}.v481-month-status.is-pending{background:#eef6ff;color:#2a628e}.v481-month-status.is-retry{background:#fff1ef;color:#a84438}.v481-reminder-item.tone-checked{border-color:#bfe2cc;background:#fbfffc}.v481-reminder-item.tone-pending{border-color:#c8dff0;background:#fbfdff}.v481-reminder-item.tone-retry{border-color:#f2c0ba;background:#fff9f8}
     .v481-clear{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px 12px;border:1px solid #d7ebde;border-radius:12px;background:#f7fcf9}.v481-clear>span{display:grid;place-items:center;width:25px;height:25px;border-radius:999px;background:#e2f5e8;color:#187745;font-weight:950}.v481-clear div{display:grid;gap:2px}.v481-clear b{font-size:11px;color:#37624a}.v481-clear small{font-size:9px;color:#789084}.v481-more,.v481-footnote{margin-top:8px;color:#788b9a;font-size:9px}.v481-footnote{border-top:1px dashed #e3ebf1;padding-top:7px}
     .v481-leave-form-note{display:grid!important;gap:7px;border-color:#bfe0f4!important;background:#f4fbff!important;color:#355c74!important}.v481-leave-form-note[hidden]{display:none!important}.v481-form-note-main{display:grid;gap:2px}.v481-form-note-main>b{color:#245d80}.v481-leave-form-note a{width:max-content;color:#1477b2;font-weight:850;text-decoration:none}.v481-form-vacation-rule>span{display:block;padding:7px 9px;border-radius:9px;font-size:11px;line-height:1.45}.v481-rule-ok{background:#eef9f2;color:#2e6e49}.v481-rule-warn{background:#fff7e8;color:#8b5a00}.v481-rule-danger{background:#fff0ef;color:#a43a32}.v481-rule-neutral{background:#f4f6f8;color:#647586}
     @media(max-width:820px){
       .v481-staff-hr-reminder{margin-bottom:12px}.v481-reminder-head{align-items:stretch;flex-direction:column;gap:8px}.v481-reminder-head h3{font-size:17px}.v481-reminder-head p{font-size:11px}.v481-head-link{width:100%;font-size:12px;padding:9px 10px}
-      .v481-reminder-item{align-items:stretch;flex-direction:column;gap:9px;padding:11px}.v481-reminder-title b{font-size:14px}.v481-period,.v481-vacation{font-size:10px}.v481-reminder-date,.v481-reminder-rule{font-size:11px}.v481-reminder-actions{min-width:0;grid-template-columns:1fr}.v481-open-link,.v481-confirm-btn{width:100%;font-size:12px;padding:9px 10px}.v481-clear b{font-size:12px}.v481-clear small,.v481-more,.v481-footnote{font-size:10px;line-height:1.4}.v481-form-vacation-rule>span{font-size:11px}
+      .v481-reminder-item{align-items:stretch;flex-direction:column;gap:9px;padding:11px}.v481-reminder-title b{font-size:14px}.v481-period,.v481-vacation{font-size:10px}.v481-reminder-date,.v481-reminder-rule{font-size:11px}.v481-reminder-actions{min-width:0;grid-template-columns:1fr}.v481-open-link,.v481-confirm-btn{width:100%;font-size:12px;padding:9px 10px}.v481-clear b{font-size:12px}.v481-clear small,.v481-more,.v481-footnote{font-size:10px;line-height:1.4}.v481-month-summary>span{font-size:10px}.v481-month-status b{font-size:11px}.v481-month-status span{font-size:10px}.v481-step-no{width:20px;height:20px;font-size:11px}.v481-form-vacation-rule>span{font-size:11px}
     }
   `;document.head.appendChild(style);
 
