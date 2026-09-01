@@ -16,7 +16,7 @@
  */
 (function(){
   'use strict';
-  const VERSION='V485_STAFF_HR_MONTH_VIEW';
+  const VERSION='V486_STAFF_HR_COMPACT_MONTH_VIEW';
   const LEAVE_URL='https://www3.ra.mahidol.ac.th/leaveRama/';
   const VACATION_ADVANCE_DAYS=3;
   if(window.__CNMI_V481_STAFF_HR_CONFIRM_ADMIN_PENDING__)return;
@@ -107,11 +107,11 @@
     return {key:'plan',label:`ต้องยื่นภายใน ${deadline}`,detail:'ลาพักผ่อนต้องลาออนไลน์ล่วงหน้าอย่างน้อย 3 วันปฏิทิน'};
   }
 
-  function statusBlock(row){
-    if(checked(row))return `<div class="v481-month-status is-checked"><b>✓ ตรวจสอบ HR แล้ว</b><span>Admin ตรวจรายการใน HC iService แล้ว</span></div>`;
-    if(pendingAdmin(row))return `<div class="v481-month-status is-pending"><b>✓ ลาในระบบแล้ว</b><span>ส่งให้ Admin แล้ว • รอตรวจสอบ HR</span></div>`;
-    if(retry(row))return `<div class="v481-month-status is-retry"><b>⚠ Admin ตรวจไม่พบใน HC iService</b><span>ตรวจ/บันทึกใน HC iService ใหม่ แล้วกดยืนยันอีกครั้ง</span></div>`;
-    return '';
+  function statusInline(row){
+    if(checked(row))return `<span class="v481-inline-status is-checked">✓ Admin ตรวจรายการใน HC iService แล้ว</span>`;
+    if(pendingAdmin(row))return `<span class="v481-inline-status is-pending">✓ ลาในระบบแล้ว • รอ Admin ตรวจ HR</span>`;
+    if(retry(row))return `<span class="v481-inline-status is-retry">⚠ Admin ตรวจไม่พบใน HC iService • กรุณาตรวจ/บันทึกใหม่</span>`;
+    return `<span class="v481-inline-status is-waiting">รอยืนยัน HC iService</span>`;
   }
   function actionBlock(row){
     if(checked(row)||pendingAdmin(row))return '';
@@ -123,12 +123,17 @@
   function rowHtml(row){
     const m=vacationMeta(row),type=typeOf(row),period=periodOf(row),done=checked(row),pending=pendingAdmin(row),again=retry(row);
     const tone=done?'checked':pending?'pending':again?'retry':m.key;
+    const inlineMeta=`<div class="v481-compact-line">
+      <b class="v481-compact-type">${esc(type)}</b>
+      <span class="v481-period">${esc(period)}</span>
+      ${vacation(row)?'<span class="v481-vacation">ล่วงหน้า 3 วัน</span>':''}
+      <span class="v481-compact-date"><b>วันลา</b> ${esc(thaiRange(row))}</span>
+      ${statusInline(row)}
+    </div>`;
     return `<div class="v481-reminder-item tone-${esc(tone)}">
       <div class="v481-reminder-main">
-        <div class="v481-reminder-title"><b>${esc(type)}</b><span class="v481-period">${esc(period)}</span>${vacation(row)?'<span class="v481-vacation">ล่วงหน้า 3 วัน</span>':''}</div>
-        <div class="v481-reminder-date"><b>วันลา</b> ${esc(thaiRange(row))}</div>
+        ${inlineMeta}
         ${done||pending||again?'':`<div class="v481-reminder-rule"><strong>${esc(m.label)}</strong><span>${esc(m.detail)}</span></div>`}
-        ${statusBlock(row)}
       </div>
       ${actionBlock(row)}
     </div>`;
@@ -283,7 +288,7 @@
     .v481-reminder-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.v481-reminder-head h3{margin:0;color:#233f55;font-size:17px}.v481-reminder-head p{margin:4px 0 0;color:#6f8294;font-size:11px;line-height:1.45}
     .v481-head-link,.v481-open-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-weight:850;border-radius:10px;white-space:nowrap}.v481-head-link{padding:9px 12px;background:#e7f5ff;color:#1573ad;border:1px solid #bfe3f8;font-size:11px}.v481-open-link{padding:7px 9px;border:1px solid #d6e7f3;background:#f5fbff;color:#2573a3;font-size:10px}
     .v481-reminder-list{display:grid;gap:8px;margin-top:12px}.v481-reminder-item{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 12px;border:1px solid #e0e9f0;border-radius:13px;background:#fff}.v481-reminder-item.tone-late{border-color:#ffc8c3;background:#fff8f7}.v481-reminder-item.tone-today{border-color:#ffd795;background:#fffaf1}.v481-reminder-item.tone-soon{border-color:#cfe2f0;background:#fbfdff}
-    .v481-reminder-main{display:grid;gap:5px;min-width:0}.v481-reminder-title{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:#29465b}.v481-reminder-title b{font-size:13px}.v481-period,.v481-vacation{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:850}.v481-period{background:#eaf3ff;color:#275f94}.v481-vacation{background:#e8f7ed;color:#317e56}.v481-reminder-date{font-size:10px;color:#6c8091}.v481-reminder-date b{color:#3c566a}.v481-reminder-rule{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-size:10px}.v481-reminder-rule strong{color:#2877a9}.v481-reminder-rule span{color:#788b9a}.tone-late .v481-reminder-rule strong{color:#b33228}.tone-today .v481-reminder-rule strong{color:#a86100}
+    .v481-reminder-main{display:grid;gap:4px;min-width:0;flex:1}.v481-compact-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;color:#29465b;font-size:10px;line-height:1.35}.v481-compact-type{font-size:13px;color:#29465b}.v481-period,.v481-vacation{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:850;white-space:nowrap}.v481-period{background:#eaf3ff;color:#275f94}.v481-vacation{background:#e8f7ed;color:#317e56}.v481-compact-date{color:#6c8091;white-space:nowrap}.v481-compact-date b{color:#3c566a}.v481-inline-status{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:9px;font-weight:850;white-space:nowrap}.v481-inline-status.is-checked{background:#eaf8ef;color:#236d49}.v481-inline-status.is-pending{background:#eef6ff;color:#2a628e}.v481-inline-status.is-retry{background:#fff1ef;color:#a84438}.v481-inline-status.is-waiting{background:#fff7e8;color:#8a5a08}.v481-reminder-rule{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-size:10px}.v481-reminder-rule strong{color:#2877a9}.v481-reminder-rule span{color:#788b9a}.tone-late .v481-reminder-rule strong{color:#b33228}.tone-today .v481-reminder-rule strong{color:#a86100}
     .v481-reminder-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:255px}.v481-confirm-btn{appearance:none;border:1px solid #9ed7ba;border-radius:10px;background:#eaf8f0;color:#187449;font:inherit;font-size:10px;font-weight:900;padding:7px 9px;cursor:pointer}.v481-confirm-btn:hover{filter:brightness(.98)}.v481-confirm-btn:disabled{opacity:.55;cursor:wait}
     .v481-month-summary{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.v481-month-summary>span{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:999px;background:#f2f6f9;color:#607687;font-size:10px;font-weight:800}.v481-month-summary .is-waiting{background:#fff7e8;color:#8a5a08}.v481-month-summary .is-pending{background:#eef6ff;color:#2b6795}.v481-month-summary .is-done{background:#eaf8ef;color:#23724a}
     .v481-step-no{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:999px;background:rgba(255,255,255,.9);font-size:10px;font-weight:950}.v481-open-link{background:#eaf6ff;border-color:#b9dbf0;color:#176f9f}.v481-confirm-btn{background:#e9f8ef;border-color:#9bd3b4;color:#176f47}.v481-month-status{display:grid;gap:2px;margin-top:2px;padding:7px 9px;border-radius:9px;font-size:10px}.v481-month-status b{font-size:10px}.v481-month-status span{font-size:9px}.v481-month-status.is-checked{background:#eaf8ef;color:#236d49}.v481-month-status.is-pending{background:#eef6ff;color:#2a628e}.v481-month-status.is-retry{background:#fff1ef;color:#a84438}.v481-reminder-item.tone-checked{border-color:#bfe2cc;background:#fbfffc}.v481-reminder-item.tone-pending{border-color:#c8dff0;background:#fbfdff}.v481-reminder-item.tone-retry{border-color:#f2c0ba;background:#fff9f8}
@@ -291,7 +296,7 @@
     .v481-leave-form-note{display:grid!important;gap:7px;border-color:#bfe0f4!important;background:#f4fbff!important;color:#355c74!important}.v481-leave-form-note[hidden]{display:none!important}.v481-form-note-main{display:grid;gap:2px}.v481-form-note-main>b{color:#245d80}.v481-leave-form-note a{width:max-content;color:#1477b2;font-weight:850;text-decoration:none}.v481-form-vacation-rule>span{display:block;padding:7px 9px;border-radius:9px;font-size:11px;line-height:1.45}.v481-rule-ok{background:#eef9f2;color:#2e6e49}.v481-rule-warn{background:#fff7e8;color:#8b5a00}.v481-rule-danger{background:#fff0ef;color:#a43a32}.v481-rule-neutral{background:#f4f6f8;color:#647586}
     @media(max-width:820px){
       .v481-staff-hr-reminder{margin-bottom:12px}.v481-reminder-head{align-items:stretch;flex-direction:column;gap:8px}.v481-reminder-head h3{font-size:17px}.v481-reminder-head p{font-size:11px}.v481-head-link{width:100%;font-size:12px;padding:9px 10px}
-      .v481-reminder-item{align-items:stretch;flex-direction:column;gap:9px;padding:11px}.v481-reminder-title b{font-size:14px}.v481-period,.v481-vacation{font-size:10px}.v481-reminder-date,.v481-reminder-rule{font-size:11px}.v481-reminder-actions{min-width:0;grid-template-columns:1fr}.v481-open-link,.v481-confirm-btn{width:100%;font-size:12px;padding:9px 10px}.v481-clear b{font-size:12px}.v481-clear small,.v481-more,.v481-footnote{font-size:10px;line-height:1.4}.v481-month-summary>span{font-size:10px}.v481-month-status b{font-size:11px}.v481-month-status span{font-size:10px}.v481-step-no{width:20px;height:20px;font-size:11px}.v481-form-vacation-rule>span{font-size:11px}
+      .v481-reminder-item{align-items:stretch;flex-direction:column;gap:7px;padding:9px 10px}.v481-compact-line{gap:5px;font-size:10px}.v481-compact-type{font-size:13px}.v481-period,.v481-vacation{font-size:9px}.v481-compact-date{font-size:10px}.v481-inline-status{font-size:9px;padding:4px 7px}.v481-reminder-rule{font-size:10px}.v481-reminder-actions{min-width:0;grid-template-columns:1fr}.v481-open-link,.v481-confirm-btn{width:100%;font-size:12px;padding:9px 10px}.v481-clear b{font-size:12px}.v481-clear small,.v481-more,.v481-footnote{font-size:10px;line-height:1.4}.v481-month-summary>span{font-size:10px}.v481-month-status b{font-size:11px}.v481-month-status span{font-size:10px}.v481-step-no{width:20px;height:20px;font-size:11px}.v481-form-vacation-rule>span{font-size:11px}
     }
   `;document.head.appendChild(style);
 
