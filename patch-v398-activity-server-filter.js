@@ -76,12 +76,15 @@
     return `<div class="activity-card-list">${rows.map(r => {
       const participants = (Array.isArray(r.participant_ids) ? r.participant_ids : []).map(staffNick).filter(Boolean).join(', ') || '-';
       const canEdit = isAdmin() || r.created_by === currentStaffId() || r.owner_id === currentStaffId();
-      return `<div class="activity-row-card">
+      const files = window.cnmiActivityAttachmentsV487?.parse ? window.cnmiActivityAttachmentsV487.parse(r.attachment_path) : (r.attachment_path ? [{path:r.attachment_path,name:'ไฟล์แนบ 1'}] : []);
+      const fileButtons = files.length ? `<div class="activity-row-detail v487-activity-files"><span>ไฟล์แนบ</span><b class="v487-file-buttons">${files.map((file,index)=>`<button type="button" class="tiny-btn v487-view-file-btn" data-v487-open-activity-file="${r.id}:${index}">📎 ดูไฟล์ ${index+1}</button>`).join('')}</b></div>` : '';
+      return `<div class="activity-row-card" data-v487-activity-id="${r.id}">
         <div class="activity-row-head"><div><b>${escapeHtml(r.title)}</b><br>${badge(r.event_type, activityClass(r.event_type))}</div><span class="muted">${formatThaiDate(r.start_date)}</span></div>
         <div class="activity-row-detail"><span>เวลา</span><b>${escapeHtml([r.start_time, r.end_time].filter(Boolean).join(' - ') || '-')}</b></div>
         <div class="activity-row-detail"><span>สถานที่</span><b>${escapeHtml(r.location || '-')}</b></div>
         <div class="activity-row-detail"><span>ผู้รับผิดชอบ</span><b>${escapeHtml(staffNick(r.owner_id) || '-')}</b></div>
         <div class="activity-row-detail"><span>ผู้เข้าร่วม</span><b>${escapeHtml(participants)}</b></div>
+        ${fileButtons}
         <div class="actions">${canEdit ? `<button class="tiny-btn" data-edit-activity="${r.id}">แก้ไข</button><button class="tiny-btn danger" data-delete-activity="${r.id}">ลบ</button>` : '<span class="muted">ดูอย่างเดียว</span>'}</div>
       </div>`;
     }).join('')}</div>`;

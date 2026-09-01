@@ -106,6 +106,46 @@
     return `<div class="v396-participants">${rows.map(p=>`<label class="v396-participant"><input type="checkbox" name="participant_ids" value="${esc(p.id)}" ${ids.has(String(p.id))?'checked':''}><span><b>${esc(p.nickname||p.full_name||'-')}</b><small>${esc(p.full_name||'')}</small></span></label>`).join('')}</div>`;
   }
 
+  // V487: activity attachments support legacy single-path values and new multi-file JSON values.
+  function activityAttachmentsV487(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.map((item,index)=>normalizeActivityAttachmentV487(item,index)).filter(Boolean);
+    if (typeof value === 'object') { const item=normalizeActivityAttachmentV487(value,0); return item?[item]:[]; }
+    const raw=String(value||'').trim();
+    if (!raw) return [];
+    if (/^[\[{]/.test(raw)) {
+      try {
+        const parsed=JSON.parse(raw);
+        const list=Array.isArray(parsed)?parsed:[parsed];
+        return list.map((item,index)=>normalizeActivityAttachmentV487(item,index)).filter(Boolean);
+      } catch (_) {}
+    }
+    const item=normalizeActivityAttachmentV487(raw,0);
+    return item?[item]:[];
+  }
+  function normalizeActivityAttachmentV487(item,index) {
+    if (!item) return null;
+    if (typeof item === 'string') return {path:item,name:activityAttachmentNameV487(item,index),mime:''};
+    const path=String(item.path||item.attachment_path||item.url||'').trim();
+    if (!path) return null;
+    return {path,name:String(item.name||item.file_name||activityAttachmentNameV487(path,index)).trim(),mime:String(item.mime||item.type||'').trim()};
+  }
+  function activityAttachmentNameV487(path,index) {
+    const raw=String(path||'').split('?')[0].split('/').pop()||'';
+    const clean=raw.replace(/^\d+_/, '').replace(/_+/g,' ').trim();
+    return clean && /[A-Za-z0-9ก-๙]/.test(clean) ? clean : `ไฟล์แนบ ${Number(index||0)+1}`;
+  }
+  function encodeActivityAttachmentsV487(items) {
+    const clean=(items||[]).map((item,index)=>normalizeActivityAttachmentV487(item,index)).filter(Boolean);
+    return clean.length ? JSON.stringify(clean) : null;
+  }
+  function attachmentEditorV487(editing) {
+    const files=activityAttachmentsV487(editing?.attachment_path);
+    const existing=files.length ? `<div class="v487-existing-files"><div class="v487-existing-title">ไฟล์แนบเดิม ${files.length} ไฟล์</div>${files.map((file,index)=>`<div class="v487-existing-file"><button type="button" class="tiny-btn" data-v487-open-activity-file="${esc(editing?.id||'')}:${index}">ดูไฟล์ ${index+1}</button><span class="v487-file-name">${esc(file.name||`ไฟล์แนบ ${index+1}`)}</span><label class="v487-keep-file"><input type="checkbox" name="keep_activity_attachment" value="${index}" checked> เก็บไว้</label></div>`).join('')}</div>` : '';
+    return `<label class="wide v487-attachment-field">เอกสารแนบ <input name="file" type="file" multiple><small class="hint">เลือกพร้อมกันได้หลายไฟล์ • ถ้าแก้ไขกิจกรรมภายหลัง สามารถเลือกไฟล์เพิ่มได้โดยไฟล์เดิมยังอยู่</small>${existing}</label>`;
+  }
+  window.cnmiActivityAttachmentsV487={parse:activityAttachmentsV487,encode:encodeActivityAttachmentsV487,name:activityAttachmentNameV487};
+
   const oldActivities = window.renderActivitiesPage || renderActivitiesPage;
   function renderActivitiesV396() {
     const rows=S().activities||[];
@@ -124,7 +164,7 @@
         <label>สถานที่ <input name="location" list="activityLocationList" value="${esc(editing?.location||'')}" required></label><datalist id="activityLocationList">${(typeof ACTIVITY_LOCATIONS!=='undefined'?ACTIVITY_LOCATIONS:[]).map(x=>`<option value="${esc(x)}"></option>`).join('')}</datalist>
         <label>วันที่เริ่ม <input name="start_date" type="date" value="${esc(editing?.start_date||todayStr())}" required></label><label>วันที่สิ้นสุด <input name="end_date" type="date" value="${esc(editing?.end_date||todayStr())}" required></label>
         <label>เวลาเริ่ม <input name="start_time" type="time" value="${esc(editing?.start_time||'')}" required></label><label>เวลาสิ้นสุด <input name="end_time" type="time" value="${esc(editing?.end_time||'')}" required></label>
-        <label>ผู้รับผิดชอบ <select name="owner_id" required><option value="">เลือกผู้รับผิดชอบ</option>${staffOptions(editing?.owner_id||actor())}</select></label><label>เอกสารแนบ <input name="file" type="file"></label>
+        <label>ผู้รับผิดชอบ <select name="owner_id" required><option value="">เลือกผู้รับผิดชอบ</option>${staffOptions(editing?.owner_id||actor())}</select></label>${attachmentEditorV487(editing)}
         <div class="wide"><div class="field-label">ผู้เข้าร่วม</div>${participantChecks(asArray(editing?.participant_ids))}</div>
         <label class="wide">หมายเหตุเพิ่มเติม <textarea name="note">${esc(cleanActivityNote(editing?.note||''))}</textarea></label><button class="primary-btn wide" type="submit">${editing?'บันทึกการแก้ไข':'บันทึกกิจกรรม'}</button>
       </form></div><div class="card"><div class="section-title"><h3>กิจกรรมทั้งหมด</h3></div>${table}</div></div>`;
@@ -145,8 +185,20 @@
     if(row.end_date<row.start_date)return showToast('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');
     if(row.start_date===row.end_date&&row.end_time<=row.start_time)return showToast('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม');
     try{
-      const file=fd.get('file'); if(file?.size&&typeof uploadFile==='function') row.attachment_path=await uploadFile(file,'activities');
       const id=S().editingActivityId;
+      const editing=id ? (S().activities||[]).find(x=>idEq(x.id,id)) : null;
+      const existingFiles=activityAttachmentsV487(editing?.attachment_path);
+      const keepIndexes=new Set([...form.querySelectorAll('[name="keep_activity_attachment"]:checked')].map(x=>Number(x.value)));
+      const keptFiles=id ? existingFiles.filter((_,index)=>keepIndexes.has(index)) : [];
+      const selectedFiles=[...form.querySelectorAll('input[name="file"]')].flatMap(input=>Array.from(input.files||[])).filter(file=>file&&file.size);
+      const uploadedFiles=[];
+      for (const file of selectedFiles) {
+        if (typeof uploadFile!=='function') throw new Error('ระบบอัปโหลดไฟล์ยังไม่พร้อมใช้งาน');
+        const path=await uploadFile(file,'activities');
+        uploadedFiles.push({path,name:file.name||activityAttachmentNameV487(path,uploadedFiles.length),mime:file.type||''});
+      }
+      row.attachment_path=encodeActivityAttachmentsV487([...keptFiles,...uploadedFiles]);
+      const removedFiles=id ? existingFiles.filter((_,index)=>!keepIndexes.has(index)) : [];
       const persist=payload=>id?DB().from('activity_events').update(payload).eq('id',id).select('*').single():DB().from('activity_events').insert({...payload,created_by:actor()}).select('*').single();
       let res=await persist(row);
       if(res.error&&isMissingOrganizerColumn(res.error)){
@@ -155,6 +207,10 @@
         res=await persist(compatibleRow);
       }
       if(res.error)throw res.error;
+      if (removedFiles.length) {
+        const paths=removedFiles.map(x=>String(x.path||'').replace(/^staff-files\//,'').replace(/^\/+/, '')).filter(Boolean);
+        if (paths.length) DB().storage.from('staff-files').remove(paths).catch(()=>{});
+      }
       const activityId=res.data?.id||id;
       const old=await DB().from(TABLE).select('*').eq('activity_id',activityId);
       if(old.error&&!/does not exist|relation/i.test(old.error.message||''))throw old.error;
