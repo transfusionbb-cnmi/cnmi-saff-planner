@@ -1,65 +1,37 @@
-/* CNMI Staff Planner V464
- * 1) Admin pending center auto-refreshes on Dashboard (every 60s while visible),
- *    and refreshes when the app returns to foreground / Dashboard is opened.
- * 2) Users page clarifies that Role=staff is independent from trainee/regular status,
- *    and daily_position_start_date is the effective date for becoming regular.
+/* CNMI Staff Planner V490 compatibility replacement for V464
+ * - Removes the 60-second Admin pending auto-refresh and all focus/visibility auto-refresh.
+ * - Admin pending still loads normally when Dashboard is rendered by V460.
+ * - Admin can refresh only by pressing the existing ↻ button.
+ * - Keeps the useful Users-page Role / daytime-position lifecycle hints from V464.
  * No SQL required.
  */
 (function(){
   'use strict';
-  const VERSION='V464_ADMIN_PENDING_AUTO_REFRESH_ROLE_HINT';
+  const VERSION='V490_ADMIN_PENDING_MANUAL_REFRESH_ONLY';
   if(window.__CNMI_V464_ADMIN_PENDING_AUTO_REFRESH_ROLE_HINT__)return;
   window.__CNMI_V464_ADMIN_PENDING_AUTO_REFRESH_ROLE_HINT__=true;
 
   function S(){try{return window.state||state||{};}catch(_){return window.state||{};}}
-  function actualAdmin(){try{return typeof window.isActualAdminV167==='function'?!!window.isActualAdminV167():(typeof isAdmin==='function'&&!!isAdmin());}catch(_){return String(S()?.profile?.role||'').toLowerCase()==='admin';}}
+  function actualAdmin(){
+    try{return typeof window.isActualAdminV167==='function'?!!window.isActualAdminV167():(typeof isAdmin==='function'&&!!isAdmin());}
+    catch(_){return String(S()?.profile?.role||'').toLowerCase()==='admin';}
+  }
   function onDashboard(){return String(S()?.page||'')==='dashboard';}
   function api(){return window.cnmiV460||null;}
-  let lastAttempt=0;
-  let timer=null;
 
-  function preserveScroll(){
-    const page=document.getElementById('pageContent');
-    return {y:window.scrollY||0,pageTop:page?.scrollTop||0};
-  }
-  function restoreScroll(pos){
-    setTimeout(()=>{
-      try{window.scrollTo({top:pos?.y||0,left:0,behavior:'auto'});}catch(_){try{window.scrollTo(0,pos?.y||0);}catch(__){}}
-      try{const page=document.getElementById('pageContent');if(page)page.scrollTop=pos?.pageTop||0;}catch(_){ }
-    },0);
-  }
-  async function refreshPending(reason='timer',force=true){
+  // Exposed for compatibility only. This function is never called automatically.
+  async function refreshPending(reason='manual',force=true){
     const a=api();
-    if(!actualAdmin()||!onDashboard()||document.hidden||!a?.loadAdminPending)return;
-    if(a.pendingCache?.status==='loading')return;
-    const now=Date.now();
-    // Guard bursts caused by focus + visibilitychange firing together.
-    if(now-lastAttempt<5000)return;
-    lastAttempt=now;
-    const pos=preserveScroll();
-    try{
-      await a.loadAdminPending(!!force);
-    }catch(err){console.warn('[V464] pending auto refresh',reason,err);}
-    finally{restoreScroll(pos);}
+    if(!actualAdmin()||!onDashboard()||!a?.loadAdminPending)return [];
+    if(a.pendingCache?.status==='loading')return [];
+    try{return await a.loadAdminPending(!!force);}
+    catch(err){console.warn('[V490] pending manual refresh',reason,err);return [];}
   }
-
-  function startTimer(){
-    if(timer)return;
-    timer=setInterval(()=>{refreshPending('interval',true);},60000);
-  }
-  startTimer();
-
-  window.addEventListener('focus',()=>{setTimeout(()=>refreshPending('focus',true),120);});
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(()=>refreshPending('visible',true),150);});
-  document.addEventListener('click',e=>{
-    const b=e.target?.closest?.('[data-page="dashboard"], [data-nav-page="dashboard"]');
-    if(b)setTimeout(()=>refreshPending('dashboard-open',true),250);
-  },true);
 
   // Clarify account Role vs daytime-position lifecycle in Admin > Users.
   const previousUsers=window.renderUsersPage||(typeof renderUsersPage==='function'?renderUsersPage:null);
   if(typeof previousUsers==='function'){
-    const wrapped=function renderUsersPageV464(){
+    const wrapped=function renderUsersPageV490(){
       let html=String(previousUsers.apply(this,arguments)||'');
       try{
         html=html.replace(/(<label>Role\s*<select\s+data-field="role"[\s\S]*?<\/select>)(<\/label>)/i,
@@ -72,17 +44,18 @@
     try{window.renderUsersPage=renderUsersPage=wrapped;}catch(_){window.renderUsersPage=wrapped;}
   }
 
-  // Add a tiny visible note so Admin knows the center no longer requires manual refresh.
+  // Make the pending panel explicitly manual so Admin knows the ↻ button is the refresh control.
   function decoratePendingPanel(){
     if(!actualAdmin()||!onDashboard())return;
     const panel=document.querySelector('[data-v460-admin-pending]');
-    if(!panel||panel.querySelector('[data-v464-auto-note]'))return;
+    if(!panel)return;
+    panel.querySelectorAll('[data-v464-auto-note]').forEach(el=>el.remove());
     const p=panel.querySelector('.v460-admin-pending-head p');
-    if(p){
+    if(p&&!p.querySelector('[data-v490-manual-note]')){
       const note=document.createElement('span');
-      note.setAttribute('data-v464-auto-note','');
-      note.className='v464-auto-note';
-      note.textContent=' • อัปเดตอัตโนมัติทุก 1 นาที';
+      note.setAttribute('data-v490-manual-note','');
+      note.className='v490-manual-note';
+      note.textContent=' • กด ↻ เมื่อต้องการอัปเดต';
       p.appendChild(note);
     }
   }
@@ -90,11 +63,12 @@
   try{mo.observe(document.getElementById('pageContent')||document.body,{childList:true,subtree:true});}catch(_){ }
   setTimeout(decoratePendingPanel,300);
 
-  const style=document.createElement('style');style.id='cnmi-v464-style';style.textContent=`
-    .v464-role-hint{display:block;margin-top:4px;color:#6f8190!important;font-size:9px!important;line-height:1.35!important;font-weight:500!important}.v464-role-hint b{color:#245d80}.v464-auto-note{color:#3c7d5a;font-weight:800}
+  const style=document.createElement('style');style.id='cnmi-v490-admin-manual-style';style.textContent=`
+    .v464-role-hint{display:block;margin-top:4px;color:#6f8190!important;font-size:9px!important;line-height:1.35!important;font-weight:500!important}.v464-role-hint b{color:#245d80}.v490-manual-note{color:#667f91;font-weight:750}
     @media(max-width:820px){.v464-role-hint{font-size:10px!important;line-height:1.4!important}}
   `;document.head.appendChild(style);
 
-  window.cnmiV464={version:VERSION,refreshPending};
+  window.cnmiV464={version:VERSION,refreshPending,mode:'manual-only'};
+  window.cnmiV490={version:VERSION,refreshPending,mode:'manual-only'};
   console.info(`${VERSION} loaded`);
 })();
