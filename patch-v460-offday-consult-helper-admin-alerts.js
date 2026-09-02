@@ -19,7 +19,7 @@
  */
 (function(){
   'use strict';
-  const VERSION='V460_OFFDAY_CONSULT_HELPER_ADMIN_ALERTS';
+  const VERSION='V491_ADMIN_PENDING_FRESH_MANUAL_ONLY';
   if(window.__CNMI_V460_OFFDAY_CONSULT_HELPER_ADMIN_ALERTS__)return;
   window.__CNMI_V460_OFFDAY_CONSULT_HELPER_ADMIN_ALERTS__=true;
 
@@ -186,7 +186,7 @@
   async function loadAdminPending(force=false){
     if(!actualAdmin())return [];
     if(pendingCache.status==='loading'&&!force)return pendingCache.promise;
-    if(pendingCache.status==='loaded'&&!force&&Date.now()-pendingCache.loadedAt<120000)return pendingCache.categories;
+    if(pendingCache.status==='loaded'&&!force)return pendingCache.categories;
     const db=DB();if(!db)return[];
     pendingCache.status='loading';pendingCache.error='';
     const promise=(async()=>{
@@ -196,7 +196,7 @@
           db.from('ot_requests').select('*').in('status',['รออนุมัติ','pending']).order('work_date',{ascending:true}).limit(200),
           db.from('leave_requests').select('*').in('status',['รออนุมัติยกเลิก','cancel_requested','pending_cancel','pending_cancellation']).order('start_date',{ascending:true}).limit(200),
           db.from('profile_change_requests').select('*').order('created_at',{ascending:false}).limit(200),
-          db.from('hr_checks').select('*').order('updated_at',{ascending:false}).limit(500),
+          db.from('hr_checks').select('*').order('updated_at',{ascending:false}).limit(1000),
           loadHelperCancelRequests(db)
         ]);
         const trades=safeRows(tradesRes),ots=safeRows(otRes),leaveCancels=safeRows(leaveRes),hrRows=safeRows(hrRes);
@@ -208,7 +208,10 @@
           }
         }
         if(profileRows.length)S().profileChangeRequests=profileRows;
-        if(hrRows.length)S().hrChecks=hrRows;
+        // V491: replace the HR snapshot even when the server returns zero rows.
+        // Keeping an old non-empty state here was the main reason completed HR items
+        // could reappear after reopening the Dashboard.
+        S().hrChecks=hrRows;
         const assignmentIds=[...new Set(trades.map(r=>String(r?.from_assignment_id||'')).filter(Boolean))];
         let assignments=[];
         if(assignmentIds.length){
@@ -231,9 +234,29 @@
         const helperItems=(helperCancels||[]).map(r=>({id:r.id,page:'donorHelpers',month:r._v460_month||monthOf(r.work_date),date:norm(r.work_date),title:helperName(r),detail:`${thaiDate(norm(r.work_date))} · ขอยกเลิกมาช่วย`}));
         let hrItems=[];
         try{
-          const api=window.cnmiHrSummaryV437;
-          if(api?.pendingRows){hrItems=api.pendingRows().map(r=>({id:r.id,page:'hr',month:monthOf(r.start_date),date:norm(r.start_date),title:staffName(r.staff_id),detail:`${String(r.type||r.leave_type||'ลา').split(':::')[0]} · ${api.pendingStatus?.(r)?.label||'รอตรวจ HR'}`}));}
-        }catch(_){ }
+          // V491: build Admin HR work directly from the fresh hr_checks query.
+          // Only rows that Staff already confirmed in HC iService are Admin work.
+          const pendingHr=hrRows.filter(h=>{
+            const st=String(h?.status||'').trim();
+            return !!h?.hr_reported_date && st!=='ตรวจสอบแล้ว' && st!=='ยกเลิก';
+          });
+          const leaveIds=[...new Set(pendingHr.map(h=>String(h?.leave_request_id||'')).filter(Boolean))];
+          let hrLeaves=[];
+          for(let i=0;i<leaveIds.length;i+=80){
+            const q=await db.from('leave_requests').select('*').in('id',leaveIds.slice(i,i+80));
+            if(!q?.error)hrLeaves.push(...(q.data||[]));
+          }
+          const lmap=new Map(hrLeaves.map(r=>[String(r?.id||''),r]));
+          // Update only the fetched HR-related leave rows in app state so the HR page
+          // and Dashboard agree after a manual refresh.
+          if(hrLeaves.length)mergeRows('leaves',hrLeaves);
+          hrItems=pendingHr.map(h=>{
+            const r=lmap.get(String(h?.leave_request_id||''));
+            if(!r)return null;
+            const type=String(r.type||r.leave_type||'ลา').split(':::')[0];
+            return {id:r.id,page:'hr',month:monthOf(r.start_date),date:norm(r.start_date),title:staffName(r.staff_id),detail:`${type} · น้องแจ้งแล้ว · รอตรวจสอบ HR`};
+          }).filter(Boolean);
+        }catch(err){console.warn('[V491] fresh HR pending',err);}
         pendingCache.categories=[
           {key:'trade',label:'ขายเวร รอ Admin บันทึก',tone:'purple',items:tradeItems},
           {key:'ot',label:'OT รออนุมัติ',tone:'blue',items:otItems},
@@ -256,7 +279,7 @@
 
   function adminPendingPanel(){
     if(!actualAdmin())return'';
-    if(pendingCache.status==='idle'){setTimeout(()=>loadAdminPending(false),0);return `<section class="card v460-admin-pending" data-v460-admin-pending><div class="v460-admin-pending-head"><div><h3>รอดำเนินการ Admin</h3><p>กำลังตรวจรายการที่ต้องกดอนุมัติ/บันทึก…</p></div><span class="v460-admin-total is-loading">…</span></div></section>`;}
+    if(pendingCache.status==='idle')return `<section class="card v460-admin-pending" data-v460-admin-pending><div class="v460-admin-pending-head"><div><h3>รอดำเนินการ Admin</h3><p>กด ↻ เมื่อต้องการตรวจรายการล่าสุดจาก Supabase</p></div><div class="v460-admin-head-actions"><span class="v460-admin-total is-loading">—</span><button type="button" class="v460-refresh-icon" data-v460-refresh-pending title="ตรวจรายการล่าสุด">↻</button></div></div></section>`;
     if(pendingCache.status==='loading')return `<section class="card v460-admin-pending" data-v460-admin-pending><div class="v460-admin-pending-head"><div><h3>รอดำเนินการ Admin</h3><p>กำลังรวมรายการจากทุกเดือน</p></div><span class="v460-admin-total is-loading">…</span></div></section>`;
     if(pendingCache.status==='error')return `<section class="card v460-admin-pending" data-v460-admin-pending><div class="v460-admin-pending-head"><div><h3>รอดำเนินการ Admin</h3><p class="v460-admin-error">${esc(pendingCache.error)}</p></div><button type="button" class="ghost-btn" data-v460-refresh-pending>ลองใหม่</button></div></section>`;
     const cats=pendingCache.categories||[],total=cats.reduce((n,c)=>n+c.items.length,0);
@@ -312,7 +335,13 @@
 
   document.addEventListener('click',e=>{
     const refresh=e.target?.closest?.('[data-v460-refresh-pending]');
-    if(refresh){e.preventDefault();pendingCache.status='idle';loadAdminPending(true);try{if(typeof renderPage==='function')renderPage();}catch(_){}return;}
+    if(refresh){
+      e.preventDefault();e.stopPropagation();
+      pendingCache.status='idle';pendingCache.error='';pendingCache.categories=[];pendingCache.loadedAt=0;
+      try{if(typeof renderPage==='function')renderPage();}catch(_){}
+      loadAdminPending(true);
+      return;
+    }
     const open=e.target?.closest?.('[data-v460-open-page]');
     if(open){e.preventDefault();e.stopPropagation();openPendingTarget(open);}
   },true);
