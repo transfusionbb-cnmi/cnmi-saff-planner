@@ -1,0 +1,14 @@
+/* v494 — CNMI Donor App synchronized events */
+.donor-sync-card{margin-top:16px;border:1px solid #efd9dc;background:linear-gradient(180deg,#fff 0%,#fffafa 100%)}
+.donor-sync-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.donor-sync-head h3{margin:0}.donor-sync-head p{margin:4px 0 0}
+.donor-sync-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:#fff0f2;color:#a92f3d;font-size:12px;font-weight:700;white-space:nowrap}
+.donor-sync-list{display:grid;gap:10px}
+.donor-sync-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;padding:12px 14px;border:1px solid #edf0f2;border-radius:14px;background:#fff}
+.donor-sync-item-main{min-width:0}.donor-sync-item-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px}.donor-sync-item-title b{font-size:15px}
+.donor-sync-meta{display:flex;gap:8px 14px;flex-wrap:wrap;color:#65727a;font-size:13px;line-height:1.5}.donor-sync-meta a{color:inherit;text-decoration:none;font-weight:600}.donor-sync-meta a:hover{text-decoration:underline}
+.donor-sync-type{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#f2f5f7;color:#58656d}.donor-sync-type.platelet{background:#fff0f2;color:#ad3040}.donor-sync-type.group{background:#edf8f2;color:#29744f}.donor-sync-type.mobile{background:#edf6fa;color:#2c6f89}
+.donor-sync-open{align-self:center;white-space:nowrap}
+.donor-sync-empty{padding:16px;border:1px dashed #dfe5e8;border-radius:14px;color:#7b878e;text-align:center;background:#fbfcfc}
+.event-pill[data-donor-sync="platelet"]{background:#fff0f2!important;color:#9e3040!important}.event-pill[data-donor-sync="group"]{background:#edf8f2!important;color:#276d4c!important}.event-pill[data-donor-sync="mobile"]{background:#edf6fa!important;color:#286985!important}
+@media(max-width:820px){.donor-sync-item{grid-template-columns:1fr}.donor-sync-open{justify-self:start}.donor-sync-meta{display:grid;gap:4px}.donor-sync-head{align-items:center}}
