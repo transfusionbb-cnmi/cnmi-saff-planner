@@ -1,0 +1,5 @@
+/* v495 — selected-date donor event card */
+.v495-donor-dashboard{margin-top:16px}
+.v495-dashboard-item .donor-sync-item-title b{font-size:14px}
+.v495-dashboard-item .donor-sync-meta{font-size:12.5px}
+@media(max-width:820px){.v495-donor-dashboard{margin-top:12px}}
