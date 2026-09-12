@@ -55,6 +55,8 @@
     catch(_){const d=new Date(`${norm(date)}T00:00:00`).getDay();return d===0||d===6;}
   }
   function timeText(date,codes,duties=[]){
+    const exactTimes=[...new Set((duties||[]).map(x=>String(x?._effective_time_label||'').trim()).filter(Boolean))];
+    if(exactTimes.length)return exactTimes.join(' + ');
     const effective=(duties||[]).filter(x=>Array.isArray(x?._effective_segments)&&x._effective_segments.length&&Number(x?._effective_hours)>0&&!isCh4(x?.duty_code));
     if(effective.length){
       const order=['morning','afternoon','night'],set=new Set(),hours=Math.round(effective.reduce((sum,x)=>sum+Number(x._effective_hours||0),0)*100)/100;

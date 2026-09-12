@@ -169,7 +169,7 @@
     return 0;
   }
   function cleanTradeNote(note){
-    return String(note||'').replace(/\s*\[SELL_PART=[a-z_]+\]\s*/ig,' ').replace(/\s*\[SELL_HOURS=\d+(?:\.\d+)?\]\s*/ig,' ').replace(/\s*\[SELL_SEGMENTS=[^\]]+\]\s*/ig,' ').replace(/\s*\[SELL_DATE=[^\]]+\]\s*/ig,' ').replace(/\s*\[SELL_DUTY=[^\]]+\]\s*/ig,' ').replace(/\s{2,}/g,' ').trim();
+    return String(note||'').replace(/\s*\[SELL_PART=[a-z_]+\]\s*/ig,' ').replace(/\s*\[SELL_HOURS=\d+(?:\.\d+)?\]\s*/ig,' ').replace(/\s*\[SELL_SEGMENTS=[^\]]+\]\s*/ig,' ').replace(/\s*\[SELL_START=\d{1,2}:\d{2}\]\s*/ig,' ').replace(/\s*\[SELL_END=\d{1,2}:\d{2}\]\s*/ig,' ').replace(/\s*\[SELL_DATE=[^\]]+\]\s*/ig,' ').replace(/\s*\[SELL_DUTY=[^\]]+\]\s*/ig,' ').replace(/\s{2,}/g,' ').trim();
   }
   function soldRateType(trade,a){
     const mode=String(trade?.rate_mode||'receiver');

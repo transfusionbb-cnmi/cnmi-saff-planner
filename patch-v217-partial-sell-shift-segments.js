@@ -21,6 +21,113 @@
   const SEGMENT_ORDER = ['morning','afternoon','night'];
   const SEGMENT_LABEL = { morning:'เช้า', afternoon:'บ่าย', night:'ดึก' };
 
+  const CUSTOM_PART = 'custom_time';
+
+  function clockMinutes(value){
+    const m=String(value||'').match(/^(\d{1,2}):(\d{2})$/);
+    if(!m)return NaN;
+    const h=Number(m[1]),min=Number(m[2]);
+    if(!Number.isInteger(h)||!Number.isInteger(min)||h<0||h>23||min<0||min>59)return NaN;
+    return h*60+min;
+  }
+  function clockText(absMinutes){
+    let n=Math.round(Number(absMinutes||0));
+    n=((n%1440)+1440)%1440;
+    return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
+  }
+  function isWeekendHoliday(date){
+    try { return !!(isWeekend(date) || isHolidayDate(date)); }
+    catch (_) {
+      const d=new Date(`${String(date||'').slice(0,10)}T12:00:00`).getDay();
+      return d===0||d===6;
+    }
+  }
+  function assignmentWindow(a){
+    const code=String(a?.duty_code||'');
+    const full=assignmentFullHours(a);
+    if(/^ชบด[123]$/.test(code)) return isWeekendHoliday(a?.duty_date) ? {start:480,end:1920} : {start:960,end:1920};
+    if(['ช3A','ช3B','ช9-เคิก','ช9-MT'].includes(code)) return {start:480,end:960};
+    if(['ช4A','ช4B'].includes(code)) return {start:960,end:1440};
+    if(full>=24)return {start:480,end:1920};
+    if(full>=16)return {start:960,end:1920};
+    return {start:480,end:480+Math.max(1,full)*60};
+  }
+  function intervalText(start,end){
+    const plus=end>1440 || (end===1440 && start>=960);
+    const base=`${clockText(start)}–${clockText(end)}`;
+    return plus && clockMinutes(clockText(end))<=clockMinutes(clockText(start)) ? `${base} (+1 วัน)` : base;
+  }
+  function resolveClockRange(startText,endText,a){
+    const w=assignmentWindow(a);
+    const sClock=clockMinutes(startText),eClock=clockMinutes(endText);
+    if(!Number.isFinite(sClock)||!Number.isFinite(eClock))return null;
+    const sCandidates=[sClock,sClock+1440,sClock+2880].filter(x=>x>=w.start-0.01&&x<w.end-0.01);
+    if(!sCandidates.length)return null;
+    const start=sCandidates[0];
+    const eCandidates=[eClock,eClock+1440,eClock+2880].filter(x=>x>start+0.01&&x<=w.end+0.01);
+    if(!eCandidates.length)return null;
+    const end=eCandidates[0];
+    return {start,end,hours:Math.round((end-start)/60*100)/100};
+  }
+  function segmentIntervals(a,segments){
+    const w=assignmentWindow(a);
+    const map={morning:[480,960],afternoon:[960,1440],night:[1440,1920]};
+    const out=[];
+    (segments||[]).forEach(seg=>{
+      const raw=map[seg]; if(!raw)return;
+      const s=Math.max(w.start,raw[0]),e=Math.min(w.end,raw[1]);
+      if(e>s+0.01)out.push([s,e]);
+    });
+    return out;
+  }
+  function legacyPartSpec(part,a){
+    const key=PARTS[part]?part:defaultPartFor(a);
+    const intervals=segmentIntervals(a,PARTS[key]?.segments||[]);
+    const hours=intervals.reduce((sum,x)=>sum+(x[1]-x[0])/60,0) || Math.min(Number(PARTS[key]?.hours||0),assignmentFullHours(a));
+    return {part:key,custom:false,intervals,hours:Math.round(hours*100)/100,label:PARTS[key]?.short||PARTS[key]?.label||key};
+  }
+  function tradeSpecFromNote(note,a){
+    const raw=String(note||'');
+    const start=raw.match(/\[SELL_START=(\d{1,2}:\d{2})\]/i)?.[1]||'';
+    const end=raw.match(/\[SELL_END=(\d{1,2}:\d{2})\]/i)?.[1]||'';
+    if(start&&end){
+      const range=resolveClockRange(start,end,a);
+      if(range)return {part:CUSTOM_PART,custom:true,intervals:[[range.start,range.end]],hours:range.hours,start,end,label:intervalText(range.start,range.end)};
+    }
+    const part=partFromNoteLegacy(raw,a);
+    return legacyPartSpec(part,a);
+  }
+  function specFromInputs(start,end,a){
+    const range=resolveClockRange(start,end,a);
+    if(!range)return null;
+    const w=assignmentWindow(a);
+    const full=assignmentFullHours(a);
+    const whole=Math.abs(range.hours-full)<0.01 && Math.abs(range.start-w.start)<0.01 && Math.abs(range.end-w.end)<0.01;
+    if(whole){
+      const legacy=legacyPartSpec(defaultPartFor(a),a);
+      return {...legacy,start:clockText(w.start),end:clockText(w.end),whole:true};
+    }
+    return {part:CUSTOM_PART,custom:true,intervals:[[range.start,range.end]],hours:range.hours,start:clockText(range.start),end:clockText(range.end),label:intervalText(range.start,range.end),whole:false};
+  }
+  function subtractIntervals(base,removed){
+    let pieces=[base];
+    (removed||[]).slice().sort((a,b)=>a[0]-b[0]).forEach(([rs,re])=>{
+      pieces=pieces.flatMap(([s,e])=>{
+        if(re<=s||rs>=e)return [[s,e]];
+        const out=[];
+        if(rs>s)out.push([s,Math.min(rs,e)]);
+        if(re<e)out.push([Math.max(re,s),e]);
+        return out.filter(x=>x[1]>x[0]+0.01);
+      });
+    });
+    return pieces;
+  }
+  function intervalsOverlap(a,b){return a[0]<b[1]-0.01&&b[0]<a[1]-0.01;}
+  function exactTimeLabel(intervals){
+    return (intervals||[]).map(x=>intervalText(x[0],x[1])).join(' + ');
+  }
+
+
   function esc(v){
     try { return escapeHtml(v == null ? '' : String(v)); }
     catch (_) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -101,24 +208,35 @@
     if (full >= 16) return 'afternoon_night';
     return 'morning';
   }
-  function partFromNote(note, a=null){
+  function partFromNoteLegacy(note, a=null){
     const raw = String(note || '').match(/\[SELL_PART=([a-z_]+)\]/i)?.[1]?.toLowerCase() || '';
     if (PARTS[raw]) return raw;
     if (raw === 'full') return defaultPartFor(a);
     if (raw === 'full24') return 'full24';
     return defaultPartFor(a);
   }
+  function partFromNote(note, a=null){
+    const raw = String(note || '').match(/\[SELL_PART=([a-z_]+)\]/i)?.[1]?.toLowerCase() || '';
+    if(raw===CUSTOM_PART || /\[SELL_START=\d{1,2}:\d{2}\]/i.test(String(note||''))) return CUSTOM_PART;
+    return partFromNoteLegacy(note,a);
+  }
   function partHours(part, a){
+    if(part===CUSTOM_PART)return NaN; // ให้ระบบภายนอก fallback ไปอ่าน [SELL_HOURS]
     const full = assignmentFullHours(a);
     const key = PARTS[part] ? part : defaultPartFor(a);
     const h = Number(PARTS[key].hours || full || 0);
     return full > 0 ? Math.min(h, full) : h;
   }
   function coversWholeSlot(part, a){
+    if(part===CUSTOM_PART)return false;
     const full = assignmentFullHours(a);
     return partHours(part, a) >= (full - 0.01);
   }
-  function partLabel(part, a){
+  function partLabel(part, a, note=''){
+    if(part===CUSTOM_PART){
+      const spec=tradeSpecFromNote(note,a);
+      return `ขาย: ${spec?.label||'เลือกเวลา'} (${hoursText(spec?.hours||0)} ชม.)`;
+    }
     const key = PARTS[part] ? part : defaultPartFor(a);
     return `${PARTS[key].label} (${hoursText(partHours(key, a))} ชม.)`;
   }
@@ -136,18 +254,25 @@
     return String(note || '')
       .replace(/\s*\[SELL_PART=[a-z_]+\]\s*/ig, ' ')
       .replace(/\s*\[SELL_HOURS=\d+(?:\.\d+)?\]\s*/ig, ' ')
-      .replace(/\s*\[SELL_SEGMENTS=[a-z_,]+\]\s*/ig, ' ')
+      .replace(/\s*\[SELL_SEGMENTS=[^\]]+\]\s*/ig, ' ')
+      .replace(/\s*\[SELL_START=\d{1,2}:\d{2}\]\s*/ig, ' ')
+      .replace(/\s*\[SELL_END=\d{1,2}:\d{2}\]\s*/ig, ' ')
       .replace(/\s*\[SELL_DATE=[^\]]+\]\s*/ig, ' ')
       .replace(/\s*\[SELL_DUTY=[^\]]+\]\s*/ig, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
   }
-  function buildNote(part, a, note){
+  function buildNote(spec, a, note){
     const clean = stripMarkers(note);
-    const cfg = PARTS[part] || PARTS[defaultPartFor(a)];
     const dutyDate = encodeURIComponent(normDate(a?.duty_date || ''));
     const dutyCode = encodeURIComponent(String(a?.duty_code || ''));
-    const marker = `[SELL_PART=${part}] [SELL_HOURS=${hoursText(partHours(part, a))}] [SELL_SEGMENTS=${(cfg.segments || []).join(',')}] [SELL_DATE=${dutyDate}] [SELL_DUTY=${dutyCode}]`;
+    let marker='';
+    if(spec?.custom){
+      marker=`[SELL_PART=${CUSTOM_PART}] [SELL_HOURS=${hoursText(spec.hours)}] [SELL_SEGMENTS=custom] [SELL_START=${spec.start}] [SELL_END=${spec.end}] [SELL_DATE=${dutyDate}] [SELL_DUTY=${dutyCode}]`;
+    }else{
+      const part=spec?.part||defaultPartFor(a),cfg=PARTS[part]||PARTS[defaultPartFor(a)];
+      marker=`[SELL_PART=${part}] [SELL_HOURS=${hoursText(spec?.hours ?? partHours(part,a))}] [SELL_SEGMENTS=${(cfg.segments||[]).join(',')}] [SELL_DATE=${dutyDate}] [SELL_DUTY=${dutyCode}]`;
+    }
     return clean ? `${marker} ${clean}` : marker;
   }
   function forcedRate(mode, date){
@@ -203,8 +328,11 @@
     if (!a?.id) return [];
     return (state?.tradeRequests || [])
       .filter(r => String(r?.status || '') === 'completed' && String(r?.from_assignment_id || '') === String(a.id))
-      .map(r => ({ r, part:partFromNote(r?.note, a), hours:partHours(partFromNote(r?.note, a), a) }))
-      .filter(x => !coversWholeSlot(x.part, a));
+      .map(r => {
+        const spec=tradeSpecFromNote(r?.note,a);
+        return {r,spec,part:spec.part,hours:spec.hours,intervals:spec.intervals||[]};
+      })
+      .filter(x => x.hours < assignmentFullHours(a)-0.01);
   }
   function activeTradePartsForAssignment(a, excludeRequestId=''){
     if (!a?.id) return [];
@@ -212,16 +340,18 @@
       .filter(r => String(r?.from_assignment_id || '') === String(a.id))
       .filter(r => String(r?.id || '') !== String(excludeRequestId || ''))
       .filter(r => !['rejected','completed_deleted','cancelled','canceled'].includes(String(r?.status || '').toLowerCase()))
-      .map(r => ({ r, part:partFromNote(r?.note, a), hours:partHours(partFromNote(r?.note, a), a), segments:PARTS[partFromNote(r?.note, a)]?.segments || [] }))
-      .filter(x => !coversWholeSlot(x.part, a));
+      .map(r => {
+        const spec=tradeSpecFromNote(r?.note,a);
+        return {r,spec,part:spec.part,hours:spec.hours,intervals:spec.intervals||[]};
+      })
+      .filter(x => x.hours < assignmentFullHours(a)-0.01);
   }
-  function selectedPartConflicts(part, a, excludeRequestId=''){
+  function selectedSpecConflicts(spec, a, excludeRequestId=''){
     const existing = activeTradePartsForAssignment(a, excludeRequestId);
     if (!existing.length) return '';
-    if (coversWholeSlot(part, a)) return 'ช่องนี้มีรายการขายบางช่วงอยู่แล้ว กรุณาเลือกขายเฉพาะช่วงที่ยังเหลือ ไม่ควรขายทั้งช่องซ้ำ';
-    const segs = new Set(PARTS[part]?.segments || []);
-    const hit = existing.find(x => (x.segments || []).some(s => segs.has(s)));
-    if (hit) return `ช่วง ${PARTS[hit.part]?.short || hit.part} มีรายการขายอยู่แล้ว กรุณาเลือกช่วงอื่น`;
+    if ((spec?.hours||0) >= assignmentFullHours(a)-0.01) return 'ช่องนี้มีรายการขายบางช่วงอยู่แล้ว กรุณาเลือกเฉพาะเวลาที่ยังไม่ได้ขาย';
+    const hit=existing.find(x=>(x.intervals||[]).some(i=>(spec?.intervals||[]).some(j=>intervalsOverlap(i,j))));
+    if(hit)return `ช่วง ${hit.spec?.label||'ที่เลือก'} มีรายการขายอยู่แล้ว กรุณาเลือกเวลาอื่น`;
     return '';
   }
   function segmentLabel(segments){
@@ -231,20 +361,21 @@
     if (unique.includes('night') && unique.includes('morning') && !unique.includes('afternoon')) return 'ดึก-เช้า';
     return orderedSegs.map(s => SEGMENT_LABEL[s] || s).join('-') || '-';
   }
+  function remainingIntervalsFor(a,trades){
+    const w=assignmentWindow(a);
+    const removed=(trades||[]).flatMap(x=>x.intervals||x.spec?.intervals||[]);
+    return subtractIntervals([w.start,w.end],removed);
+  }
   function remainingLabelFor(a, trades){
     const full = assignmentFullHours(a);
     const soldHours = trades.reduce((sum, x) => sum + Number(x.hours || 0), 0);
-    const remainHours = Math.max(0, full - soldHours);
+    const remainHours = Math.max(0, Math.round((full - soldHours)*100)/100);
     if (remainHours <= 0.01) return '';
-    if (full >= 24) {
-      const sold = new Set();
-      trades.forEach(x => (PARTS[x.part]?.segments || []).forEach(s => sold.add(s)));
-      const remainSeg = SEGMENT_ORDER.filter(s => !sold.has(s));
-      return remainSeg.length === 3 ? labelDuty(a.duty_code) : segmentLabel(remainSeg);
-    }
-    return remainHours >= full ? labelDuty(a.duty_code) : `เหลือ ${hoursText(remainHours)} ชม.`;
+    if (remainHours >= full-0.01) return labelDuty(a.duty_code);
+    return `เหลือ ${hoursText(remainHours)} ชม.`;
   }
-  function entryLabelForReceived(part, a){
+  function entryLabelForReceived(part, a, spec=null){
+    if(spec?.custom)return spec.label||`${hoursText(spec.hours)} ชม.`;
     const cfg = PARTS[part] || PARTS[defaultPartFor(a)];
     return cfg.short || cfg.label || 'รับเวร';
   }
@@ -255,6 +386,7 @@
     return ['morning'];
   }
   function remainingSegmentsFor(a,trades){
+    if((trades||[]).some(x=>x.spec?.custom))return ['custom'];
     const sold=new Set();
     (trades||[]).forEach(x=>(PARTS[x.part]?.segments||[]).forEach(s=>sold.add(s)));
     return baseSegmentsForAssignment(a).filter(s=>!sold.has(s));
@@ -269,14 +401,17 @@
         if (trades.length) {
           const label = remainingLabelFor(a, trades);
           const full=assignmentFullHours(a),soldHours=trades.reduce((sum,x)=>sum+Number(x.hours||0),0),hours=Math.max(0,full-soldHours),segments=remainingSegmentsFor(a,trades);
-          if (label) rows.push({ kind:'owner-remain', assignment:a, label, hours, segments, trades, sort:sortDuty(a.duty_code), className:'v217-remain' });
+          const timeLabel=exactTimeLabel(remainingIntervalsFor(a,trades));
+          if (label) rows.push({ kind:'owner-remain', assignment:a, label, timeLabel, hours, segments, trades, sort:sortDuty(a.duty_code), className:'v217-remain' });
         } else {
-          rows.push({ kind:'owner', assignment:a, label:labelDuty(a.duty_code), hours:assignmentFullHours(a), segments:baseSegmentsForAssignment(a), sort:sortDuty(a.duty_code), className:'' });
+          const w=assignmentWindow(a);
+          rows.push({ kind:'owner', assignment:a, label:labelDuty(a.duty_code), timeLabel:intervalText(w.start,w.end), hours:assignmentFullHours(a), segments:baseSegmentsForAssignment(a), sort:sortDuty(a.duty_code), className:'' });
         }
       }
       trades.forEach(x => {
         if (String(x.r?.receiver_id || '') === String(staffId)) {
-          rows.push({ kind:'receiver-part', assignment:a, request:x.r, part:x.part, label:entryLabelForReceived(x.part, a), hours:Number(x.hours||partHours(x.part,a)||0), segments:[...(PARTS[x.part]?.segments||[])], sort:sortDuty(a.duty_code) + 0.1, className:'v217-received' });
+          const segments=x.spec?.custom?['custom']:[...(PARTS[x.part]?.segments||[])];
+          rows.push({ kind:'receiver-part', assignment:a, request:x.r, part:x.part, spec:x.spec, label:entryLabelForReceived(x.part,a,x.spec), timeLabel:x.spec?.label||'', hours:Number(x.hours||0), segments, sort:sortDuty(a.duty_code) + 0.1, className:'v217-received' });
         }
       });
     });
@@ -287,6 +422,7 @@
       ...e.assignment,
       staff_id:staffId,
       _effective_label:e.label,
+      _effective_time_label:e.timeLabel||'',
       _effective_kind:e.kind,
       _effective_hours:Number(e.hours||0),
       _effective_segments:[...(e.segments||[])],
@@ -311,20 +447,20 @@
 
   window.tradePaymentDisplay = function tradePaymentDisplayV217(r, from, to=null){
     const a = from || findAssignment(r?.from_assignment_id) || {};
-    const part = partFromNote(r?.note, a);
-    const p = calcPayment(a, r?.requester_id, r?.receiver_id, r?.rate_mode || 'mt', part, r?.amount_from || 0);
+    const spec=tradeSpecFromNote(r?.note,a);
+    const p = calcPayment(a, r?.requester_id, r?.receiver_id, r?.rate_mode || 'mt', spec.part, r?.amount_from || 0);
+    if(spec?.custom){ p.hours=spec.hours; p.adjustedHours=spec.hours; if((r?.rate_mode||'mt')!=='custom') p.amount=Math.round(spec.hours*forcedRate(r?.rate_mode||'mt',a?.duty_date||'')); }
     const amount = Number(r?.amount_from ?? p.amount ?? 0);
     let html = `${money(amount)}`;
-    html += `<br><span class="muted">${esc(partLabel(part, a))} • ชม.เบิก ${hoursText(p.adjustedHours || p.hours)} • ${esc(niceRate(r?.rate_mode || 'mt'))}</span>`;
-    if (String(r?.status || '') === 'completed' && !coversWholeSlot(part, a)) html += `<br><span class="badge blue">โอนเฉพาะช่วงในตาราง</span>`;
+    const sellLabel=spec?.custom?`ขาย ${spec.label}`:partLabel(spec.part,a,r?.note);
+    html += `<br><span class="muted">${esc(sellLabel)} • ${hoursText(spec.hours)} ชม. • ${esc(niceRate(r?.rate_mode || 'mt'))}</span>`;
+    if (String(r?.status || '') === 'completed' && spec.hours < assignmentFullHours(a)-0.01) html += `<br><span class="badge blue">โอนเฉพาะช่วง</span>`;
     if (to && Number(r?.amount_diff || 0)) html += `<br><span class="muted">ส่วนต่าง ${Number(r.amount_diff || 0).toLocaleString()} บ.</span>`;
     return html;
   };
   try { tradePaymentDisplay = window.tradePaymentDisplay; } catch (_) {}
 
-  window.selfPaidTradeNotice = function selfPaidTradeNoticeV217(){
-    return `<div class="notice soft-notice wide"><b>เลือกช่วงขายเวรได้</b><br>ถ้าขายครบชั่วโมงของช่องเวร ระบบจะโอนชื่อทั้งช่องให้ผู้รับเวรตามเดิม แต่ถ้าขายเฉพาะช่วง ระบบจะแสดงในตารางเฉพาะช่วงที่ขาย เช่น ผู้ขายเหลือ “บ่าย-ดึก” และผู้รับขึ้น “เช้า” โดยไม่ทำให้ช่องเวรหลักเพี้ยน</div>`;
-  };
+  window.selfPaidTradeNotice = function selfPaidTradeNoticeV217(){ return ''; };
   try { selfPaidTradeNotice = window.selfPaidTradeNotice; } catch (_) {}
 
   window.showTradeModal = function showTradeModalV217(assignmentId, existingRequest=null){
@@ -336,31 +472,36 @@
     const editing = !!existingRequest?.id;
     const requesterValue = editing ? existingRequest.requester_id : (admin() ? '' : slot.staff_id);
     const receiverValue = editing ? existingRequest.receiver_id : '';
-    const selectedPart = editing ? partFromNote(existingRequest.note, slot) : defaultPartFor(slot);
+    const existingSpec=editing?tradeSpecFromNote(existingRequest.note,slot):null;
+    const w=assignmentWindow(slot);
+    const startValue=existingSpec?.intervals?.length===1?clockText(existingSpec.intervals[0][0]):clockText(w.start);
+    const endValue=existingSpec?.intervals?.length===1?clockText(existingSpec.intervals[0][1]):clockText(w.end);
     const rateValue = editing ? (existingRequest.rate_mode || defaultRateMode(requesterValue || slot.staff_id, slot)) : defaultRateMode(slot.staff_id, slot);
     const customValue = editing && rateValue === 'custom' ? Number(existingRequest.amount_from || 0) : '';
     const staffRows = activeRosterStaff();
     const possibleRequester = staffRows;
     const possibleReceiver = staffRows.filter(s => String(s.id) !== String(slot.staff_id));
-    const fullAmount = calcPayment(slot, slot.staff_id, slot.staff_id, defaultRateMode(slot.staff_id, slot), defaultPartFor(slot)).amount;
     const requesterControl = admin()
-      ? `<label class="wide">ผู้ขายเวร <select name="requester_id" id="tradeRequesterSelect" required><option value="">เลือกผู้ขายเวร</option>${possibleRequester.map(s => `<option value="${esc(s.id)}" ${String(requesterValue)===String(s.id)?'selected':''}>${esc(s.nickname || s.full_name || s.email || s.id)} (${esc(s.staff_type || '-')})</option>`).join('')}</select><span class="hint">ผู้ขายเวรต้องตรงกับเจ้าของเวรเดิมของช่องนี้</span></label>`
+      ? `<label class="wide">ผู้ขายเวร<select name="requester_id" id="tradeRequesterSelect" required><option value="">เลือกผู้ขายเวร</option>${possibleRequester.map(s => `<option value="${esc(s.id)}" ${String(requesterValue)===String(s.id)?'selected':''}>${esc(s.nickname || s.full_name || s.email || s.id)}</option>`).join('')}</select></label>`
       : `<input type="hidden" name="requester_id" value="${esc(slot.staff_id)}">`;
     const body = `<h2>${editing ? 'แก้ไขคำขอขายเวร' : 'ขอขายเวร'}</h2>
-      <p class="hint">${formatThaiDate(slot.duty_date)} ${esc(labelDuty(slot.duty_code))} • เจ้าของเวรเดิม ${staffPill(slot.staff_id)} • มูลค่าเต็มช่องประมาณ ${money(fullAmount)}</p>
-      <form id="dutyTradeForm" class="form-grid" data-v217-trade-form="1" data-assignment-id="${esc(slot.id)}">
+      <p class="hint v217-trade-summary">${formatThaiDate(slot.duty_date)} • ${esc(labelDuty(slot.duty_code))} • ${staffPill(slot.staff_id)}</p>
+      <form id="dutyTradeForm" class="form-grid v507-trade-form" data-v217-trade-form="1" data-assignment-id="${esc(slot.id)}">
         <input type="hidden" name="from_assignment_id" value="${esc(slot.id)}">
+        <input type="hidden" name="trade_type" value="ขายเวร">
         ${editing ? `<input type="hidden" name="trade_request_id" value="${esc(existingRequest.id)}">` : ''}
         ${requesterControl}
-        <label>ประเภท <select name="trade_type" id="tradeTypeSelect"><option value="ขายเวร" selected>ขายเวร / เบิก OT ผ่าน HR</option></select><span class="hint">ระบบนี้ใช้รายการขายเวรเท่านั้น</span></label>
-        <label>คนที่จะรับเวร <select name="receiver_id" id="tradeReceiverSelect" required><option value="">เลือกคน</option>${possibleReceiver.map(s => `<option value="${esc(s.id)}" ${String(receiverValue)===String(s.id)?'selected':''}>${esc(s.nickname || s.full_name || s.email || s.id)} (${esc(s.staff_type || '-')})</option>`).join('')}</select></label>
-        <label class="wide">ช่วงที่ขาย <select name="sell_part" id="tradeSellPartSelect">${allowedPartOptions(selectedPart, slot)}</select><span class="hint">ช3A / ช3B / ช9 และช่อง 8 ชม. จะใช้ตัวเลือก “ขาย: เช้า (8 ชม.)”</span></label>
-        <label id="tradeRateWrap">คิดเรท <select name="rate_mode" id="tradeRateSelect">${rateOptions(rateValue)}</select><span class="hint">เลือกขายเรท MT หรือขายเรทเคิกโดยตรง</span></label>
-        <label id="tradeCustomWrap">จำนวนเงินกำหนดเอง <input name="custom_amount" id="tradeCustomAmount" type="number" min="0" step="1" value="${esc(customValue)}" placeholder="เช่น 0 หรือ 1000"></label>
-        <div class="notice soft-notice wide" id="tradeEstimateV217">กำลังคำนวณ...</div>
-        ${window.selfPaidTradeNotice()}
-        <label class="wide">รายละเอียดข้อตกลง <textarea name="note" placeholder="เช่น เบิกผ่าน HR / ไม่คิดเงินใส่ 0 บาท / หมายเหตุเพิ่มเติม">${esc(stripMarkers(existingRequest?.note || ''))}</textarea></label>
-        <button class="primary-btn wide" type="submit">${editing ? 'บันทึกการแก้ไข' : 'ส่งคำขอให้อีกฝ่ายยืนยัน'}</button>
+        <label class="wide">ผู้รับเวร<select name="receiver_id" id="tradeReceiverSelect" required><option value="">เลือกคน</option>${possibleReceiver.map(s => `<option value="${esc(s.id)}" ${String(receiverValue)===String(s.id)?'selected':''}>${esc(s.nickname || s.full_name || s.email || s.id)}</option>`).join('')}</select></label>
+        <div class="wide v507-time-grid">
+          <label>เริ่มขาย<input name="sell_start" id="tradeSellStart" type="time" step="1800" value="${esc(startValue)}" required></label>
+          <label>สิ้นสุด<input name="sell_end" id="tradeSellEnd" type="time" step="1800" value="${esc(endValue)}" required></label>
+        </div>
+        <span class="hint wide v507-short-hint">เลือกขายได้ตามเวลาจริง เช่น 17:00–19:00</span>
+        <label>คิดเรท<select name="rate_mode" id="tradeRateSelect">${rateOptions(rateValue)}</select></label>
+        <label id="tradeCustomWrap">จำนวนเงิน<input name="custom_amount" id="tradeCustomAmount" type="number" min="0" step="1" value="${esc(customValue)}" placeholder="0"></label>
+        <div class="notice soft-notice wide v507-estimate" id="tradeEstimateV217">กำลังคำนวณ...</div>
+        <label class="wide">หมายเหตุ <textarea name="note" rows="2" placeholder="ไม่จำเป็นต้องกรอก">${esc(stripMarkers(existingRequest?.note || ''))}</textarea></label>
+        <button class="primary-btn wide" type="submit">${editing ? 'บันทึกการแก้ไข' : 'ส่งให้อีกฝ่ายยืนยัน'}</button>
       </form>`;
     try { showModal(body, { large:true }); } catch (_) { document.body.insertAdjacentHTML('beforeend', body); }
     setTimeout(() => updateEstimate(document.getElementById('dutyTradeForm')), 20);
@@ -375,13 +516,20 @@
     if (!slot) return;
     const requesterId = (admin() ? form.querySelector('[name="requester_id"]')?.value : currentId()) || slot.staff_id;
     const receiverId = form.querySelector('[name="receiver_id"]')?.value || slot.staff_id;
-    const part = form.querySelector('[name="sell_part"]')?.value || defaultPartFor(slot);
+    const start=form.querySelector('[name="sell_start"]')?.value||'';
+    const end=form.querySelector('[name="sell_end"]')?.value||'';
+    const spec=specFromInputs(start,end,slot);
     const rateMode = form.querySelector('[name="rate_mode"]')?.value || defaultRateMode(requesterId, slot);
     const custom = Number(form.querySelector('[name="custom_amount"]')?.value || 0);
-    const p = calcPayment(slot, requesterId, receiverId, rateMode, part, custom);
     const el = form.querySelector('#tradeEstimateV217') || form.querySelector('#tradeEstimateV205');
-    const actionText = coversWholeSlot(part, slot) ? 'บันทึกแล้วจะโอนชื่อทั้งช่องให้ผู้รับเวร' : 'บันทึกแล้วจะโอนเฉพาะช่วงในตาราง ผู้ขายยังเหลือช่วงที่ไม่ได้ขาย';
-    if (el) el.innerHTML = `<b>ประมาณการ:</b> ${esc(partLabel(part, slot))} • ${esc(niceRate(rateMode))} • ชั่วโมงเบิก ${hoursText(p.adjustedHours || p.hours)} ชม. • เงิน ${money(p.amount)}<br><span class="muted">${esc(actionText)}</span>`;
+    if(!spec){
+      if(el)el.innerHTML='<b>กรุณาเลือกเวลาให้อยู่ในช่วงเวรนี้</b>';
+    }else{
+      let amount=custom;
+      if(rateMode!=='custom')amount=Math.round(spec.hours*forcedRate(rateMode,slot.duty_date));
+      const mode=spec.hours>=assignmentFullHours(slot)-0.01?'ทั้งเวร':'บางช่วง';
+      if (el) el.innerHTML = `<b>${esc(spec.label||exactTimeLabel(spec.intervals))}</b> • ${hoursText(spec.hours)} ชม. • ${esc(niceRate(rateMode))} • ${money(amount)} <span class="muted">(${mode})</span>`;
+    }
     const customWrap = form.querySelector('#tradeCustomWrap');
     if (customWrap) customWrap.style.display = rateMode === 'custom' ? '' : 'none';
   }
@@ -394,19 +542,19 @@
     const from = findAssignment(fromId, sourceRows) || findAssignment(fromId);
     const requesterId = admin() ? fd.get('requester_id') : currentId();
     const receiverId = fd.get('receiver_id');
-    if (!from || !receiverId) return toast('กรุณาเลือกผู้รับเวรให้ครบ', 'error');
-    if (admin() && !requesterId) return toast('Admin ต้องเลือกผู้ขายเวรก่อนบันทึก', 'error');
+    if (!from || !receiverId) return toast('กรุณาเลือกผู้รับเวร', 'error');
+    if (admin() && !requesterId) return toast('กรุณาเลือกผู้ขายเวร', 'error');
     if (!admin() && String(from.staff_id) !== String(currentId())) return toast('ส่งคำขอได้เฉพาะเวรของตัวเอง', 'error');
-    if (String(requesterId) !== String(from.staff_id)) return toast('ผู้ขายเวรต้องตรงกับเจ้าของเวรเดิมของช่องนี้', 'error');
-    if (String(receiverId) === String(requesterId)) return toast('ผู้รับเวรต้องไม่ใช่คนเดียวกับผู้ขายเวร', 'error');
-    const selected = fd.get('sell_part');
-    const sellPart = PARTS[selected] ? String(selected) : defaultPartFor(from);
-    const conflict = selectedPartConflicts(sellPart, from, requestId);
+    if (String(requesterId) !== String(from.staff_id)) return toast('ผู้ขายเวรไม่ตรงกับเจ้าของเวร', 'error');
+    if (String(receiverId) === String(requesterId)) return toast('ผู้รับเวรต้องเป็นคนละคนกับผู้ขาย', 'error');
+    const spec=specFromInputs(fd.get('sell_start'),fd.get('sell_end'),from);
+    if(!spec)return toast('ช่วงเวลาที่เลือกอยู่นอกเวลาเวร หรือเวลาสิ้นสุดไม่ถูกต้อง', 'error');
+    if(spec.hours<0.5)return toast('กรุณาขายอย่างน้อย 30 นาที', 'error');
+    const conflict = selectedSpecConflicts(spec, from, requestId);
     if (conflict) return toast(conflict, 'error');
     const rateMode = fd.get('rate_mode') || defaultRateMode(requesterId, from);
     const custom = Number(fd.get('custom_amount') || 0);
-    const p = calcPayment(from, requesterId, receiverId, rateMode, sellPart, custom);
-    const amountFrom = rateMode === 'custom' ? custom : p.amount;
+    const amountFrom = rateMode === 'custom' ? custom : Math.round(spec.hours*forcedRate(rateMode,from.duty_date));
     const existing = requestId ? (state?.tradeRequests || []).find(x => String(x.id) === String(requestId)) : null;
     const row = {
       requester_id: requesterId,
@@ -419,7 +567,7 @@
       amount_to: 0,
       amount_diff: 0,
       status: existing?.status || 'pending',
-      note: buildNote(sellPart, from, fd.get('note') || ''),
+      note: buildNote(spec, from, fd.get('note') || ''),
       updated_by: currentId()
     };
     let error;
@@ -429,7 +577,7 @@
     try { closeModal(); } catch (_) {}
     try { await loadAllData(); } catch (_) {}
     try { renderPage(); } catch (_) {}
-    toast(requestId ? 'แก้ไขคำขอขายเวรแล้ว' : 'ส่งคำขอขายเวรแล้ว รออีกฝ่ายกดยืนยัน');
+    toast(requestId ? 'แก้ไขคำขอขายเวรแล้ว' : 'ส่งคำขอขายเวรแล้ว รออีกฝ่ายยืนยัน');
   };
   try { saveTradeRequest = window.saveTradeRequest; } catch (_) {}
 
@@ -439,8 +587,9 @@
     if (!r || !['pending','confirmed'].includes(String(r.status || ''))) return toast('คำขอนี้ยังไม่พร้อมให้บันทึก', 'error');
     const from = findAssignment(r.from_assignment_id);
     if (!from) return toast('ไม่พบเวรต้นทาง', 'error');
-    const part = partFromNote(r.note, from);
-    const isWhole = coversWholeSlot(part, from);
+    const spec = tradeSpecFromNote(r.note, from);
+    const part = spec.part;
+    const isWhole = spec.hours >= assignmentFullHours(from) - 0.01;
     const override = String(r.status || '') === 'pending';
     if (override) {
       let ok = false;
@@ -471,9 +620,10 @@
     return (state?.tradeRequests || []).filter(r => String(r?.status || '') === 'completed' && String(r?.receiver_id || '') === String(me)).map(r => {
       const a = findAssignment(r.from_assignment_id);
       if (!a || normDate(a.duty_date) !== d) return null;
-      const part = partFromNote(r.note, a);
-      if (coversWholeSlot(part, a)) return null;
-      return { request:r, assignment:{ ...a, staff_id:r.receiver_id, _original_staff_id:r.requester_id, _sell_part:part, _sell_label:entryLabelForReceived(part, a) } };
+      const spec = tradeSpecFromNote(r.note, a);
+      const part = spec.part;
+      if (spec.hours >= assignmentFullHours(a)-0.01) return null;
+      return { request:r, assignment:{ ...a, staff_id:r.receiver_id, _original_staff_id:r.requester_id, _sell_part:part, _sell_label:entryLabelForReceived(part, a, spec), _effective_time_label:spec.label||'' } };
     }).filter(Boolean);
   };
   try { selfPaidDutyProxyOptions = window.selfPaidDutyProxyOptions; } catch (_) {}
@@ -485,7 +635,7 @@
     const lines = [];
     if (split.remain) lines.push(`<span class="v217-split-line v217-remain"><b>${esc(split.remain)}</b>${pillFor(slot.staff_id, staffStatAttrs(slot.staff_id))}</span>`);
     split.trades.forEach(x => {
-      const label = entryLabelForReceived(x.part, slot);
+      const label = entryLabelForReceived(x.part, slot, x.spec);
       lines.push(`<span class="v217-split-line v217-received"><b>${esc(label)}</b>${pillFor(x.r.receiver_id, staffStatAttrs(x.r.receiver_id))}</span>`);
     });
     return `<div class="schedule-person-cell v217-split-cell">${lines.join('')}${tradeButtonSafe(slot)}</div>`;
@@ -579,20 +729,22 @@
   document.addEventListener('input', function(e){
     const form = e.target?.closest?.('#dutyTradeForm[data-v217-trade-form="1"]');
     if (!form) return;
-    if (['sell_part','rate_mode','custom_amount','receiver_id','requester_id'].includes(e.target?.name)) updateEstimate(form);
+    if (['sell_start','sell_end','rate_mode','custom_amount','receiver_id','requester_id'].includes(e.target?.name)) updateEstimate(form);
   }, true);
   document.addEventListener('change', function(e){
     const form = e.target?.closest?.('#dutyTradeForm[data-v217-trade-form="1"]');
     if (!form) return;
-    if (['sell_part','rate_mode','custom_amount','receiver_id','requester_id'].includes(e.target?.name)) updateEstimate(form);
+    if (['sell_start','sell_end','rate_mode','custom_amount','receiver_id','requester_id'].includes(e.target?.name)) updateEstimate(form);
   }, true);
 
   const style = document.createElement('style');
   style.textContent = `
     .v217-split-cell{display:flex;flex-direction:column;gap:6px;align-items:stretch}.v217-split-line{display:flex;align-items:center;justify-content:space-between;gap:6px;border:1px solid rgba(37,99,235,.18);border-radius:12px;padding:4px 6px;background:#fff}.v217-split-line>b{font-size:12px;white-space:nowrap}.v217-split-line.v217-received{background:#eef8ff;border-color:#bfe4ff}.v217-split-line.v217-remain{background:#fffdf4;border-color:#f7e6a1}.clean-shift-pill.v217-received{outline:2px solid rgba(14,165,233,.35);background:#e0f2fe!important;color:#075985!important}.clean-shift-pill.v217-remain{outline:2px solid rgba(234,179,8,.35)}.clean-person-duty.v217-received{background:#eef8ff;border-radius:12px;padding:6px 8px}.clean-person-duty.v217-remain{background:#fffdf4;border-radius:12px;padding:6px 8px}
+    .v507-trade-form{row-gap:12px}.v507-time-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.v507-time-grid label{margin:0}.v507-short-hint{margin-top:-6px}.v507-estimate{padding:10px 12px}.v217-trade-summary{margin-top:-4px}
+    @media(max-width:640px){.v507-time-grid{grid-template-columns:1fr 1fr}.v507-trade-form textarea{min-height:64px}.v507-estimate{font-size:14px}}
   `;
   document.head.appendChild(style);
 
-  window.cnmiTradeSegmentsV217 = { PARTS, partFromNote, partHours, coversWholeSlot, effectiveEntriesForStaffDate, effectiveAssignmentsForStaffDate };
+  window.cnmiTradeSegmentsV217 = { PARTS, partFromNote, partHours, coversWholeSlot, tradeSpecFromNote, assignmentWindow, effectiveEntriesForStaffDate, effectiveAssignmentsForStaffDate };
   console.info(`${VERSION} loaded`);
 })();
