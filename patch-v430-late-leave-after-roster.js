@@ -2,14 +2,15 @@
  * Late leave / "ลานอกตาราง" marker.
  * Goal: distinguish leave submitted after the monthly duty roster had already been arranged.
  * Historical logic (no schema change):
- *   1) Prefer the first roster_months audit event that reached published/locked.
- *   2) Also estimate roster-build completion from the 90th percentile of roster_assignment created_at timestamps.
- *   3) Fall back to roster_months published_at/locked_at/updated_at when needed.
+ *   1) A leave can be "ลานอกตาราง" only after the monthly duty roster is actually published/locked.
+ *   2) Prefer the first roster_months audit event that reached published/locked.
+ *   3) Fall back to roster_months published_at/locked_at/updated_at only when the current month status is published/locked.
+ * Draft/generated assignments alone must never trigger the orange late-leave state.
  * Actual leave types only; "ไม่รับเวร" is intentionally excluded.
  */
 (function(){
   'use strict';
-  const VERSION='V430_LATE_LEAVE_AFTER_ROSTER';
+  const VERSION='V430_LATE_LEAVE_AFTER_ROSTER_V509_PUBLISH_GATE';
   if(window.__CNMI_V430_LATE_LEAVE_AFTER_ROSTER__)return;
   window.__CNMI_V430_LATE_LEAVE_AFTER_ROSTER__=true;
 
@@ -85,12 +86,13 @@
   }
   function rosterArrangedMs(key){
     const row=monthRow(key);
+    const status=String(row?.status||'').toLowerCase();
+    // V509: orange "ลานอกตาราง" starts only after the roster was actually released.
+    // A draft can already contain many roster_assignment rows, but staff have not received the roster yet.
+    if(!row||!['published','locked'].includes(status))return NaN;
     const audit=auditPublishMs(key,row);
-    const built=assignmentBuildMs(key);
-    const fallback=rosterFallbackMs(row);
-    const strong=[audit,built].filter(Number.isFinite);
-    if(strong.length)return Math.min(...strong);
-    return fallback;
+    if(Number.isFinite(audit))return audit;
+    return rosterFallbackMs(row);
   }
   function isLateLeaveForDate(row,date){
     if(!actualLeave(row))return false;
