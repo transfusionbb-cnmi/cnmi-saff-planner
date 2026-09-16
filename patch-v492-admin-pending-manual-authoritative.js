@@ -40,11 +40,15 @@
   }
 
   async function freshHrCategory(db){
-    const hrRes=await db.from('hr_checks').select('*').order('updated_at',{ascending:false}).limit(1000);
+    /* V514: Read the same safe HR status source used by the Staff HC iService card.
+       After V479, public.hr_checks remains private by design; querying it directly here
+       can return zero rows under RLS even though hr_check_status_public correctly shows
+       "ลาในระบบแล้ว / รอ Admin".  Admin pending only needs these three safe fields. */
+    const hrRes=await db.from('hr_check_status_public')
+      .select('leave_request_id,status,hr_reported_date')
+      .limit(1000);
     if(hrRes?.error)throw hrRes.error;
     const hrRows=safeRows(hrRes);
-    // Replace app snapshot even when zero rows, so old rows cannot survive in memory.
-    try{S().hrChecks=hrRows;}catch(_){ }
 
     const pending=hrRows.filter(h=>{
       const status=String(h?.status||'').trim();
@@ -64,6 +68,8 @@
     const items=pending.map(h=>{
       const r=lmap.get(String(h?.leave_request_id||''));
       if(!r)return null;
+      /* Physician leave is self-managed and must never enter Admin HR work. */
+      try{if(window.cnmiPhysicianLeaveV504?.isPhysicianId?.(r.staff_id))return null;}catch(_){ }
       const type=String(r.type||r.leave_type||'ลา').split(':::')[0].trim()||'ลา';
       const period=String(r.period||r.leave_period||'').trim();
       const date=norm(r.start_date);
