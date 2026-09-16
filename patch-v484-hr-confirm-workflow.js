@@ -187,14 +187,14 @@
     if(!actualAdmin())return;
     const leave=(S().leaves||[]).find(r=>String(r?.id||'')===String(leaveId||''));
     const h=leave?hrFor(leave):null;
-    if(!leave||!h?.id)return typeof showToast==='function'&&showToast('ไม่พบข้อมูล HR ของรายการนี้');
+    if(!leave||!h)return typeof showToast==='function'&&showToast('ไม่พบข้อมูล HR ของรายการนี้');
     if(!h.hr_reported_date)return typeof showToast==='function'&&showToast('น้องยังไม่ได้กด “ลาในระบบแล้ว”');
     const ok=await confirmSafe(`ยืนยันว่าตรวจพบรายการ ${typeOf(leave)} ของ ${staffNickSafe(leave.staff_id)} (${rangeOf(leave)}) ใน HC iService แล้ว?`,'ตรวจสอบ HR แล้ว');
     if(!ok)return;
     const db=DB();if(!db)return;
     const old=button?.textContent;try{if(button){button.disabled=true;button.textContent='กำลังบันทึก…';}}catch(_){ }
     try{
-      const q=await db.from('hr_checks').update({status:'ตรวจสอบแล้ว',checked_by:currentId(),checked_at:new Date().toISOString()}).eq('id',h.id);
+      const q=await db.from('hr_checks').update({status:'ตรวจสอบแล้ว',checked_by:currentId(),checked_at:new Date().toISOString()}).eq('leave_request_id',leave.id).neq('status','ตรวจสอบแล้ว');
       if(q?.error)throw q.error;
       await refreshAfterAdminAction('ตรวจสอบ HR แล้ว');
     }catch(err){console.warn(`[${VERSION}] verify`,err);if(typeof showToast==='function')showToast(text(err?.message||err||'บันทึกไม่สำเร็จ'));}
@@ -204,7 +204,7 @@
     if(!actualAdmin())return;
     const leave=(S().leaves||[]).find(r=>String(r?.id||'')===String(leaveId||''));
     const h=leave?hrFor(leave):null;
-    if(!leave||!h?.id)return typeof showToast==='function'&&showToast('ไม่พบข้อมูล HR ของรายการนี้');
+    if(!leave||!h)return typeof showToast==='function'&&showToast('ไม่พบข้อมูล HR ของรายการนี้');
     const ok=await confirmSafe(`ตรวจไม่พบรายการ ${typeOf(leave)} ของ ${staffNickSafe(leave.staff_id)} (${rangeOf(leave)}) ใน HC iService ใช่หรือไม่?\n\nระบบจะกลับไปเตือนน้องให้ตรวจสอบและกด “ลาในระบบแล้ว” ใหม่`,'ไม่พบใน HR');
     if(!ok)return;
     const db=DB();if(!db)return;
@@ -216,7 +216,7 @@
         checked_by:currentId(),
         checked_at:new Date().toISOString(),
         note:'Admin ตรวจไม่พบใน HC iService กรุณาตรวจสอบ/บันทึกลาในระบบ และกด “ลาในระบบแล้ว” ใหม่'
-      }).eq('id',h.id);
+      }).eq('leave_request_id',leave.id).neq('status','ตรวจสอบแล้ว');
       if(q?.error)throw q.error;
       await refreshAfterAdminAction('ส่งกลับให้น้องตรวจสอบ HC iService ใหม่แล้ว');
     }catch(err){console.warn(`[${VERSION}] not found`,err);if(typeof showToast==='function')showToast(text(err?.message||err||'บันทึกไม่สำเร็จ'));}

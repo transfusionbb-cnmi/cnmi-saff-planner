@@ -28,7 +28,7 @@
     const status = text(staff.status).toLowerCase();
     if (['inactive','disabled','deleted','resigned'].includes(status)) return false;
     const type = text(staff.staff_type);
-    if (/แพทย์|physician|doctor/i.test(type)) return false;
+    if (window.cnmiPersonTypeV516?.isPhysician?.(staff) ?? /^(แพทย์|physician|doctor)$/i.test(type)) return false;
     return true;
   }
   function isTang(staff){ return nickname(staff) === 'แตง'; }
@@ -63,31 +63,15 @@
     const st = appState();
     return text(document.getElementById('positionDateInput')?.value || st.positionDate || '').slice(0,10);
   }
-  function activeLeave(staffId, date){
-    if (!staffId || !date) return null;
+  function isOnLeave(staffId, date){
+    if (!staffId || !date) return false;
     try {
-      if (typeof activeLeaveRecordOn === 'function') return activeLeaveRecordOn(staffId, date) || null;
+      if (typeof isActiveLeaveOn === 'function') return !!isActiveLeaveOn(staffId, date);
     } catch (_) {}
     try {
-      if (typeof window.activeLeaveRecordOn === 'function') return window.activeLeaveRecordOn(staffId, date) || null;
+      if (typeof window.isActiveLeaveOn === 'function') return !!window.isActiveLeaveOn(staffId, date);
     } catch (_) {}
-    return null;
-  }
-  function leaveType(row){
-    try {
-      if (typeof leaveDisplayType === 'function') return text(leaveDisplayType(row));
-    } catch (_) {}
-    try {
-      if (typeof window.leaveDisplayType === 'function') return text(window.leaveDisplayType(row));
-    } catch (_) {}
-    return text(row?.type || row?.leave_type || row?.reason_type || 'ลาอื่นๆ').split(':::')[0].trim();
-  }
-  function isNoDutyRow(row){
-    return leaveType(row) === 'ไม่รับเวร';
-  }
-  function leaveBadgeText(row){
-    if (!row) return '';
-    return isNoDutyRow(row) ? 'ไม่รับเวรวันนี้' : 'ลาวันนี้';
+    return false;
   }
   function compareStaff(a, b){
     try {
@@ -101,9 +85,8 @@
   function optionFor(staff, selectedId, date){
     const option = document.createElement('option');
     option.value = idOf(staff.id);
-    const leave = activeLeave(staff.id, date);
-    const badge = leaveBadgeText(leave);
-    option.textContent = `${fullLabel(staff)}${badge ? ` ⚠ ${badge}` : ''}`;
+    const leave = isOnLeave(staff.id, date);
+    option.textContent = `${fullLabel(staff)}${leave ? ' ⚠ ลาวันนี้' : ''}`;
     option.selected = idOf(staff.id) === selectedId;
     if (leave && !option.selected) option.disabled = true;
     return option;

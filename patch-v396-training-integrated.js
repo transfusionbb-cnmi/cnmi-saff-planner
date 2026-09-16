@@ -342,7 +342,8 @@
   function isPhysicianTrainingProfile(profile){
     const type=String(profile?.staff_type||profile?.position||profile?.job_title||'').trim();
     const role=String(profile?.role||profile?.app_role||'').trim();
-    return /แพทย์|physician|doctor/i.test(`${type} ${role}`);
+    if(window.cnmiPersonTypeV516?.isPhysician)return window.cnmiPersonTypeV516.isPhysician(profile);
+    return /^(แพทย์|physician|doctor)$/i.test(type)||/^(แพทย์|physician|doctor)$/i.test(role);
   }
   function headDisplayName(head){
     const raw=String(head?.full_name||'ปาริฉัตร อินทร์เกลี้ยง').trim();

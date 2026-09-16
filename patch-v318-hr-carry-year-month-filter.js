@@ -567,7 +567,7 @@
   function historyYears(){const now=new Date().getFullYear(),out=[];for(let y=now+1;y>=now-6;y--)out.push({value:String(y),label:String(y+543)});return out;}
   function historyMonthOptions(){return ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'].map((label,i)=>({value:pad2(i+1),label}));}
   function selectedHistoryMonth(){const year=String(st().hrHistoryYearV318||''),monthNo=String(st().hrHistoryMonthNumberV318||'');return /^\d{4}$/.test(year)&&/^\d{2}$/.test(monthNo)?`${year}-${monthNo}`:'';}
-  function activeStaff(){return (st().staff||[]).filter(s=>s.is_active!==false&&s.active!==false&&!/แพทย์|physician/i.test(String(s.staff_type||s.role||''))).sort((a,b)=>String(a.nickname||a.full_name||'').localeCompare(String(b.nickname||b.full_name||''),'th'));}
+  function activeStaff(){return (st().staff||[]).filter(s=>s.is_active!==false&&s.active!==false&&!(window.cnmiPersonTypeV516?.isPhysician?.(s)??/^(แพทย์|physician|doctor)$/i.test(String(s.staff_type||s.role||'').trim()))).sort((a,b)=>String(a.nickname||a.full_name||'').localeCompare(String(b.nickname||b.full_name||''),'th'));}
   function historyKey(staffId,year,monthNo){return `${staffId}|${year}|${monthNo}`;}
   async function loadHistory(force=false){
     const staffId=String(st().hrHistoryStaffV318||''),year=String(st().hrHistoryYearV318||''),monthNo=String(st().hrHistoryMonthNumberV318||''),month=selectedHistoryMonth();if(!staffId||!month)return;

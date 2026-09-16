@@ -34,7 +34,7 @@
   }
   function activeStaff(){
     return (S()?.staff || [])
-      .filter(person => person && person.is_active !== false && person.active !== false && !/แพทย์|physician/i.test(String(person.staff_type || person.role || '')))
+      .filter(person => person && person.is_active !== false && person.active !== false && !(window.cnmiPersonTypeV516?.isPhysician?.(person) ?? /^(แพทย์|physician|doctor)$/i.test(String(person.staff_type || person.role || '').trim())))
       .slice()
       .sort((a,b) => String(a.nickname || a.full_name || '').localeCompare(String(b.nickname || b.full_name || ''), 'th'));
   }

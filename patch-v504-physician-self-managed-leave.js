@@ -23,7 +23,7 @@
   function esc(v){try{return typeof escapeHtml==='function'?escapeHtml(txt(v)):txt(v);}catch(_){return txt(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}}
   function currentId(){try{return typeof currentStaffId==='function'?currentStaffId():S()?.profile?.id||null;}catch(_){return S()?.profile?.id||null;}}
   function currentProfile(){const id=currentId();return S()?.profile||(S()?.staff||[]).find(p=>String(p?.id||'')===String(id||''))||{};}
-  function isPhysicianProfile(p){return /แพทย์|physician|doctor/i.test(`${txt(p?.staff_type)} ${txt(p?.role)} ${txt(p?.position)} ${txt(p?.job_title)}`);}
+  function isPhysicianProfile(p){if(window.cnmiPersonTypeV516?.isPhysician)return window.cnmiPersonTypeV516.isPhysician(p);const type=txt(p?.staff_type),role=txt(p?.role),pos=txt(p?.position),job=txt(p?.job_title);if(/นักเทคนิคการแพทย์|เทคนิคการแพทย์/i.test(`${type} ${pos} ${job}`))return false;return /^(แพทย์|physician|doctor)$/i.test(type)||/^(แพทย์|physician|doctor)$/i.test(role)||/^แพทย์(?:$|[\s/()\-]|เวช|ประจำ|ผู้|เฉพาะ)/i.test(pos)||/^แพทย์(?:$|[\s/()\-]|เวช|ประจำ|ผู้|เฉพาะ)/i.test(job);}
   function isCurrentPhysician(){return isPhysicianProfile(currentProfile());}
   function personById(id){return (S()?.staff||[]).find(p=>String(p?.id||'')===String(id||''))||null;}
   function isPhysicianId(id){return isPhysicianProfile(personById(id));}

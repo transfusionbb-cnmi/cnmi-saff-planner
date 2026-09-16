@@ -36,7 +36,7 @@
   function selectedDashboardDate(){return normDate(S()?.dashboardDateV443)||(()=>{try{return normDate(todayStr())||today();}catch(_){return today();}})();}
   function physicians(){return (S().staff||[]).filter(p=>{
     if(!p||p.is_active===false||p.active===false)return false;
-    return /แพทย์|physician|doctor/i.test(`${p.staff_type||''} ${p.role||''} ${p.position||''}`);
+    return window.cnmiPersonTypeV516?.isPhysician?.(p) ?? /^(แพทย์|physician|doctor)$/i.test(String(p.staff_type||p.role||'').trim());
   }).sort((a,b)=>String(a.nickname||a.full_name||'').localeCompare(String(b.nickname||b.full_name||''),'th'));}
   function person(id){return (S().staff||[]).find(p=>String(p?.id)===String(id||''))||null;}
   function personName(id){const p=person(id);return p?(p.full_name||p.nickname||p.email||'-'):'-';}

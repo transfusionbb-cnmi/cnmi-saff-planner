@@ -185,7 +185,7 @@
   setInterval(()=>{if(S().profile)enforceAccess();},60000);
 
   // Life-cycle aware weekday manpower so a leaver is not counted after their end date.
-  function groupOf(p){const t=`${p?.staff_type||''} ${p?.role||''}`;if(/แพทย์|physician|doctor/i.test(t))return 'แพทย์';if(String(p?.staff_type||'').trim()==='เคิก'||/clerk|ธุรการ/i.test(t))return 'เคิก';return 'MT';}
+  function groupOf(p){if(window.cnmiPersonTypeV516?.group)return window.cnmiPersonTypeV516.group(p);const t=`${p?.staff_type||''} ${p?.role||''}`;if(/^(แพทย์|physician|doctor)$/i.test(String(p?.staff_type||'').trim()))return 'แพทย์';if(String(p?.staff_type||'').trim()==='เคิก'||/clerk|ธุรการ/i.test(t))return 'เคิก';return 'MT';}
   function actualLeave(row){try{if(typeof isLeaveEffective==='function'&&!isLeaveEffective(row))return false;}catch(_){ }const t=String(row?.type||row?.leave_type||'').split(':::')[0].trim();return !!t&&t!=='ไม่รับเวร';}
   function overlap(row,date){return norm(row?.start_date)<=date&&norm(row?.end_date||row?.start_date)>=date;}
   function period(row){const x=String(row?.leave_period||row?.period||'เต็มวัน').toLowerCase();if(/ครึ่งเช้า|morning/.test(x))return'morning';if(/ครึ่งบ่าย|afternoon/.test(x))return'afternoon';return'full';}

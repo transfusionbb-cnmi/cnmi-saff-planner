@@ -25,7 +25,7 @@
     catch(_){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;}
   }
   function profileText(p){return `${txt(p?.staff_type)} ${txt(p?.role)} ${txt(p?.position)} ${txt(p?.job_title)}`;}
-  function isPhysicianProfile(p){return !!p&&/แพทย์|physician|doctor/i.test(profileText(p));}
+  function isPhysicianProfile(p){if(!p)return false;if(window.cnmiPersonTypeV516?.isPhysician)return window.cnmiPersonTypeV516.isPhysician(p);const type=txt(p?.staff_type);if(/นักเทคนิคการแพทย์|เทคนิคการแพทย์/i.test(profileText(p)))return false;return /^(แพทย์|physician|doctor)$/i.test(type);}
   function staffById(id){return (S()?.staff||[]).find(p=>String(p?.id||'')===String(id||''))||null;}
   function isPhysicianId(id){
     try{if(window.cnmiPhysicianLeaveV504?.isPhysicianId)return !!window.cnmiPhysicianLeaveV504.isPhysicianId(id);}catch(_){}

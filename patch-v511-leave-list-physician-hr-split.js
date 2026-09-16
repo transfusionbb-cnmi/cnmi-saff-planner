@@ -29,7 +29,8 @@
   function isPhysicianId(id){
     try{if(window.cnmiPhysicianLeaveV504?.isPhysicianId)return !!window.cnmiPhysicianLeaveV504.isPhysicianId(id);}catch(_){}
     const p=(S()?.staff||[]).find(x=>String(x?.id||'')===String(id||''));
-    return !!p&&/แพทย์|physician|doctor/i.test(`${txt(p?.staff_type)} ${txt(p?.role)} ${txt(p?.position)} ${txt(p?.job_title)}`);
+    if(window.cnmiPersonTypeV516?.isPhysician)return !!window.cnmiPersonTypeV516.isPhysician(p);
+    const type=txt(p?.staff_type);return !!p&&/^(แพทย์|physician|doctor)$/i.test(type);
   }
   function nick(id){try{return typeof staffNick==='function'?txt(staffNick(id)):txt((S()?.staff||[]).find(x=>String(x?.id||'')===String(id||''))?.nickname||id);}catch(_){return txt(id)||'-';}}
   function periodLabel(row){

@@ -32,7 +32,7 @@
     const type=String(staff?.staff_type||'').trim();
     const role=String(staff?.role||'').trim();
     const text=`${type} ${role}`;
-    if(/แพทย์|physician|doctor/i.test(text))return 'แพทย์';
+    if(window.cnmiPersonTypeV516?.isPhysician?.(staff) ?? /^(แพทย์|physician|doctor)$/i.test(type))return 'แพทย์';
     if(type==='เคิก'||/clerk|ธุรการ/i.test(text))return 'เคิก';
     return 'MT';
   }
