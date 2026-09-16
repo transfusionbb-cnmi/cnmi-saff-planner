@@ -1,6 +1,6 @@
-/* CNMI Staff Planner PWA service worker — V514 */
+/* CNMI Staff Planner PWA service worker — V515 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v514`;
+const CACHE_NAME = `${CACHE_PREFIX}v515`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
   './pwa-install-v303.css', './pwa-install-v303.js',
@@ -123,7 +123,8 @@ const APP_SHELL = [
   './android-chrome-192x192.png', './android-chrome-512x512.png',
   './maskable-icon-192x192.png', './maskable-icon-512x512.png',
   './apple-touch-icon.png', './favicon-32x32.png', './favicon-16x16.png',
-  './patch-v513-leave-sequence-tap-repair.js'
+  './patch-v513-leave-sequence-tap-repair.js',
+  './patch-v515-hash-routing-hr-deeplink.js'
 ];
 self.addEventListener('install', event => {
   event.waitUntil((async()=>{
