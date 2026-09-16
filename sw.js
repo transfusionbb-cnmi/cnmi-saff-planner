@@ -1,9 +1,10 @@
-/* CNMI Staff Planner PWA service worker — V516 */
+/* CNMI Staff Planner PWA service worker — V517 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v516`;
+const CACHE_NAME = `${CACHE_PREFIX}v517`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
   './patch-v516-person-type-helper.js',
+  './patch-v517-performance-interaction-feedback.js',
   './pwa-install-v303.css', './pwa-install-v303.js',
   './patch-v217-partial-sell-shift-segments.js',
   './patch-v221-duty-date-slot-edit-month-ui.js',
@@ -159,8 +160,21 @@ self.addEventListener('fetch', event => {
   }
   const cacheableDestinations=new Set(['script','style','image','font','manifest']);
   if(!cacheableDestinations.has(request.destination)) return;
-  event.respondWith(fetch(request).then(response=>{
-    if(response?.ok&&response.type==='basic'){const copy=response.clone();caches.open(CACHE_NAME).then(cache=>cache.put(request,copy));}
-    return response;
-  }).catch(async()=>await caches.match(request)||await caches.match(request,{ignoreSearch:true})||Response.error()));
+  /* V517: same-origin static app assets are cache-first.
+     Every release bumps CACHE_NAME, so a new version is fetched during install,
+     while normal opens no longer wait for the network for hundreds of JS/CSS assets. */
+  event.respondWith((async()=>{
+    const cached=await caches.match(request)||await caches.match(request,{ignoreSearch:true});
+    if(cached) return cached;
+    try{
+      const response=await fetch(request);
+      if(response?.ok&&response.type==='basic'){
+        const copy=response.clone();
+        caches.open(CACHE_NAME).then(cache=>cache.put(request,copy));
+      }
+      return response;
+    }catch(_){
+      return Response.error();
+    }
+  })());
 });
