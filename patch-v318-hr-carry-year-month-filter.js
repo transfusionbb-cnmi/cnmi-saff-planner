@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V371 — balanced HR dummy allocation + automatic carry forward
+/* CNMI Staff Planner V371/V527 — balanced HR dummy allocation + automatic carry forward + adjustment ledger
    - Uses V317 manual-style HR workbook and 8-hour dummy allocation as the base.
    - Automatically adds the latest carry-out to the next source month before allocation.
    - Stores an exact carry snapshot inside the existing claim_batch_id field; no new SQL/table.
@@ -230,17 +230,44 @@
       client.from('leave_requests').select('*').gte('end_date',cycle.start).lte('start_date',cycle.end).order('start_date',{ascending:true}),
       client.from('public_holidays').select('*').gte('holiday_date',holidayStart).lte('holiday_date',holidayEnd).order('holiday_date',{ascending:true}),
       client.from('roster_assignments').select('*').gte('duty_date',source.start).lte('duty_date',source.end).order('duty_date',{ascending:true}),
-      client.from('monthly_incharges').select('*').eq('month_key',source.month).limit(10)
+      client.from('monthly_incharges').select('*').eq('month_key',source.month).limit(10),
+      client.from('ot_adjustments').select('*').eq('apply_month',source.month).eq('status','pending').order('created_at',{ascending:true})
     ];
-    const [ot,leaves,holidays,roster,incharges]=await Promise.all(queries);
-    for(const r of [ot,leaves,holidays,roster,incharges])if(r?.error)throw r.error;
+    const [ot,leaves,holidays,roster,incharges,adjustments]=await Promise.all(queries);
+    for(const r of [ot,leaves,holidays,roster,incharges,adjustments])if(r?.error)throw r.error;
     const app=st();
     app.otRequests=mergeRows(app.otRequests,ot.data||[],x=>String(x.id||`${x.staff_id}|${x.work_date}|${x.created_at||''}`));
     app.leaves=mergeRows(app.leaves,leaves.data||[],x=>String(x.id||`${x.staff_id}|${x.start_date}|${x.end_date}`));
     app.holidays=mergeRows(app.holidays,holidays.data||[],x=>dateKey(x.holiday_date||x.date));
     app.rosterAssignments=mergeRows(app.rosterAssignments,roster.data||[],x=>String(x.id||`${x.staff_id}|${x.duty_date}|${x.duty_code}`));
     app.incharges=mergeRows(app.incharges,incharges.data||[],x=>String(x.id||x.month_key));
-    return {source,cycle,rows:(ot.data||[]).filter(r=>approved(r)&&claimStatus(r)==='pending'),leaves:leaves.data||[],holidays:holidays.data||[]};
+    return {source,cycle,rows:(ot.data||[]).filter(r=>approved(r)&&claimStatus(r)==='pending'),leaves:leaves.data||[],holidays:holidays.data||[],adjustments:adjustments.data||[]};
+  }
+
+  function applyAdjustmentUnits(totals,adjustments){
+    const map=new Map((totals||[]).map(t=>[String(t.staff_id),t]));
+    (adjustments||[]).forEach(adj=>{
+      const sid=String(adj.staff_id||'');if(!sid)return;
+      let t=map.get(sid);
+      if(!t){
+        t={staff_id:sid,actual:0,total:0,currentTotal:0,carryIn:0,carrySourceMonth:'',actualMoney:0,rows:[],baseType:baseType(sid),baseRate:baseRate(sid),employeeCode:employeeCode(sid)};
+        map.set(sid,t);
+      }
+      if(t.regularAvailable==null)t.regularAvailable=round2(t.total||0);
+      if(!Array.isArray(t.adjustments))t.adjustments=[];
+      const units=Math.trunc(Number(adj.hr_unit_delta||0));
+      const amount=round2(Number(adj.amount_delta||0));
+      t.adjustmentUnits=(t.adjustmentUnits||0)+units;
+      t.adjustmentAmount=round2((t.adjustmentAmount||0)+amount);
+      t.adjustments.push(adj);
+    });
+    map.forEach(t=>{
+      if(t.regularAvailable==null)t.regularAvailable=round2(t.total||0);
+      const adjusted=round2(Number(t.regularAvailable||0)+Number(t.adjustmentUnits||0)*8);
+      if(adjusted < -0.001) throw new Error(`ยอดลด OT ของ ${staffNickSafe(t.staff_id)} มากกว่ายอดที่มีในรอบนี้ กรุณาลดยอดทีละรอบ`);
+      t.total=Math.max(0,adjusted);
+    });
+    return [...map.values()].filter(t=>Number(t.total||0)>0||Number(t.adjustmentAmount||0)!==0).sort((a,b)=>staffNickSafe(a.staff_id).localeCompare(staffNickSafe(b.staff_id),'th'));
   }
 
   function buildTotals(rows){
@@ -432,20 +459,20 @@
     }));
     return out;
   }
-  function staffSummaryRows(totals){return totals.map(t=>({'รหัสพนักงาน':t.employeeCode,'ชื่อ':staffFullName(t.staff_id),'ชื่อเล่น':staffNickSafe(t.staff_id),'กลุ่ม HR':t.baseType,'ฐาน HR':t.baseRate,'ชั่วโมงจริงรวม':t.actual,'OT เดือนนี้เทียบ HR':t.currentTotal,'ยอดทบยกมา(ชม.)':t.carryIn,'เดือนยอดทบยกมา':t.carrySourceMonth||'','โอทีทั้งหมดรวมยอดทบ':t.total,'เบิกจริง':t.claimed,'ทบเดือนหน้า(ชม.)':t.carry,'จำนวนเวร 8 ชม.':t.claimedUnits,'เวรที่จัดไม่ได้เพราะลา/ความจุ':t.unallocatedUnits,'คำนวณเป็นเงิน':t.money}));}
+  function staffSummaryRows(totals){return totals.map(t=>({'รหัสพนักงาน':t.employeeCode,'ชื่อ':staffFullName(t.staff_id),'ชื่อเล่น':staffNickSafe(t.staff_id),'กลุ่ม HR':t.baseType,'ฐาน HR':t.baseRate,'ชั่วโมงจริงรวม':t.actual,'OT เดือนนี้เทียบ HR':t.currentTotal,'ยอดทบยกมา(ชม.)':t.carryIn,'เดือนยอดทบยกมา':t.carrySourceMonth||'','รวมก่อนปรับย้อนหลัง':t.regularAvailable==null?t.total:t.regularAvailable,'ปรับย้อนหลังหน่วย HR 8ชม.':Number(t.adjustmentUnits||0),'ปรับย้อนหลัง(บาท)':Number(t.adjustmentAmount||0),'โอทีทั้งหมดหลังปรับ':t.total,'เบิก HR รอบนี้':t.claimed,'ทบเดือนหน้า(ชม.)':t.carry,'จำนวนเวร 8 ชม.':t.claimedUnits,'เวรที่จัดไม่ได้เพราะลา/ความจุ':t.unallocatedUnits,'ยอดเงินที่เบิก HR รอบนี้':t.money}));}
   function holidayDayList(cycle,holidays){return datesBetween(cycle.start,cycle.end).filter(d=>weekend(d)||publicHoliday(d,holidays)).map(d=>String(Number(d.slice(-2))).padStart(2,'0')).join(',');}
 
   function makeOtExtraSheet(sourceRows,totals,source,cycle){
     const rows=[
       [`สรุป OT เดือน ${source.month} / HR dummy ${cycle.start} ถึง ${cycle.end}`],
-      ['ชื่อ','OT เดือนนี้เทียบ HR','ยอดทบยกมา','เดือนยอดทบ','โอทีทั้งหมดรวมยอดทบ','เบิกจริง','ทบเดือนหน้า','ฐาน HR','คำนวณเป็นเงิน','หมายเหตุ'],
-      ...totals.map(t=>[staffFullName(t.staff_id),t.currentTotal,t.carryIn,t.carrySourceMonth||'',t.total,t.claimed,t.carry,t.baseRate,t.money,[Number(t.carryIn||0)>0?'รวมยอดทบจากเดือนก่อนอัตโนมัติ':'',isTang(t.staff_id)?'อริภัศ/แตง: งานปั่นเลือด/งาน MT คิดเรท MT แล้วหารฐานเคิก 90':''].filter(Boolean).join(' • ')]),
+      ['ชื่อ','OT เดือนนี้เทียบ HR','ยอดทบยกมา','เดือนยอดทบ','รวมก่อนปรับย้อนหลัง','ปรับย้อนหลัง (เวร 8ชม.)','ยอดหลังปรับ','เบิก HR รอบนี้','ทบเดือนหน้า','ฐาน HR','ยอดเงินที่เบิก HR รอบนี้','หมายเหตุ'],
+      ...totals.map(t=>[staffFullName(t.staff_id),t.currentTotal,t.carryIn,t.carrySourceMonth||'',t.regularAvailable==null?t.total:t.regularAvailable,Number(t.adjustmentUnits||0),t.total,t.claimed,t.carry,t.baseRate,t.money,[Number(t.carryIn||0)>0?'รวมยอดทบจากเดือนก่อนอัตโนมัติ':'',Number(t.adjustmentUnits||0)!==0?`V527 ปรับย้อนหลัง ${Number(t.adjustmentUnits)>0?'+':''}${Number(t.adjustmentUnits)} เวร`:'' ,isTang(t.staff_id)?'อริภัศ/แตง: งานปั่นเลือด/งาน MT คิดเรท MT แล้วหารฐานเคิก 90':''].filter(Boolean).join(' • ')]),
       [],
       ['รายละเอียดต้นทางเดือนปัจจุบัน'],
       ['ชื่อ','วันที่ OT','เหตุผล','ประเภทเวร','ชั่วโมงจริง','เรทงานจริง','ฐาน HR','ชั่วโมงเทียบ HR','เงินตามงานจริง','หมายเหตุการแปลง'],
       ...sourceRows.map(r=>[r['ชื่อ'],r['วันที่ OT จริง'],r['เหตุผล'],r['ประเภทเวร'],r['ชั่วโมงจริง'],r['เรทงานจริง (บาท/ชม.)'],r['ฐาน HR (บาท/ชม.)'],r['ชั่วโมงเทียบ HR'],r['เงินตามงานจริง'],r['การแปลงเรท']])
     ];
-    const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:34},{wch:18},{wch:15},{wch:15},{wch:22},{wch:15},{wch:18},{wch:12},{wch:16},{wch:60}];return ws;
+    const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:34},{wch:18},{wch:15},{wch:15},{wch:20},{wch:20},{wch:18},{wch:16},{wch:18},{wch:12},{wch:22},{wch:60}];return ws;
   }
   function makeScheduleSheet(allocation,totals,cycle){
     const start=new Date(`${cycle.start}T12:00:00`),first=new Date(start);first.setDate(first.getDate()-first.getDay());
@@ -533,13 +560,15 @@
     const month=monthKey(st().otSourceMonthV241||st().otMoneyMonthV241||st().monthKey);
     busy(true,'กำลังอ่านยอดทบเดือนก่อนและจัด HR dummy แบบไฟล์ Manual');
     try{
-      const data=await queryExportData(month);if(!data.rows.length)throw new Error('ยังไม่มีรายการ OT ที่อนุมัติและรอ Export ในเดือนนี้');
+      const data=await queryExportData(month);if(!data.rows.length&&!(data.adjustments||[]).some(x=>Number(x.hr_unit_delta||0)!==0))throw new Error('ยังไม่มีรายการ OT หรือรายการปรับยอดที่ใช้ Export ในเดือนนี้');
       const carryInMap=await queryCarryIn(data.source.month);
-      const totals=applyCarryIn(buildTotals(data.rows),carryInMap);if(!totals.length)throw new Error('ไม่พบชั่วโมง OT ที่ใช้คำนวณได้');
+      const regularTotals=applyCarryIn(buildTotals(data.rows),carryInMap);
+      const totals=applyAdjustmentUnits(regularTotals,data.adjustments||[]);if(!totals.length)throw new Error('ไม่พบชั่วโมง OT ที่ใช้คำนวณได้');
       const missing=totals.filter(t=>!t.employeeCode).map(t=>staffNickSafe(t.staff_id));if(missing.length)throw new Error(`ยังไม่มีรหัสพนักงานของ: ${missing.join(', ')} กรุณาใส่ในข้อมูลเจ้าหน้าที่ก่อน Export`);
       const allocation=allocate(totals,data.cycle,data.leaves,data.holidays),sourceSheetRows=sourceRowsForSheet(totals,data.source.month,data.cycle),summaryRows=staffSummaryRows(totals);
       const leaveRows=allocation.leaveSkipped.map(x=>({'รหัสพนักงาน':employeeCode(x.staff_id),'ชื่อ':staffFullName(x.staff_id),'วันที่ลาในรอบ HR':x.date,'หมายเหตุ':'ระบบไม่สร้าง dummy shift ในวันนี้'}));
-      const carryRows=totals.map(t=>({'รหัสพนักงาน':t.employeeCode,'ชื่อ':staffFullName(t.staff_id),'เดือน OT ปัจจุบัน':data.source.month,'เดือนยอดทบยกมา':t.carrySourceMonth||'','ยอดทบยกมา(ชม.)':t.carryIn,'OT เดือนนี้เทียบ HR':t.currentTotal,'โอทีทั้งหมดรวมยอดทบ':t.total,'เบิกจริง':t.claimed,'ทบเดือนหน้า(ชม.)':t.carry,'หมายเหตุ':'ยอดทบเดือนหน้าถูกบันทึกเป็น Snapshot ใน Batch เดิมอัตโนมัติ โดยไม่เพิ่มตาราง Supabase'}));
+      const carryRows=totals.map(t=>({'รหัสพนักงาน':t.employeeCode,'ชื่อ':staffFullName(t.staff_id),'เดือน OT ปัจจุบัน':data.source.month,'เดือนยอดทบยกมา':t.carrySourceMonth||'','ยอดทบยกมา(ชม.)':t.carryIn,'OT เดือนนี้เทียบ HR':t.currentTotal,'รวมก่อนปรับย้อนหลัง':t.regularAvailable==null?t.total:t.regularAvailable,'ปรับย้อนหลังหน่วย HR 8ชม.':Number(t.adjustmentUnits||0),'โอทีทั้งหมดหลังปรับ':t.total,'เบิก HR รอบนี้':t.claimed,'ทบเดือนหน้า(ชม.)':t.carry,'หมายเหตุ':'V527: รายการปรับย้อนหลังเป็นหน่วย 8 ชม. แยกจาก OT จริง จึงไม่เปลี่ยนเศษยอดทบปกติ'}));
+      const adjustmentRows=(data.adjustments||[]).map(a=>({'รหัสพนักงาน':employeeCode(a.staff_id),'ชื่อ':staffFullName(a.staff_id),'ประเภท':a.adjustment_type==='overclaim'?'ลด OT เบิกเกิน':'OT ตกเบิกย้อนหลัง','เดือนต้นทาง':a.source_month,'เดือนที่นำมาปรับ':a.apply_month,'ยอดเงินปรับ':Number(a.amount_delta||0),'หน่วย HR 8 ชม.':Number(a.hr_unit_delta||0),'ฐาน HR':Number(a.base_rate||baseRate(a.staff_id)),'เหตุผล':a.reason||'','รายละเอียด':a.note||'','สถานะก่อน Export':a.status||'pending'}));
       const wb=XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb,makeOtExtraSheet(sourceSheetRows,totals,data.source,data.cycle),'OT เสริม');
       XLSX.utils.book_append_sheet(wb,makeScheduleSheet(allocation,totals,data.cycle),'ตาราง');
@@ -550,16 +579,20 @@
       const balanceRows=balanceCheckRows(allocation);
       XLSX.utils.book_append_sheet(wb,makeJsonSheet(balanceRows,Object.keys(balanceRows[0]||{'วันที่ HR dummy':'','วัน':'','ประเภทวัน':'','เป้าหมายจำนวนเวร':'','จำนวนเวรจริง':'','00:00-08:00':'','08:00-16:00':'','16:00-00:00':'','ส่วนต่างช่วงเวลาสูงสุด':'','ตรวจสอบ':''}),[16,12,22,18,16,16,16,16,22,18]),'Dummy_Balance_Check');
       XLSX.utils.book_append_sheet(wb,makeJsonSheet(sourceSheetRows,Object.keys(sourceSheetRows[0]||{}),[14,30,14,14,12,24,34,42,14,12,16,12,16,16,44,20]),'Source_OT_1_to_End');
-      XLSX.utils.book_append_sheet(wb,makeJsonSheet(summaryRows,Object.keys(summaryRows[0]||{}),[14,30,14,12,10,16,16,16,22,14,18,14,18,16]),'Staff_Total');
-      XLSX.utils.book_append_sheet(wb,makeJsonSheet(carryRows,Object.keys(carryRows[0]||{'รหัสพนักงาน':'','ชื่อ':'','เดือน OT ปัจจุบัน':'','เดือนยอดทบยกมา':'','ยอดทบยกมา(ชม.)':'','OT เดือนนี้เทียบ HR':'','โอทีทั้งหมดรวมยอดทบ':'','เบิกจริง':'','ทบเดือนหน้า(ชม.)':'','หมายเหตุ':''}),[14,30,16,16,18,18,22,14,18,62]),'Carry_Forward');
+      XLSX.utils.book_append_sheet(wb,makeJsonSheet(summaryRows,Object.keys(summaryRows[0]||{}),[14,30,14,12,10,16,16,16,22,18,18,18,20,16,18,14,18,18]),'Staff_Total');
+      XLSX.utils.book_append_sheet(wb,makeJsonSheet(adjustmentRows,Object.keys(adjustmentRows[0]||{'รหัสพนักงาน':'','ชื่อ':'','ประเภท':'','เดือนต้นทาง':'','เดือนที่นำมาปรับ':'','ยอดเงินปรับ':'','หน่วย HR 8 ชม.':'','ฐาน HR':'','เหตุผล':'','รายละเอียด':'','สถานะก่อน Export':''}),[14,30,22,14,16,16,18,12,24,46,18]),'OT_Adjustments');
+      XLSX.utils.book_append_sheet(wb,makeJsonSheet(carryRows,Object.keys(carryRows[0]||{'รหัสพนักงาน':'','ชื่อ':'','เดือน OT ปัจจุบัน':'','เดือนยอดทบยกมา':'','ยอดทบยกมา(ชม.)':'','OT เดือนนี้เทียบ HR':'','รวมก่อนปรับย้อนหลัง':'','ปรับย้อนหลังหน่วย HR 8ชม.':'','โอทีทั้งหมดหลังปรับ':'','เบิก HR รอบนี้':'','ทบเดือนหน้า(ชม.)':'','หมายเหตุ':''}),[14,30,16,16,18,18,20,22,20,16,18,62]),'Carry_Forward');
       XLSX.utils.book_append_sheet(wb,makeJsonSheet(leaveRows,Object.keys(leaveRows[0]||{'รหัสพนักงาน':'','ชื่อ':'','วันที่ลาในรอบ HR':'','หมายเหตุ':''}),[14,30,18,42]),'Leave_Skipped');
       const id=batchId(),filename=`HR_OT_V318_${id}_source_${data.source.start}_to_${data.source.end}_dummy_${data.cycle.start}_to_${data.cycle.end}.xlsx`;
       XLSX.writeFile(wb,filename);
       await markExported(data.rows,id,totals,data.source.month);
+      const adjustmentIds=(data.adjustments||[]).filter(a=>a.id&&Number(a.hr_unit_delta||0)!==0).map(a=>a.id);
+      if(adjustmentIds.length){const ar=await db().from('ot_adjustments').update({status:'exported',export_batch_id:id,exported_at:new Date().toISOString(),updated_at:new Date().toISOString()}).in('id',adjustmentIds);if(ar.error)throw ar.error;}
+      try{window.cnmiV527AdjustmentLedger?.refresh?.();}catch(_){ }
       try{window.cnmiV316?.clearCache?.();await window.cnmiV316?.loadPageData?.('ot',{force:true});}catch(_){ }
       st().otSubtabV241='summary';try{renderPage();}catch(_){ }
-      const totalCarryIn=round2(totals.reduce((s,x)=>s+Number(x.carryIn||0),0)),totalCarry=round2(totals.reduce((s,x)=>s+Number(x.carry||0),0));
-      toast(`Export สำเร็จ ${allocation.rows.length} เวร 8 ชม. • ยกมา ${hours(totalCarryIn)} ชม. • ทบเดือนหน้า ${hours(totalCarry)} ชม. • Batch ${id}`);
+      const totalCarryIn=round2(totals.reduce((s,x)=>s+Number(x.carryIn||0),0)),totalCarry=round2(totals.reduce((s,x)=>s+Number(x.carry||0),0)),adjustUnits=totals.reduce((s,x)=>s+Number(x.adjustmentUnits||0),0);
+      toast(`Export สำเร็จ ${allocation.rows.length} เวร 8 ชม. • ปรับย้อนหลัง ${adjustUnits>=0?'+':''}${adjustUnits} เวร • ยกมา ${hours(totalCarryIn)} ชม. • ทบเดือนหน้า ${hours(totalCarry)} ชม. • Batch ${id}`);
     }catch(err){console.error(`[${VERSION}] export failed`,err);toast(String(err?.message||err||'Export ไม่สำเร็จ'),'error');}
     finally{busy(false);}
   }
