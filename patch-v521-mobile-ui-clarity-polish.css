@@ -1,0 +1,198 @@
+/* CNMI Staff Planner V521 — Mobile UI clarity polish
+   Refines V520: stronger icon visibility, less helper-text noise, placeholder-first fields,
+   and tighter mobile spacing. No business logic / DB changes. */
+
+:root{
+  --v521-accent:#5caee0;
+  --v521-accent-strong:#337fa9;
+  --v521-accent-soft:#eef7fd;
+  --v521-line:#d6e3ec;
+  --v521-muted:#75889a;
+  --v521-surface-soft:#f8fbfd;
+}
+
+body.v521-ui-clarity .nav-emoji{
+  filter:none!important;
+  opacity:.98!important;
+  color:inherit;
+}
+body.v521-ui-clarity .nav-btn{
+  gap:10px;
+}
+body.v521-ui-clarity .hint,
+body.v521-ui-clarity .muted,
+body.v521-ui-clarity .v521-helper-compact{
+  color:var(--v521-muted);
+}
+body.v521-ui-clarity .v521-helper-short{font-size:12px!important}
+body.v521-ui-clarity .v521-dense-card > .hint,
+body.v521-ui-clarity .v521-dense-card > .muted{max-width:82ch}
+
+/* subtle icon cue for common buttons without relying on faded emoji */
+body.v521-ui-clarity [data-v521-icon]{position:relative;padding-left:34px!important}
+body.v521-ui-clarity [data-v521-icon]::before{
+  content:'';
+  position:absolute;left:12px;top:50%;width:14px;height:14px;transform:translateY(-50%);
+  border-radius:50%;background:var(--v521-accent-soft);
+  box-shadow:inset 0 0 0 1px #cfe5f2;
+}
+body.v521-ui-clarity [data-v521-icon="search"]::after,
+body.v521-ui-clarity [data-v521-icon="save"]::after,
+body.v521-ui-clarity [data-v521-icon="clear"]::after,
+body.v521-ui-clarity [data-v521-icon="refresh"]::after,
+body.v521-ui-clarity [data-v521-icon="download"]::after{
+  position:absolute;left:15px;top:50%;transform:translateY(-53%);font-size:10px;font-weight:900;color:var(--v521-accent-strong)
+}
+body.v521-ui-clarity [data-v521-icon="search"]::after{content:'⌕'}
+body.v521-ui-clarity [data-v521-icon="save"]::after{content:'✓'}
+body.v521-ui-clarity [data-v521-icon="clear"]::after{content:'×'}
+body.v521-ui-clarity [data-v521-icon="refresh"]::after{content:'↻'}
+body.v521-ui-clarity [data-v521-icon="download"]::after{content:'↓'}
+
+/* more obvious chips / badges */
+body.v521-ui-clarity .badge,
+body.v521-ui-clarity .summary-chip,
+body.v521-ui-clarity .staff-color-pill{filter:none}
+
+/* generic compact form look */
+body.v521-ui-clarity input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+body.v521-ui-clarity select,
+body.v521-ui-clarity textarea{
+  border-color:var(--v521-line);
+  background:#fff;
+}
+body.v521-ui-clarity .v521-placeholder-driven::placeholder{color:#7e90a1}
+
+/* desktop polish on key operational pages */
+body.v521-ui-clarity[data-cnmi-route="leave"] .card,
+body.v521-ui-clarity[data-cnmi-route="activities"] .card,
+body.v521-ui-clarity[data-cnmi-route="ot"] .card,
+body.v521-ui-clarity[data-cnmi-route="hr-check"] .card,
+body.v521-ui-clarity[data-cnmi-route="dashboard"] .card{box-shadow:none}
+body.v521-ui-clarity[data-cnmi-route="leave"] .notice,
+body.v521-ui-clarity[data-cnmi-route="hr-check"] .notice,
+body.v521-ui-clarity[data-cnmi-route="dashboard"] .notice{border-radius:12px}
+
+/* Activities page: simpler search/form balance */
+body.v521-ui-clarity[data-cnmi-route="activities"] .v397-activities-layout{gap:12px!important}
+body.v521-ui-clarity[data-cnmi-route="activities"] .v518-section-head span{font-size:10px!important}
+body.v521-ui-clarity[data-cnmi-route="activities"] .v518-participant-wrap .v396-participants{max-height:240px!important}
+body.v521-ui-clarity[data-cnmi-route="activities"] .v396-participant{min-height:42px!important}
+
+/* OT page list buttons were too tall */
+body.v521-ui-clarity[data-cnmi-route="ot"] .card h3,
+body.v521-ui-clarity[data-cnmi-route="ot"] .card h4{margin-bottom:8px}
+body.v521-ui-clarity[data-cnmi-route="ot"] .card .ghost-btn,
+body.v521-ui-clarity[data-cnmi-route="ot"] .card .soft-btn,
+body.v521-ui-clarity[data-cnmi-route="ot"] .card .primary-btn{
+  min-height:54px;
+  align-items:center;
+}
+
+/* Dashboard: compress oversized stat blocks on mobile and desktop */
+body.v521-ui-clarity[data-cnmi-route="dashboard"] .summary-chip{padding:6px 9px}
+body.v521-ui-clarity[data-cnmi-route="dashboard"] .card h3{margin-bottom:8px}
+
+/* Mobile-first tightening */
+@media (max-width:820px){
+  body.v521-ui-clarity .sidebar{width:278px;max-width:84vw;padding:12px 10px}
+  body.v521-ui-clarity .sidebar-head{margin-bottom:8px}
+  body.v521-ui-clarity .brand-icon{width:38px;height:38px;flex-basis:38px}
+  body.v521-ui-clarity .app-title{font-size:17px}
+  body.v521-ui-clarity .nav-section-title{padding:6px 8px 2px;font-size:11px}
+  body.v521-ui-clarity .nav-btn{min-height:36px;padding:8px 10px;font-size:13px;border-radius:10px}
+  body.v521-ui-clarity .nav-emoji{font-size:16px;width:18px}
+  body.v521-ui-clarity .user-mini{padding:8px 9px;border-radius:12px}
+  body.v521-ui-clarity .topbar{padding:10px 12px}
+  body.v521-ui-clarity .topbar h2{font-size:17px}
+  body.v521-ui-clarity .topbar p{display:none}
+  body.v521-ui-clarity .sync-status{display:none}
+  body.v521-ui-clarity .page-content{padding:10px 8px 18px;gap:9px}
+  body.v521-ui-clarity .card{padding:10px;border-radius:13px}
+  body.v521-ui-clarity .card h3{font-size:16px;margin-bottom:7px}
+  body.v521-ui-clarity .card h4{font-size:14px}
+  body.v521-ui-clarity .grid-2,
+  body.v521-ui-clarity .grid-3,
+  body.v521-ui-clarity .grid-4,
+  body.v521-ui-clarity .form-grid{gap:8px}
+  body.v521-ui-clarity .hint,
+  body.v521-ui-clarity .muted,
+  body.v521-ui-clarity .v521-helper-compact{font-size:11px;line-height:1.35}
+  body.v521-ui-clarity .v521-helper-compact{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  body.v521-ui-clarity input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+  body.v521-ui-clarity select,
+  body.v521-ui-clarity textarea{min-height:38px;padding:8px 10px;font-size:14px}
+  body.v521-ui-clarity textarea{min-height:68px}
+  body.v521-ui-clarity .field-label,
+  body.v521-ui-clarity label{font-size:13px}
+  body.v521-ui-clarity .primary-btn,
+  body.v521-ui-clarity .ghost-btn,
+  body.v521-ui-clarity .soft-btn,
+  body.v521-ui-clarity .danger-ghost{min-height:36px;font-size:13px;padding:7px 10px}
+
+  /* hide repeated labels when placeholder already says the same thing */
+  body.v521-ui-clarity .v521-hide-label-on-mobile{display:none!important}
+
+  /* dashboard compactness */
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .card{padding:10px 11px}
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .summary-chip{padding:5px 8px;font-size:12px}
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .v518-dashboard-activity{padding:8px 9px!important}
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .v518-activity-info{gap:5px!important}
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .v518-activity-info span{padding:4px 6px;font-size:11px}
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .big-number,
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .summary-number{font-size:34px!important;line-height:1}
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .mobile-card{padding:10px 11px}
+
+  /* leave page */
+  body.v521-ui-clarity[data-cnmi-route="leave"] .notice{padding:9px 10px;font-size:12px}
+  body.v521-ui-clarity[data-cnmi-route="leave"] .card .toolbar,
+  body.v521-ui-clarity[data-cnmi-route="leave"] .card .grid-2,
+  body.v521-ui-clarity[data-cnmi-route="leave"] .card .grid-3{gap:8px}
+
+  /* hr-check page */
+  body.v521-ui-clarity[data-cnmi-route="hr-check"] table{font-size:12px}
+  body.v521-ui-clarity[data-cnmi-route="hr-check"] th,
+  body.v521-ui-clarity[data-cnmi-route="hr-check"] td{padding:8px 8px}
+
+  /* activities page */
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v397-activities-layout{grid-template-columns:1fr!important}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v518-activity-entry-card{padding:10px!important}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v518-form-section{padding:9px 9px!important;margin-bottom:7px!important}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v518-section-head{margin-bottom:6px!important}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v518-section-head h4{font-size:14px!important}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v518-section-head span{display:none!important}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v518-participant-tools{grid-template-columns:1fr 1fr!important;gap:6px!important}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v518-participant-tools input{grid-column:1/-1}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v518-selected-count{font-size:11px}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v518-participant-wrap .v396-participants{grid-template-columns:repeat(2,minmax(0,1fr))!important;max-height:200px!important;gap:6px!important}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v396-participant{padding:6px 7px!important;min-height:40px!important;border-radius:10px!important}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v396-participant b{font-size:12px!important}
+  body.v521-ui-clarity[data-cnmi-route="activities"] .v518-form-actions{position:sticky;bottom:max(0px,env(safe-area-inset-bottom));padding-top:6px;background:rgba(255,255,255,.96)}
+
+  /* OT page */
+  body.v521-ui-clarity[data-cnmi-route="ot"] .card .primary-btn,
+  body.v521-ui-clarity[data-cnmi-route="ot"] .card .ghost-btn,
+  body.v521-ui-clarity[data-cnmi-route="ot"] .card .soft-btn{min-height:34px;padding:7px 10px}
+  body.v521-ui-clarity[data-cnmi-route="ot"] .card h3{font-size:15px}
+
+  /* mobile sidebar/user card */
+  body.v521-ui-clarity .sidebar-foot{gap:7px}
+  body.v521-ui-clarity .v520-version-chip{font-size:10px;padding:2px 7px}
+}
+
+@media (max-width:520px){
+  body.v521-ui-clarity .topbar .icon-btn{width:38px;height:38px}
+  body.v521-ui-clarity .topbar-actions .ghost-btn{min-height:34px;padding:6px 10px}
+  body.v521-ui-clarity .sidebar{max-width:82vw}
+  body.v521-ui-clarity .main-nav{padding-right:0}
+  body.v521-ui-clarity .nav-btn{min-height:34px;padding:7px 9px}
+  body.v521-ui-clarity .user-mini{font-size:11px}
+  body.v521-ui-clarity [data-v521-icon]{padding-left:30px!important}
+  body.v521-ui-clarity [data-v521-icon]::before{left:10px;width:13px;height:13px}
+  body.v521-ui-clarity [data-v521-icon]::after{left:13px;font-size:9px}
+
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .big-number,
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .summary-number{font-size:30px!important}
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .card .grid-2,
+  body.v521-ui-clarity[data-cnmi-route="dashboard"] .card .grid-3{gap:7px}
+}

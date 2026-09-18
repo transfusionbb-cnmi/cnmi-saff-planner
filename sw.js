@@ -1,12 +1,12 @@
 /* CNMI Staff Planner PWA service worker — V520 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v520`;
+const CACHE_NAME = `${CACHE_PREFIX}v521`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
   './patch-v516-person-type-helper.js',
   './patch-v517-performance-interaction-feedback.js',
   './patch-v519-activity-page-freeze-fix.js',
-  './patch-v520-whole-app-ui-refresh.css', './patch-v520-whole-app-ui-refresh.js',
+  './patch-v520-whole-app-ui-refresh.css', './patch-v520-whole-app-ui-refresh.js', './patch-v521-mobile-ui-clarity-polish.css', './patch-v521-mobile-ui-clarity-polish.js',
   './pwa-install-v303.css', './pwa-install-v303.js',
   './patch-v217-partial-sell-shift-segments.js',
   './patch-v221-duty-date-slot-edit-month-ui.js',
