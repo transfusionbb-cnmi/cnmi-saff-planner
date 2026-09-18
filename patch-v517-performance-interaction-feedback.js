@@ -153,7 +153,11 @@
   function isActionButton(btn){
     if (!btn || btn.tagName !== 'BUTTON') return false;
     if ((btn.type || '').toLowerCase() === 'submit') return false;
-    if (btn.matches('[data-page],[data-cal-view],[data-cal-nav],[data-close-modal],[data-toggle-password],.modal-close,.icon-btn')) return false;
+    /* V526: sidebar/tree navigation is navigation, never a save/action button.
+       Some menu labels contain words such as “รับเวร” / “ขอ OT”, which previously
+       triggered the V517 busy guard and temporarily blocked navigation. */
+    if (btn.closest('#mainNav')) return false;
+    if (btn.matches('[data-page],[data-cal-view],[data-cal-nav],[data-close-modal],[data-toggle-password],[data-v523-submenu-toggle],[data-v523-ot-item],[data-v524-tree-toggle],[data-v524-child-key],.modal-close,.icon-btn')) return false;
     const text = (btn.textContent || '').trim();
     const attrs = Array.from(btn.attributes || []).map(a=>`${a.name}=${a.value}`).join(' ');
     return ACTION_WORDS.test(text) || /data-(approve|reject|confirm|save|delete|submit|publish|lock|hr|trade|ot)/i.test(attrs);
