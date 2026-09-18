@@ -1,0 +1,90 @@
+/* CNMI Staff Planner V524 — Unified Sidebar Tree Navigation */
+
+body.v520-ui-refresh .v524-nav-tree{display:grid;gap:2px;min-width:0}
+body.v520-ui-refresh .v524-nav-parent{position:relative;padding-right:34px!important}
+body.v520-ui-refresh .v524-parent-label{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.v520-ui-refresh .v524-caret{
+  position:absolute;right:11px;top:50%;transform:translateY(-50%);display:grid;place-items:center;
+  width:20px;height:20px;border-radius:7px;color:#718697;font-size:22px;line-height:1;
+  transition:transform .18s ease,background .18s ease,color .18s ease
+}
+body.v520-ui-refresh .v524-nav-parent[aria-expanded="true"] .v524-caret{transform:translateY(-50%) rotate(90deg);color:#2f7fac;background:#e9f5fc}
+
+body.v520-ui-refresh .v524-nav-submenu{
+  display:none;overflow:hidden;margin:0 0 0 20px;padding:0 0 0 12px;border-left:1.5px solid #cfdeea
+}
+body.v520-ui-refresh .v524-nav-submenu.open{display:grid;gap:1px;margin-top:2px;margin-bottom:4px;padding-top:2px;padding-bottom:2px}
+body.v520-ui-refresh .v524-subitem{
+  position:relative;display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:7px 9px 7px 8px;
+  border:0;border-radius:9px;background:transparent;color:#536b7d;text-align:left;font:inherit;font-size:12px;font-weight:700;cursor:pointer
+}
+body.v520-ui-refresh .v524-subitem::before{content:'';position:absolute;left:-13px;top:50%;width:10px;height:1.5px;background:#cfdeea}
+body.v520-ui-refresh .v524-subitem:hover{background:rgba(255,255,255,.72);color:#2d6688}
+body.v520-ui-refresh .v524-subitem.active{background:#fff;color:#1f678f;box-shadow:0 2px 8px rgba(41,94,127,.06)}
+body.v520-ui-refresh .v524-subitem.active::before{background:#69b9e5}
+body.v520-ui-refresh .v524-branch-icon{display:grid;place-items:center;width:17px;height:17px;flex:0 0 17px;color:#6d9fbe}
+body.v520-ui-refresh .v524-branch-icon svg{width:15px;height:15px}
+body.v520-ui-refresh .v524-subitem.active .v524-branch-icon{color:#2e8bc0}
+
+/* Screens that used to show separate tasks side-by-side now expose one task at a time. */
+body.v520-ui-refresh .v524-panel-hidden{display:none!important}
+body.v520-ui-refresh .v524-single-view-layout{grid-template-columns:minmax(0,1fr)!important;gap:0!important;align-items:start}
+body.v520-ui-refresh .v524-leave-form-panel,
+body.v520-ui-refresh .v524-activity-create-panel{width:100%;max-width:980px}
+body.v520-ui-refresh .v524-leave-history-panel,
+body.v520-ui-refresh .v524-activity-search-panel{width:100%;max-width:1180px}
+body.v520-ui-refresh .v524-intern-grid{grid-template-columns:minmax(0,1fr)!important;gap:0!important}
+body.v520-ui-refresh .v524-grid-hidden{display:none!important}
+body.v520-ui-refresh .v524-intern-single-view [data-v524-intern-panel]{width:100%;max-width:1120px}
+
+/* Remove the feeling of an empty second desktop column on converted pages. */
+body.v520-ui-refresh[data-cnmi-route="activities"] .v524-activity-layout,
+body.v520-ui-refresh[data-cnmi-route="leave"] .v524-leave-layout{max-width:1220px}
+
+@media(max-width:820px){
+  body.v520-ui-refresh .v524-nav-tree{gap:1px}
+  body.v520-ui-refresh .v524-nav-parent{min-height:36px!important;padding-right:32px!important}
+  body.v520-ui-refresh .v524-nav-submenu{margin-left:18px;padding-left:12px}
+  body.v520-ui-refresh .v524-subitem{min-height:35px;padding:7px 8px;font-size:12px;border-radius:8px}
+  body.v520-ui-refresh .v524-branch-icon{width:16px;height:16px;flex-basis:16px}
+  body.v520-ui-refresh .v524-branch-icon svg{width:14px;height:14px}
+  body.v520-ui-refresh .v524-leave-form-panel,
+  body.v520-ui-refresh .v524-leave-history-panel,
+  body.v520-ui-refresh .v524-activity-create-panel,
+  body.v520-ui-refresh .v524-activity-search-panel,
+  body.v520-ui-refresh .v524-intern-single-view [data-v524-intern-panel]{max-width:none}
+}
+
+@media(min-width:821px){
+  body.cnmi-sidebar-hidden .v524-nav-submenu,
+  .sidebar.collapsed .v524-nav-submenu{display:none!important}
+  .sidebar.collapsed .v524-caret{display:none}
+}
+
+/* Additional converted task pages */
+body.v520-ui-refresh .v524-profile-main-panel{width:100%;max-width:980px}
+body.v520-ui-refresh .v524-profile-requests-panel{width:100%;max-width:1100px}
+body.v520-ui-refresh .users-page-v49.v524-users-layout.v524-single-view-layout{grid-template-columns:minmax(0,1fr)!important}
+body.v520-ui-refresh .users-page-v49.v524-users-layout:has(.v479-new-user-panel:not(.v524-panel-hidden)){
+  grid-template-columns:minmax(0,1fr)!important
+}
+body.v520-ui-refresh .users-page-v49.v524-users-layout .v479-new-user-panel:not(.v524-panel-hidden){grid-column:1/-1!important;max-width:1180px;width:100%}
+body.v520-ui-refresh .v524-physician-single-view .v452-form-grid{grid-template-columns:minmax(0,1fr)!important}
+body.v520-ui-refresh .v524-physician-single-view #v452DaytimeForm,
+body.v520-ui-refresh .v524-physician-single-view #v452OncallForm,
+body.v520-ui-refresh .v524-physician-single-view #v452OverrideForm,
+body.v520-ui-refresh .v524-physician-single-view > .card:not(.v452-intro){max-width:1120px;width:100%}
+body.v520-ui-refresh .v524-physician-intro{padding:10px 12px!important}
+body.v520-ui-refresh .v524-physician-intro .hint{margin-bottom:0}
+
+@media(max-width:820px){
+  body.v520-ui-refresh .v524-profile-main-panel,
+  body.v520-ui-refresh .v524-profile-requests-panel,
+  body.v520-ui-refresh .users-page-v49.v524-users-layout .v479-new-user-panel:not(.v524-panel-hidden),
+  body.v520-ui-refresh .v524-physician-single-view #v452DaytimeForm,
+  body.v520-ui-refresh .v524-physician-single-view #v452OncallForm,
+  body.v520-ui-refresh .v524-physician-single-view #v452OverrideForm,
+  body.v520-ui-refresh .v524-physician-single-view > .card:not(.v452-intro){max-width:none}
+  body.v520-ui-refresh .v524-physician-intro .section-title span,
+  body.v520-ui-refresh .v524-physician-intro .hint{display:none}
+}
