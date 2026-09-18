@@ -1,12 +1,12 @@
-/* CNMI Staff Planner PWA service worker — V524 */
+/* CNMI Staff Planner PWA service worker — V525 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v524`;
+const CACHE_NAME = `${CACHE_PREFIX}v525`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
   './patch-v516-person-type-helper.js',
   './patch-v517-performance-interaction-feedback.js',
   './patch-v519-activity-page-freeze-fix.js',
-  './patch-v520-whole-app-ui-refresh.css', './patch-v520-whole-app-ui-refresh.js', './patch-v521-mobile-ui-clarity-polish.css', './patch-v521-mobile-ui-clarity-polish.js', './patch-v522-ot-submenu-mobile-navigation.css', './patch-v522-ot-submenu-mobile-navigation.js', './patch-v523-sidebar-tree-submenu.css', './patch-v523-sidebar-tree-submenu.js', './patch-v524-unified-sidebar-tree-navigation.css', './patch-v524-unified-sidebar-tree-navigation.js',
+  './patch-v520-whole-app-ui-refresh.css', './patch-v520-whole-app-ui-refresh.js', './patch-v521-mobile-ui-clarity-polish.css', './patch-v521-mobile-ui-clarity-polish.js', './patch-v522-ot-submenu-mobile-navigation.css', './patch-v522-ot-submenu-mobile-navigation.js', './patch-v523-sidebar-tree-submenu.css', './patch-v523-sidebar-tree-submenu.js', './patch-v524-unified-sidebar-tree-navigation.css', './patch-v524-unified-sidebar-tree-navigation.js', './patch-v525-ot-payday-tracker.css', './patch-v525-ot-payday-tracker.js',
   './pwa-install-v303.css', './pwa-install-v303.js',
   './patch-v217-partial-sell-shift-segments.js',
   './patch-v221-duty-date-slot-edit-month-ui.js',

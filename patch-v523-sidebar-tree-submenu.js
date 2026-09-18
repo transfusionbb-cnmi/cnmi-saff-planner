@@ -5,6 +5,10 @@
   if(window.__CNMI_V523_SIDEBAR_SUBMENU__) return;
   window.__CNMI_V523_SIDEBAR_SUBMENU__=true;
   const VERSION='V523_SIDEBAR_TREE_SUBMENU';
+  const SIDEBAR_OPEN_KEY='cnmi-sidebar-tree-open-id';
+  function getOpenTree(){try{return sessionStorage.getItem(SIDEBAR_OPEN_KEY)||'';}catch(_){return '';} }
+  function setOpenTree(id){try{if(id)sessionStorage.setItem(SIDEBAR_OPEN_KEY,id);else sessionStorage.removeItem(SIDEBAR_OPEN_KEY);}catch(_){} }
+  function announceOpenTree(id){setOpenTree(id);try{window.dispatchEvent(new CustomEvent('cnmi:sidebar-tree-open',{detail:{id}}));}catch(_){} }
 
   function S(){
     try{return window.state || (typeof state!=='undefined'?state:{});}catch(_){return {};}
@@ -88,7 +92,7 @@
       refreshTree();
       return;
     }
-    const wasOpen = S().page==='ot' || sessionStorage.getItem('cnmi-v523-ot-open')==='1';
+    const wasOpen = S().page==='ot' || getOpenTree()==='ot';
     const tree=document.createElement('div');
     tree.className='v523-nav-tree';
     tree.dataset.v523Tree='ot';
@@ -103,7 +107,7 @@
     if(!tree) return;
     const parent=tree.querySelector('.v523-nav-parent');
     const sub=tree.querySelector('.v523-nav-submenu');
-    const shouldOpen = S().page==='ot' || parent?.getAttribute('aria-expanded')==='true' || sessionStorage.getItem('cnmi-v523-ot-open')==='1';
+    const shouldOpen = S().page==='ot' || getOpenTree()==='ot';
     if(parent){
       parent.classList.toggle('active',S().page==='ot');
       parent.setAttribute('aria-expanded',shouldOpen?'true':'false');
@@ -131,6 +135,7 @@
   }
 
   function apply(){
+    if(S().page==='ot' && getOpenTree()!=='ot') announceOpenTree('ot');
     installTree();
     refreshTree();
     compactOtTopCard();
@@ -159,6 +164,8 @@
       sub?.classList.toggle('open',open);
       sub?.setAttribute('aria-hidden',open?'false':'true');
       sessionStorage.setItem('cnmi-v523-ot-open',open?'1':'0');
+      if(open) announceOpenTree('ot');
+      else if(getOpenTree()==='ot') setOpenTree('');
       return;
     }
     const item=e.target?.closest?.('[data-v523-ot-item]');
@@ -171,6 +178,7 @@
       S().otGroupV522=groupFor(id);
       S().page='ot';
       sessionStorage.setItem('cnmi-v523-ot-open','1');
+      announceOpenTree('ot');
       const sidebar=document.getElementById('sidebar');
       if(sidebar && window.matchMedia('(max-width:820px)').matches){
         sidebar.classList.remove('open');
@@ -180,6 +188,19 @@
       return;
     }
   },true);
+
+
+  window.addEventListener('cnmi:sidebar-tree-open',function(e){
+    const id=String(e?.detail?.id||'');
+    if(id==='ot') return;
+    const tree=document.querySelector('.v523-nav-tree');
+    const parent=tree?.querySelector('.v523-nav-parent');
+    const sub=tree?.querySelector('.v523-nav-submenu');
+    parent?.setAttribute('aria-expanded','false');
+    sub?.classList.remove('open');
+    sub?.setAttribute('aria-hidden','true');
+    try{sessionStorage.setItem('cnmi-v523-ot-open','0');}catch(_){}
+  });
 
   let queued=false;
   function queue(){

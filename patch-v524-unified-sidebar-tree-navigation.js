@@ -8,6 +8,10 @@
   if(window.__CNMI_V524_UNIFIED_TREE_NAV__) return;
   window.__CNMI_V524_UNIFIED_TREE_NAV__=true;
   const VERSION='V524_UNIFIED_SIDEBAR_TREE_NAVIGATION';
+  const SIDEBAR_OPEN_KEY='cnmi-sidebar-tree-open-id';
+  function getOpenTree(){try{return sessionStorage.getItem(SIDEBAR_OPEN_KEY)||'';}catch(_){return '';} }
+  function setOpenTree(id){try{if(id)sessionStorage.setItem(SIDEBAR_OPEN_KEY,id);else sessionStorage.removeItem(SIDEBAR_OPEN_KEY);}catch(_){} }
+  function announceOpenTree(id){setOpenTree(id);try{window.dispatchEvent(new CustomEvent('cnmi:sidebar-tree-open',{detail:{id}}));}catch(_){} }
 
   function S(){
     try{return window.state || (typeof state!=='undefined'?state:{});}catch(_){return window.state||{};}
@@ -176,7 +180,11 @@
     return true;
   }
   function openKey(id){return `cnmi-v524-tree-${id}-open`;}
-  function shouldOpen(def){return !!def.active?.() || ssGet(openKey(def.id),'0')==='1';}
+  function shouldOpen(def){
+    const activeDef=defs().find(d=>!!d.active?.());
+    if(activeDef) return activeDef.id===def.id;
+    return getOpenTree()===`v524:${def.id}`;
+  }
 
   function treeHtml(def,children){
     const open=shouldOpen(def);
@@ -367,6 +375,8 @@
 
   function apply(){
     decorateVersion();
+    const activeDef=defs().find(d=>!!d.active?.());
+    if(activeDef && getOpenTree()!==`v524:${activeDef.id}`) announceOpenTree(`v524:${activeDef.id}`);
     defs().forEach(installTree);
     defs().forEach(def=>{
       const tree=document.querySelector(`.v524-nav-tree[data-v524-tree="${CSS.escape(def.id)}"]`);
@@ -393,6 +403,7 @@
   function navigateChild(def,child){
     setSubview(child);
     ssSet(openKey(def.id),'1');
+    announceOpenTree(`v524:${def.id}`);
     closeMobileSidebar();
     const same=page()===child.page;
     if(same){
@@ -418,6 +429,8 @@
       sub?.classList.toggle('open',open);
       sub?.setAttribute('aria-hidden',open?'false':'true');
       ssSet(openKey(id),open?'1':'0');
+      if(open) announceOpenTree(`v524:${id}`);
+      else if(getOpenTree()===`v524:${id}`) setOpenTree('');
       return;
     }
     const item=e.target?.closest?.('[data-v524-child-key]');
@@ -428,6 +441,22 @@
       if(def&&child) navigateChild(def,child);
     }
   },true);
+
+
+  window.addEventListener('cnmi:sidebar-tree-open',function(e){
+    const openId=String(e?.detail?.id||'');
+    defs().forEach(def=>{
+      const own=`v524:${def.id}`;
+      if(openId===own) return;
+      const tree=document.querySelector(`.v524-nav-tree[data-v524-tree="${CSS.escape(def.id)}"]`);
+      const parent=tree?.querySelector('.v524-nav-parent');
+      const sub=tree?.querySelector('.v524-nav-submenu');
+      parent?.setAttribute('aria-expanded','false');
+      sub?.classList.remove('open');
+      sub?.setAttribute('aria-hidden','true');
+      ssSet(openKey(def.id),'0');
+    });
+  });
 
   const oldRenderNav=window.renderNav || (typeof renderNav==='function'?renderNav:null);
   if(oldRenderNav && !oldRenderNav.__v524Wrapped){
