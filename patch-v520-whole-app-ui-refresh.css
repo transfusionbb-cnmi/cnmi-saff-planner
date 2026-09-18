@@ -1,0 +1,220 @@
+/* CNMI Staff Planner V520 — Whole App UI/UX Refresh
+   Presentation only: consistent hierarchy, compact controls, mobile-first spacing.
+   No business rules / DB schema changes. */
+
+:root{
+  --v520-bg:#f5f7fa;
+  --v520-surface:#ffffff;
+  --v520-surface-soft:#f8fafc;
+  --v520-ink:#1e3345;
+  --v520-muted:#6d8091;
+  --v520-line:#dbe5ed;
+  --v520-line-strong:#cbd9e4;
+  --v520-primary:#5daee0;
+  --v520-primary-strong:#2f7fac;
+  --v520-primary-soft:#edf7fd;
+  --v520-danger:#c94b61;
+  --v520-shadow:0 5px 18px rgba(35,66,91,.055);
+  --v520-radius:16px;
+  --v520-radius-sm:11px;
+}
+
+/* ---------- App shell / hierarchy ---------- */
+body.v520-ui-refresh{background:var(--v520-bg);color:var(--v520-ink);font-size:15px;line-height:1.45}
+body.v520-ui-refresh .app-view{grid-template-columns:256px minmax(0,1fr)}
+body.v520-ui-refresh .sidebar{padding:16px 14px;background:#eef7fc;border-right:1px solid #dbe8f0}
+body.v520-ui-refresh .sidebar-head{margin-bottom:12px;padding:0 4px}
+body.v520-ui-refresh .brand-icon{width:42px;height:42px;flex-basis:42px;border-radius:13px;box-shadow:none;border:1px solid #e1ebf2}
+body.v520-ui-refresh .app-title{font-size:18px;letter-spacing:-.01em}
+body.v520-ui-refresh .app-subtitle{font-size:12px}
+body.v520-ui-refresh .main-nav{gap:2px;padding-right:2px}
+body.v520-ui-refresh .nav-section{gap:3px;margin-bottom:10px}
+body.v520-ui-refresh .nav-section-title{padding:8px 9px 3px;font-size:12px;letter-spacing:.02em;color:#728594;text-transform:none}
+body.v520-ui-refresh .nav-section-title small{display:none}
+body.v520-ui-refresh .nav-btn{min-height:40px;padding:9px 10px;border-radius:11px;gap:9px;font-size:14px;font-weight:700}
+body.v520-ui-refresh .nav-btn:hover{background:rgba(255,255,255,.72)}
+body.v520-ui-refresh .nav-btn.active{background:#fff;color:#1f5879;box-shadow:0 2px 9px rgba(31,72,110,.07);border:1px solid #dce9f1}
+body.v520-ui-refresh .nav-emoji{width:18px;font-size:15px;filter:grayscale(.75);opacity:.78}
+body.v520-ui-refresh .sidebar-foot{gap:8px}
+body.v520-ui-refresh .user-mini{padding:9px 10px;border-radius:13px;background:rgba(255,255,255,.78);font-size:12px}
+body.v520-ui-refresh .v520-version-chip{display:inline-flex;align-items:center;justify-content:center;width:max-content;margin:0 3px;padding:2px 7px;border-radius:999px;background:#e2f2fb;color:#4e738a;font-size:10px;font-weight:700;letter-spacing:.04em}
+
+body.v520-ui-refresh .topbar{padding:13px 20px;gap:12px;background:rgba(245,247,250,.94);border-bottom:1px solid #e1e8ee;backdrop-filter:blur(9px)}
+body.v520-ui-refresh .topbar h2{font-size:20px;line-height:1.25;letter-spacing:-.01em}
+body.v520-ui-refresh .topbar p{font-size:12px;margin-top:1px}
+body.v520-ui-refresh .topbar-actions{gap:7px}
+body.v520-ui-refresh .sync-status{font-size:11px}
+body.v520-ui-refresh .page-content{padding:18px 20px 28px;gap:14px;width:100%;max-width:1680px;margin:0 auto}
+
+/* ---------- Cards / groups ---------- */
+body.v520-ui-refresh .card{border:1px solid var(--v520-line);border-radius:var(--v520-radius);box-shadow:var(--v520-shadow);padding:16px;background:var(--v520-surface)}
+body.v520-ui-refresh .card h3{font-size:17px;margin:0 0 10px;line-height:1.3}
+body.v520-ui-refresh .card h4{line-height:1.3}
+body.v520-ui-refresh .section-title{gap:8px;margin-bottom:10px;align-items:flex-start}
+body.v520-ui-refresh .section-title h3{margin:0}
+body.v520-ui-refresh .grid-2,
+body.v520-ui-refresh .grid-3,
+body.v520-ui-refresh .grid-4{gap:12px}
+body.v520-ui-refresh .toolbar{gap:8px}
+body.v520-ui-refresh .hint{font-size:12px;line-height:1.35;margin-top:5px;color:var(--v520-muted);font-weight:400}
+body.v520-ui-refresh .muted{color:var(--v520-muted)}
+body.v520-ui-refresh .notice{padding:10px 12px;border-radius:12px;margin:8px 0;font-size:13px;box-shadow:none}
+body.v520-ui-refresh .empty-state,
+body.v520-ui-refresh .empty{padding:18px;border-radius:13px;background:#fafcfd}
+
+/* ---------- Forms ---------- */
+body.v520-ui-refresh label{gap:5px;font-size:14px;font-weight:700;color:#30485b}
+body.v520-ui-refresh input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+body.v520-ui-refresh select,
+body.v520-ui-refresh textarea{min-height:42px;border:1px solid var(--v520-line-strong);border-radius:11px;padding:9px 11px;background:#fff;color:var(--v520-ink);box-shadow:none}
+body.v520-ui-refresh textarea{min-height:76px;line-height:1.5}
+body.v520-ui-refresh input:focus,
+body.v520-ui-refresh select:focus,
+body.v520-ui-refresh textarea:focus{border-color:#73b9df;box-shadow:0 0 0 3px rgba(93,174,224,.14)}
+body.v520-ui-refresh input::placeholder,
+body.v520-ui-refresh textarea::placeholder{color:#91a0ad;opacity:1}
+body.v520-ui-refresh input[type="checkbox"],
+body.v520-ui-refresh input[type="radio"]{accent-color:#4d9fd0}
+body.v520-ui-refresh .form-grid{gap:11px 12px}
+body.v520-ui-refresh .field-label{font-size:14px;margin-bottom:6px}
+
+/* ---------- Buttons ---------- */
+body.v520-ui-refresh .primary-btn,
+body.v520-ui-refresh .ghost-btn,
+body.v520-ui-refresh .danger-ghost,
+body.v520-ui-refresh .soft-btn{min-height:40px;border-radius:10px;padding:8px 13px;font-size:14px;font-weight:700;transition:background .15s,border-color .15s,transform .15s,box-shadow .15s}
+body.v520-ui-refresh .primary-btn{background:#70b9e3;color:#173e57}
+body.v520-ui-refresh .primary-btn:hover{background:#64b1dd;box-shadow:0 3px 10px rgba(47,127,172,.12);transform:none}
+body.v520-ui-refresh .ghost-btn{border-color:#d7e3eb;background:#fff;color:#39789e}
+body.v520-ui-refresh .ghost-btn:hover{background:#f6fafc;border-color:#c7dbe7}
+body.v520-ui-refresh .soft-btn{background:#edf7fc;color:#39789e}
+body.v520-ui-refresh .danger-ghost{border-color:#f1d2d9;color:#b6455a;background:#fff}
+body.v520-ui-refresh .tiny-btn{border-radius:8px!important;min-height:31px!important;padding:5px 9px!important;font-size:12px!important}
+body.v520-ui-refresh .icon-btn{width:40px;height:40px;border-radius:10px;box-shadow:none}
+
+/* ---------- Tables / data density ---------- */
+body.v520-ui-refresh .table-wrap{border-color:var(--v520-line);border-radius:13px;box-shadow:none}
+body.v520-ui-refresh table{font-size:13px}
+body.v520-ui-refresh th,
+body.v520-ui-refresh td{padding:9px 10px;border-bottom-color:#e6edf2;line-height:1.35}
+body.v520-ui-refresh th{background:#f7fafc;color:#526a7d;font-size:12px;font-weight:800}
+body.v520-ui-refresh tbody tr:hover>td{background-color:rgba(241,247,251,.48)}
+body.v520-ui-refresh .badge{padding:3px 8px;font-size:11px;font-weight:800;box-shadow:none}
+body.v520-ui-refresh .staff-color-pill{padding:5px 9px;min-width:34px;font-size:12px;box-shadow:none;border-color:rgba(31,50,69,.1)}
+body.v520-ui-refresh .summary-chip{border-radius:11px;padding:8px 10px;box-shadow:none}
+
+/* ---------- Modal ---------- */
+body.v520-ui-refresh .modal{background:rgba(24,43,58,.32);padding:16px}
+body.v520-ui-refresh .modal-card{width:min(720px,100%);max-height:90vh;border-radius:18px;padding:20px;box-shadow:0 18px 46px rgba(23,48,67,.18)}
+body.v520-ui-refresh .modal-close{width:34px;height:34px;border-radius:9px;font-size:21px;background:#f3f6f8}
+
+/* ---------- Activity page: fix the current visual problems ---------- */
+body.v520-ui-refresh[data-cnmi-page="activities"] .v397-activities-layout{grid-template-columns:minmax(0,1fr) minmax(360px,.78fr)!important;gap:14px!important;align-items:start}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-activity-entry-card{padding:15px!important;overflow:visible}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-form-section{margin:0 0 10px;padding:13px 14px;border:1px solid #e0e8ee;border-radius:13px;background:#fbfcfd}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-section-head{margin-bottom:9px;gap:8px}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-section-head h4{font-size:15px;color:#29475c}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-section-head span{font-size:11px;color:#8696a3}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-section-grid{gap:9px 12px}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-readonly-person{min-height:42px;padding:8px 11px;border-radius:10px;border-color:#dce6ed;background:#f5f8fa;justify-content:flex-start}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-readonly-person small{display:none}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-participant-tools{grid-template-columns:minmax(200px,1fr) auto auto;gap:7px;margin:6px 0 4px}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-selected-count{grid-column:1/-1;justify-self:start;font-size:11px;color:#6f8291;margin-top:-1px}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-selected-chips{margin:3px 0 7px;min-height:24px;gap:5px}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-chip{padding:3px 7px;font-size:11px;background:#edf7fc;border-color:#cae3f0}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-no-selection{font-size:11px;color:#8b99a5}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-participant-wrap .v396-participants{grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:7px;max-height:215px;padding:1px;border:0;background:transparent;overflow:auto}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v396-participant{display:flex;align-items:center;gap:8px;min-height:46px;padding:7px 9px;border:1px solid #dce6ed;border-radius:10px;background:#fff;cursor:pointer;overflow:hidden}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v396-participant:hover{border-color:#b9d9ea;background:#f8fcfe}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v396-participant:has(input:checked){border-color:#85bedc;background:#eef8fd;box-shadow:inset 0 0 0 1px rgba(93,174,224,.1)}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-activity-form .v396-participant input[type="checkbox"],
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-activity-form .v396-training-check input[type="checkbox"]{width:18px!important;height:18px!important;min-width:18px!important;max-width:18px!important;flex:0 0 18px;padding:0!important;margin:0!important;box-shadow:none!important}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v396-participant span{display:block;min-width:0}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v396-participant b{display:block;font-size:13px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v396-participant small{display:none!important}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-tool-btn{min-height:36px!important;padding:6px 10px!important;font-size:12px!important}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-optional-section .v396-training-check,
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-optional-section .v405-training-field{padding:9px 10px;border-radius:10px}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-form-actions{gap:7px;padding-top:1px}
+body.v520-ui-refresh[data-cnmi-page="activities"] .v518-form-actions button{min-width:112px}
+body.v520-ui-refresh[data-cnmi-page="activities"] .activity-row-card{border-radius:12px!important;box-shadow:none!important}
+body.v520-ui-refresh[data-cnmi-page="activities"] .activity-row-detail{font-size:12px}
+
+/* ---------- Dashboard / calendar / leave / OT cards ---------- */
+body.v520-ui-refresh[data-cnmi-page="dashboard"] .card{padding:14px}
+body.v520-ui-refresh[data-cnmi-page="dashboard"] .v518-dashboard-activity{padding:10px 11px!important;border-radius:11px!important}
+body.v520-ui-refresh[data-cnmi-page="dashboard"] .v518-activity-info span{padding:6px 7px;border-radius:8px;background:#f7fafb}
+body.v520-ui-refresh[data-cnmi-page="dashboard"] .v518-created-rank{display:none}
+body.v520-ui-refresh .calendar-cell{border-radius:12px!important;box-shadow:none!important}
+body.v520-ui-refresh .timeline-item{border-radius:12px;padding:10px 12px;box-shadow:none}
+body.v520-ui-refresh .mobile-card{border-radius:12px;padding:11px 12px;box-shadow:none}
+body.v520-ui-refresh .roster-slot{border-radius:10px;padding:7px}
+
+/* ---------- Admin / management surfaces ---------- */
+body.v520-ui-refresh[data-cnmi-page="users"] .card,
+body.v520-ui-refresh[data-cnmi-page="audit"] .card,
+body.v520-ui-refresh[data-cnmi-page="eligibility"] .card,
+body.v520-ui-refresh[data-cnmi-page="positions"] .card{box-shadow:none}
+body.v520-ui-refresh .position-zone-card,
+body.v520-ui-refresh .position-check,
+body.v520-ui-refresh .selected-staff-card{border-radius:12px;box-shadow:none}
+body.v520-ui-refresh .position-check{padding:9px 10px}
+body.v520-ui-refresh .big-staff-name{font-size:22px}
+
+/* Keep formal / audit contexts detailed. Nickname compaction only applies to operational activity picker. */
+body.v520-ui-refresh[data-cnmi-page="activities"] .v396-participant[data-v520-full-name]{position:relative}
+
+/* ---------- Authentication ---------- */
+body.v520-ui-refresh .auth-view{background:#f5f8fa;padding:18px}
+body.v520-ui-refresh .auth-card{width:min(500px,100%);padding:28px;border:1px solid #dfe8ee;border-radius:20px;box-shadow:0 10px 32px rgba(31,60,82,.08);backdrop-filter:none}
+body.v520-ui-refresh .brand-mark{width:64px;height:64px;border-radius:17px;box-shadow:none;border:1px solid #e4ebf0}
+body.v520-ui-refresh .auth-card h1{font-size:24px}
+
+/* ---------- Responsive ---------- */
+@media(max-width:1080px){
+  body.v520-ui-refresh .app-view{grid-template-columns:232px minmax(0,1fr)}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v397-activities-layout{grid-template-columns:1fr!important}
+}
+@media(max-width:820px){
+  body.v520-ui-refresh .app-view{grid-template-columns:1fr}
+  body.v520-ui-refresh .sidebar{width:288px;max-width:86vw;padding:14px 12px}
+  body.v520-ui-refresh .topbar{padding:11px 12px}
+  body.v520-ui-refresh .topbar h2{font-size:18px}
+  body.v520-ui-refresh .page-content{padding:12px 10px 22px;gap:10px}
+  body.v520-ui-refresh .card{padding:12px;border-radius:13px}
+  body.v520-ui-refresh .grid-2,
+  body.v520-ui-refresh .grid-3,
+  body.v520-ui-refresh .grid-4,
+  body.v520-ui-refresh .form-grid{gap:9px}
+  body.v520-ui-refresh .modal-card{padding:16px 13px;border-radius:15px}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-activity-entry-card{padding:11px!important}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-form-section{padding:10px 9px;margin-bottom:8px}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-section-head{display:flex;flex-direction:row;align-items:baseline;justify-content:space-between;gap:6px}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-section-head span{display:none}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-participant-tools{grid-template-columns:1fr 1fr}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-participant-tools input{grid-column:1/-1}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-selected-count{grid-column:1/-1}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-participant-wrap .v396-participants{grid-template-columns:repeat(2,minmax(0,1fr));max-height:240px}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v396-participant{min-height:44px;padding:7px 8px}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-form-actions{position:sticky;bottom:max(0px,env(safe-area-inset-bottom));background:rgba(255,255,255,.95);padding:7px 0 2px;backdrop-filter:blur(6px)}
+}
+@media(max-width:460px){
+  body.v520-ui-refresh{font-size:14px}
+  body.v520-ui-refresh .page-content{padding-left:8px;padding-right:8px}
+  body.v520-ui-refresh .card{padding:10px}
+  body.v520-ui-refresh input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+  body.v520-ui-refresh select,
+  body.v520-ui-refresh textarea{min-height:40px;padding:8px 10px;border-radius:10px}
+  body.v520-ui-refresh .primary-btn,
+  body.v520-ui-refresh .ghost-btn,
+  body.v520-ui-refresh .danger-ghost,
+  body.v520-ui-refresh .soft-btn{min-height:38px;padding:7px 10px;font-size:13px}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-participant-wrap .v396-participants{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v396-participant b{font-size:12px}
+  body.v520-ui-refresh[data-cnmi-page="activities"] .v518-form-actions{grid-template-columns:1fr 1fr;gap:6px}
+}
+
+/* Print/export are intentionally left to the existing document/export styles. */
+@media print{
+  body.v520-ui-refresh .v520-version-chip{display:none!important}
+}
