@@ -12,7 +12,7 @@
   function markNavigation(root=document){
     const nav=root?.id==='mainNav'?root:document.getElementById('mainNav');
     if(!nav) return;
-    nav.querySelectorAll('button[data-v523-submenu-toggle],button[data-v523-ot-item],button[data-v524-tree-toggle],button[data-v524-child-key]').forEach(btn=>{
+    nav.querySelectorAll('button[data-v523-submenu-toggle],button[data-v523-ot-item],button[data-v524-tree-toggle],button[data-v524-child-key],button[data-v528-extra-toggle],button[data-v528-extra-mode]').forEach(btn=>{
       /* Empty data-page keeps V517 from treating it as an action; base handler ignores empty value. */
       if(!btn.hasAttribute('data-page')) btn.setAttribute('data-page','');
       btn.classList.remove('v517-action-busy');
@@ -28,6 +28,7 @@
   function decorateVersion(){
     const chip=document.querySelector('.v525-version-chip,.v524-version-chip,.v523-version-chip,.v522-version-chip,.v521-version-chip,.v520-version-chip');
     if(chip){
+      if(chip.classList.contains('v528-version-chip')||chip.classList.contains('v527-version-chip')) return;
       chip.textContent='v526';
       chip.title='Sidebar navigation hotfix';
       chip.classList.add('v526-version-chip');
