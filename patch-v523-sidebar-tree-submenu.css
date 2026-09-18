@@ -1,0 +1,64 @@
+/* CNMI Staff Planner V523 — Sidebar Tree Submenu */
+
+body.v520-ui-refresh .v523-nav-tree{display:grid;gap:2px;min-width:0}
+body.v520-ui-refresh .v523-nav-parent{position:relative;padding-right:34px!important}
+body.v520-ui-refresh .v523-nav-parent .v523-parent-label{min-width:0;flex:1}
+body.v520-ui-refresh .v523-caret{
+  position:absolute;right:11px;top:50%;transform:translateY(-50%);display:grid;place-items:center;
+  width:20px;height:20px;border-radius:7px;color:#718697;font-size:22px;line-height:1;transition:transform .18s ease,background .18s ease,color .18s ease
+}
+body.v520-ui-refresh .v523-nav-parent[aria-expanded="true"] .v523-caret{transform:translateY(-50%) rotate(90deg);color:#2f7fac;background:#e9f5fc}
+
+body.v520-ui-refresh .v523-nav-submenu{
+  display:none;overflow:hidden;
+  margin:0 0 0 20px;padding:0 0 0 12px;border-left:1.5px solid #cfdeea;
+}
+body.v520-ui-refresh .v523-nav-submenu.open{display:grid;gap:1px;margin-top:2px;margin-bottom:4px;padding-top:2px;padding-bottom:2px}
+body.v520-ui-refresh .v523-subitem{
+  position:relative;display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:7px 9px 7px 8px;
+  border:0;border-radius:9px;background:transparent;color:#536b7d;text-align:left;font:inherit;font-size:12px;font-weight:700;cursor:pointer
+}
+body.v520-ui-refresh .v523-subitem::before{
+  content:'';position:absolute;left:-13px;top:50%;width:10px;height:1.5px;background:#cfdeea
+}
+body.v520-ui-refresh .v523-subitem:hover{background:rgba(255,255,255,.7);color:#2d6688}
+body.v520-ui-refresh .v523-subitem.active{background:#fff;color:#1f678f;box-shadow:0 2px 8px rgba(41,94,127,.06)}
+body.v520-ui-refresh .v523-subitem.active::before{background:#69b9e5}
+body.v520-ui-refresh .v523-branch-icon{display:grid;place-items:center;width:17px;height:17px;flex:0 0 17px;color:#6d9fbe}
+body.v520-ui-refresh .v523-branch-icon svg{width:15px;height:15px}
+body.v520-ui-refresh .v523-subitem.active .v523-branch-icon{color:#2e8bc0}
+
+/* Once sidebar owns OT navigation, keep only the shared month control on the page. */
+body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v522-group-tabs,
+body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v522-submenu,
+body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v522-submenu-chooser{display:none!important}
+body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v369-ot-menu-card.v523-month-only-card{padding:11px 13px!important;margin-bottom:10px;box-shadow:none}
+body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v369-ot-menu-card .v369-ot-menu-head{display:block!important;margin:0!important}
+body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v369-ot-menu-head>div:first-child{display:none!important}
+body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v369-month-label{display:grid!important;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;width:100%;max-width:460px;margin:0;font-size:12px;color:#647b8c}
+body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v369-month-label input{min-height:38px}
+body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v369-ot-content{margin-top:0!important}
+body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v369-ot-content>.card:first-child{margin-top:0}
+
+/* Hide V522's page-level grouping even if it momentarily renders before V523 decorates the page. */
+body.v520-ui-refresh[data-cnmi-route="ot"] .v522-group-tabs,
+body.v520-ui-refresh[data-cnmi-route="ot"] .v522-submenu{display:none!important}
+
+@media(max-width:820px){
+  body.v520-ui-refresh .v523-nav-tree{gap:1px}
+  body.v520-ui-refresh .v523-nav-parent{min-height:36px!important;padding-right:32px!important}
+  body.v520-ui-refresh .v523-nav-submenu{margin-left:18px;padding-left:12px}
+  body.v520-ui-refresh .v523-subitem{min-height:35px;padding:7px 8px;font-size:12px;border-radius:8px}
+  body.v520-ui-refresh .v523-branch-icon{width:16px;height:16px;flex-basis:16px}
+  body.v520-ui-refresh .v523-branch-icon svg{width:14px;height:14px}
+  body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v369-ot-menu-card.v523-month-only-card{padding:9px 10px!important;margin-bottom:8px}
+  body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v369-month-label{grid-template-columns:1fr;gap:4px;max-width:none;font-size:11px}
+  body.v520-ui-refresh .v369-ot-page.v523-sidebar-driven .v369-month-label input{width:100%;min-height:38px}
+}
+
+@media(min-width:821px){
+  /* Keep tree readable when desktop sidebar is manually collapsed. */
+  body.cnmi-sidebar-hidden .v523-nav-submenu,
+  .sidebar.collapsed .v523-nav-submenu{display:none!important}
+  .sidebar.collapsed .v523-caret{display:none}
+}
