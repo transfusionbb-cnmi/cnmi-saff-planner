@@ -1,8 +1,9 @@
-/* CNMI Staff Planner PWA service worker — V537 */
+/* CNMI Staff Planner PWA service worker — V538 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v537`;
+const CACHE_NAME = `${CACHE_PREFIX}v538`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
+  './bootstrap-v538-dependency-failover.js', './patch-v538-startup-dependency-failover.js',
   './patch-v516-person-type-helper.js',
   './patch-v517-performance-interaction-feedback.js',
   './patch-v519-activity-page-freeze-fix.js',
