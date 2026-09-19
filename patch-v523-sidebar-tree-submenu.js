@@ -107,7 +107,8 @@
     if(!tree) return;
     const parent=tree.querySelector('.v523-nav-parent');
     const sub=tree.querySelector('.v523-nav-submenu');
-    const shouldOpen = S().page==='ot' || getOpenTree()==='ot';
+    const openId=getOpenTree();
+    const shouldOpen = openId ? openId==='ot' : S().page==='ot';
     if(parent){
       parent.classList.toggle('active',S().page==='ot');
       parent.setAttribute('aria-expanded',shouldOpen?'true':'false');
@@ -135,7 +136,7 @@
   }
 
   function apply(){
-    if(S().page==='ot' && getOpenTree()!=='ot') announceOpenTree('ot');
+    if(S().page==='ot' && !getOpenTree()) announceOpenTree('ot');
     installTree();
     refreshTree();
     compactOtTopCard();

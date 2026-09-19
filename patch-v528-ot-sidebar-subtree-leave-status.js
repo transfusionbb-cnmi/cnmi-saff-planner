@@ -205,6 +205,16 @@
       submenu?.classList.toggle('open',open);submenu?.setAttribute('aria-hidden',open?'false':'true');ssSet(BRANCH_KEY,open?'1':'0');
       return;
     }
+    const otherOtItem=e.target?.closest?.('[data-v523-ot-item]');
+    if(otherOtItem && String(otherOtItem.dataset.v523OtItem||'')!=='admin-extra'){
+      ssSet(BRANCH_KEY,'0');
+      const branch=document.querySelector('[data-v528-extra-tree]');
+      const parent=branch?.querySelector('[data-v528-extra-toggle]');
+      const submenu=branch?.querySelector('[data-v528-extra-submenu]');
+      parent?.setAttribute('aria-expanded','false');
+      submenu?.classList.remove('open');
+      submenu?.setAttribute('aria-hidden','true');
+    }
     const item=e.target?.closest?.('[data-v528-extra-mode]');
     if(item){
       e.preventDefault();e.stopPropagation();

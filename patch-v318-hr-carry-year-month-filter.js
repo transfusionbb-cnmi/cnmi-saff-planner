@@ -24,6 +24,7 @@
   function admin(){try{return typeof isAdmin==='function'&&isAdmin();}catch(_){return false;}}
   function pad2(n){return String(n).padStart(2,'0');}
   function round2(v){const n=Number(v||0);return Number.isFinite(n)?Math.round(n*100)/100:0;}
+  function round4(v){const n=Number(v||0);return Number.isFinite(n)?Math.round(n*10000)/10000:0;}
   function esc(v){
     try{return escapeHtml(v==null?'':String(v));}
     catch(_){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -255,7 +256,7 @@
       }
       if(t.regularAvailable==null)t.regularAvailable=round2(t.total||0);
       if(!Array.isArray(t.adjustments))t.adjustments=[];
-      const units=Math.trunc(Number(adj.hr_unit_delta||0));
+      const units=round4(Number(adj.hr_unit_delta||0));
       const amount=round2(Number(adj.amount_delta||0));
       t.adjustmentUnits=(t.adjustmentUnits||0)+units;
       t.adjustmentAmount=round2((t.adjustmentAmount||0)+amount);
@@ -567,7 +568,7 @@
       const missing=totals.filter(t=>!t.employeeCode).map(t=>staffNickSafe(t.staff_id));if(missing.length)throw new Error(`ยังไม่มีรหัสพนักงานของ: ${missing.join(', ')} กรุณาใส่ในข้อมูลเจ้าหน้าที่ก่อน Export`);
       const allocation=allocate(totals,data.cycle,data.leaves,data.holidays),sourceSheetRows=sourceRowsForSheet(totals,data.source.month,data.cycle),summaryRows=staffSummaryRows(totals);
       const leaveRows=allocation.leaveSkipped.map(x=>({'รหัสพนักงาน':employeeCode(x.staff_id),'ชื่อ':staffFullName(x.staff_id),'วันที่ลาในรอบ HR':x.date,'หมายเหตุ':'ระบบไม่สร้าง dummy shift ในวันนี้'}));
-      const carryRows=totals.map(t=>({'รหัสพนักงาน':t.employeeCode,'ชื่อ':staffFullName(t.staff_id),'เดือน OT ปัจจุบัน':data.source.month,'เดือนยอดทบยกมา':t.carrySourceMonth||'','ยอดทบยกมา(ชม.)':t.carryIn,'OT เดือนนี้เทียบ HR':t.currentTotal,'รวมก่อนปรับย้อนหลัง':t.regularAvailable==null?t.total:t.regularAvailable,'ปรับย้อนหลังหน่วย HR 8ชม.':Number(t.adjustmentUnits||0),'โอทีทั้งหมดหลังปรับ':t.total,'เบิก HR รอบนี้':t.claimed,'ทบเดือนหน้า(ชม.)':t.carry,'หมายเหตุ':'V527: รายการปรับย้อนหลังเป็นหน่วย 8 ชม. แยกจาก OT จริง จึงไม่เปลี่ยนเศษยอดทบปกติ'}));
+      const carryRows=totals.map(t=>({'รหัสพนักงาน':t.employeeCode,'ชื่อ':staffFullName(t.staff_id),'เดือน OT ปัจจุบัน':data.source.month,'เดือนยอดทบยกมา':t.carrySourceMonth||'','ยอดทบยกมา(ชม.)':t.carryIn,'OT เดือนนี้เทียบ HR':t.currentTotal,'รวมก่อนปรับย้อนหลัง':t.regularAvailable==null?t.total:t.regularAvailable,'ปรับย้อนหลังหน่วย HR 8ชม.':Number(t.adjustmentUnits||0),'โอทีทั้งหมดหลังปรับ':t.total,'เบิก HR รอบนี้':t.claimed,'ทบเดือนหน้า(ชม.)':t.carry,'หมายเหตุ':'V530: รายการปรับย้อนหลังแยกจาก OT จริง; หน่วย HR รองรับทศนิยมและรวมยอดก่อนตัดเป็นชุด 8 ชม.'}));
       const adjustmentRows=(data.adjustments||[]).map(a=>({'รหัสพนักงาน':employeeCode(a.staff_id),'ชื่อ':staffFullName(a.staff_id),'ประเภท':a.adjustment_type==='overclaim'?'ลด OT เบิกเกิน':'OT ตกเบิกย้อนหลัง','เดือนต้นทาง':a.source_month,'เดือนที่นำมาปรับ':a.apply_month,'ยอดเงินปรับ':Number(a.amount_delta||0),'หน่วย HR 8 ชม.':Number(a.hr_unit_delta||0),'ฐาน HR':Number(a.base_rate||baseRate(a.staff_id)),'เหตุผล':a.reason||'','รายละเอียด':a.note||'','สถานะก่อน Export':a.status||'pending'}));
       const wb=XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb,makeOtExtraSheet(sourceSheetRows,totals,data.source,data.cycle),'OT เสริม');

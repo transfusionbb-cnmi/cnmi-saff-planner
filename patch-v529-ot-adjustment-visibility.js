@@ -27,18 +27,19 @@
   function typeLabel(r){return r.adjustment_type==='overclaim'?'ลด OT เบิกเกิน':'OT ตกเบิกย้อนหลัง';}
   function statusLabel(r){if(r.status==='exported')return '<span class="v529-status exported">รวมใน Export แล้ว</span>';return '<span class="v529-status pending">รอ Export</span>';}
   function signMoney(r){const n=Number(r.amount_delta||0);return `${n>=0?'+':'-'}${fmtMoney(n)}`;}
-  function units(r){const n=Number(r.hr_unit_delta||0);return `${n>0?'+':''}${n}`;}
+  function fmtUnit(v){const n=Number(v||0);if(!Number.isFinite(n))return '0';const a=Math.abs(n);if(Math.abs(a-Math.round(a))<0.00005)return `${n<0?'-':''}${Math.round(a)}`;return `${n<0?'-':''}${a.toFixed(2)}`;}
+  function units(r){const n=Number(r.hr_unit_delta||0);return `${n>0?'+':''}${fmtUnit(n)}`;}
   function rowsSummary(rows){
     const plus=rows.filter(r=>Number(r.amount_delta)>0).reduce((s,r)=>s+Number(r.amount_delta||0),0);
     const minus=Math.abs(rows.filter(r=>Number(r.amount_delta)<0).reduce((s,r)=>s+Number(r.amount_delta||0),0));
     const net=plus-minus;
     const u=rows.reduce((s,r)=>s+Number(r.hr_unit_delta||0),0);
-    return `<div class="v529-summary-chips"><span>เพิ่ม <b class="v529-plus">+${fmtMoney(plus)}</b></span><span>ลด <b class="v529-minus">-${fmtMoney(minus)}</b></span><span>สุทธิ <b class="${net<0?'v529-minus':'v529-plus'}">${net>=0?'+':'-'}${fmtMoney(net)}</b></span><span>HR 8 ชม.สุทธิ <b>${u>0?'+':''}${u} เวร</b></span></div>`;
+    return `<div class="v529-summary-chips"><span>เพิ่ม <b class="v529-plus">+${fmtMoney(plus)}</b></span><span>ลด <b class="v529-minus">-${fmtMoney(minus)}</b></span><span>สุทธิ <b class="${net<0?'v529-minus':'v529-plus'}">${net>=0?'+':'-'}${fmtMoney(net)}</b></span><span>HR 8 ชม.สุทธิ <b>${u>0?'+':''}${fmtUnit(u)} เวร</b></span></div>`;
   }
   function ownRows(rows,sid){return rows.filter(r=>String(r.staff_id)===String(sid));}
   function table(rows,{showName=false,compact=false}={}){
     if(!rows.length)return '<div class="empty v529-empty">ไม่มีรายการปรับยอดในเดือนนี้</div>';
-    return `<div class="table-wrap v529-wrap"><table class="v529-table ${compact?'compact':''}"><thead><tr>${showName?'<th>คน</th>':''}<th>รายการ</th><th>เดือนต้นทาง</th><th>ยอดปรับ</th><th>HR 8 ชม.</th><th>สถานะ</th></tr></thead><tbody>${rows.map(r=>`<tr>${showName?`<td><b>${esc(nick(r.staff_id))}</b></td>`:''}<td>${esc(typeLabel(r))}${r.note?`<small>${esc(r.note)}</small>`:''}</td><td>${esc(thaiMonth(r.source_month))}</td><td><b class="${Number(r.amount_delta)<0?'v529-minus':'v529-plus'}">${esc(signMoney(r))}</b></td><td>${esc(units(r))}${Number(r.hr_unit_delta||0)===0?'<small>ตรวจมือ</small>':''}</td><td>${statusLabel(r)}</td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="table-wrap v529-wrap"><table class="v529-table ${compact?'compact':''}"><thead><tr>${showName?'<th>คน</th>':''}<th>รายการ</th><th>เดือนต้นทาง</th><th>ยอดปรับ</th><th>HR 8 ชม.</th><th>สถานะ</th></tr></thead><tbody>${rows.map(r=>`<tr>${showName?`<td><b>${esc(nick(r.staff_id))}</b></td>`:''}<td>${esc(typeLabel(r))}${r.note?`<small>${esc(r.note)}</small>`:''}</td><td>${esc(thaiMonth(r.source_month))}</td><td><b class="${Number(r.amount_delta)<0?'v529-minus':'v529-plus'}">${esc(signMoney(r))}</b></td><td>${esc(units(r))}</td><td>${statusLabel(r)}</td></tr>`).join('')}</tbody></table></div>`;
   }
   async function fetchRows(month){
     if(window.cnmiV527AdjustmentLedger?.fetchAdjustments){return await window.cnmiV527AdjustmentLedger.fetchAdjustments(month,false);}

@@ -181,9 +181,10 @@
   }
   function openKey(id){return `cnmi-v524-tree-${id}-open`;}
   function shouldOpen(def){
+    const openId=getOpenTree();
+    if(openId) return openId===`v524:${def.id}`;
     const activeDef=defs().find(d=>!!d.active?.());
-    if(activeDef) return activeDef.id===def.id;
-    return getOpenTree()===`v524:${def.id}`;
+    return !!activeDef && activeDef.id===def.id;
   }
 
   function treeHtml(def,children){
@@ -376,7 +377,7 @@
   function apply(){
     decorateVersion();
     const activeDef=defs().find(d=>!!d.active?.());
-    if(activeDef && getOpenTree()!==`v524:${activeDef.id}`) announceOpenTree(`v524:${activeDef.id}`);
+    if(activeDef && !getOpenTree()) announceOpenTree(`v524:${activeDef.id}`);
     defs().forEach(installTree);
     defs().forEach(def=>{
       const tree=document.querySelector(`.v524-nav-tree[data-v524-tree="${CSS.escape(def.id)}"]`);
