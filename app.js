@@ -909,38 +909,6 @@ async function init() {
     return;
   }
 
-  // V538: Supabase is the only external library required for app startup.
-  // Wait for the resilient loader (jsDelivr -> unpkg fallback) instead of letting
-  // optional Excel/PDF/ZIP libraries block DOMContentLoaded and the login flow.
-  if (!window.supabase?.createClient && window.CNMI_DEPENDENCY_READY?.supabase) {
-    const loginSubmitV538 = $('loginForm')?.querySelector('button[type="submit"],input[type="submit"]');
-    if (loginSubmitV538) loginSubmitV538.disabled = true;
-    try {
-      setBusy(true, 'กำลังเชื่อมต่อระบบ');
-      await window.CNMI_DEPENDENCY_READY.supabase;
-      if (loginSubmitV538) loginSubmitV538.disabled = false;
-    } catch (err) {
-      console.error('[V538] Supabase dependency failed to load', err);
-      const warning = $('setupWarning');
-      if (warning) {
-        warning.classList.remove('hidden');
-        warning.innerHTML = '<b>เชื่อมต่อระบบไม่สำเร็จ</b><br>เครือข่ายสำหรับโหลดระบบ Login มีปัญหาชั่วคราว กรุณากด “ลองใหม่”<div style="margin-top:10px"><button type="button" class="primary-btn" onclick="location.reload()">ลองใหม่</button></div>';
-      }
-      setBusy(false);
-      return;
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (!window.supabase?.createClient) {
-    const warning = $('setupWarning');
-    if (warning) {
-      warning.classList.remove('hidden');
-      warning.innerHTML = '<b>ยังโหลดระบบ Login ไม่สำเร็จ</b><br>กรุณาตรวจอินเทอร์เน็ตแล้วกด “ลองใหม่”<div style="margin-top:10px"><button type="button" class="primary-btn" onclick="location.reload()">ลองใหม่</button></div>';
-    }
-    return;
-  }
-
   // V133: Early Hash Check. This runs before any route guard / enterApp decision.
   const recoveryAtPageOpen = RECOVERY_INTENT || getAuthRedirectInfo().isRecovery;
 
