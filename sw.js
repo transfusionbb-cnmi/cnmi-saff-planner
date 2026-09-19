@@ -1,12 +1,12 @@
-/* CNMI Staff Planner PWA service worker — V532 */
+/* CNMI Staff Planner PWA service worker — V533 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v532`;
+const CACHE_NAME = `${CACHE_PREFIX}v533`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
   './patch-v516-person-type-helper.js',
   './patch-v517-performance-interaction-feedback.js',
   './patch-v519-activity-page-freeze-fix.js',
-  './patch-v520-whole-app-ui-refresh.css', './patch-v520-whole-app-ui-refresh.js', './patch-v521-mobile-ui-clarity-polish.css', './patch-v521-mobile-ui-clarity-polish.js', './patch-v522-ot-submenu-mobile-navigation.css', './patch-v522-ot-submenu-mobile-navigation.js', './patch-v523-sidebar-tree-submenu.css', './patch-v523-sidebar-tree-submenu.js', './patch-v524-unified-sidebar-tree-navigation.css', './patch-v524-unified-sidebar-tree-navigation.js', './patch-v525-ot-payday-tracker.css', './patch-v525-ot-payday-tracker.js', './patch-v526-sidebar-navigation-hotfix.js', './patch-v527-ot-adjustment-ledger.css', './patch-v527-ot-adjustment-ledger.js', './patch-v528-ot-sidebar-subtree-leave-status.css', './patch-v528-ot-sidebar-subtree-leave-status.js', './patch-v529-ot-adjustment-visibility.css', './patch-v529-ot-adjustment-visibility.js', './patch-v531-fractional-hr-unit-accordion-freeze-fix.js', './patch-v532-export-snapshot-preflight-lock.js',
+  './patch-v520-whole-app-ui-refresh.css', './patch-v520-whole-app-ui-refresh.js', './patch-v521-mobile-ui-clarity-polish.css', './patch-v521-mobile-ui-clarity-polish.js', './patch-v522-ot-submenu-mobile-navigation.css', './patch-v522-ot-submenu-mobile-navigation.js', './patch-v523-sidebar-tree-submenu.css', './patch-v523-sidebar-tree-submenu.js', './patch-v524-unified-sidebar-tree-navigation.css', './patch-v524-unified-sidebar-tree-navigation.js', './patch-v525-ot-payday-tracker.css', './patch-v525-ot-payday-tracker.js', './patch-v526-sidebar-navigation-hotfix.js', './patch-v527-ot-adjustment-ledger.css', './patch-v527-ot-adjustment-ledger.js', './patch-v528-ot-sidebar-subtree-leave-status.css', './patch-v528-ot-sidebar-subtree-leave-status.js', './patch-v529-ot-adjustment-visibility.css', './patch-v529-ot-adjustment-visibility.js', './patch-v531-fractional-hr-unit-accordion-freeze-fix.js', './patch-v532-export-snapshot-preflight-lock.js', './patch-v533-hr-pdf-reconciliation.css', './patch-v533-hr-pdf-reconciliation.js',
   './pwa-install-v303.css', './pwa-install-v303.js',
   './patch-v217-partial-sell-shift-segments.js',
   './patch-v221-duty-date-slot-edit-month-ui.js',
