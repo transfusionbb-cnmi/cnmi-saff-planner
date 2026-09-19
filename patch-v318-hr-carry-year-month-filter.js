@@ -585,16 +585,19 @@
       XLSX.utils.book_append_sheet(wb,makeJsonSheet(carryRows,Object.keys(carryRows[0]||{'รหัสพนักงาน':'','ชื่อ':'','เดือน OT ปัจจุบัน':'','เดือนยอดทบยกมา':'','ยอดทบยกมา(ชม.)':'','OT เดือนนี้เทียบ HR':'','รวมก่อนปรับย้อนหลัง':'','ปรับย้อนหลังหน่วย HR 8ชม.':'','โอทีทั้งหมดหลังปรับ':'','เบิก HR รอบนี้':'','ทบเดือนหน้า(ชม.)':'','หมายเหตุ':''}),[14,30,16,16,18,18,20,22,20,16,18,62]),'Carry_Forward');
       XLSX.utils.book_append_sheet(wb,makeJsonSheet(leaveRows,Object.keys(leaveRows[0]||{'รหัสพนักงาน':'','ชื่อ':'','วันที่ลาในรอบ HR':'','หมายเหตุ':''}),[14,30,18,42]),'Leave_Skipped');
       const id=batchId(),filename=`HR_OT_V318_${id}_source_${data.source.start}_to_${data.source.end}_dummy_${data.cycle.start}_to_${data.cycle.end}.xlsx`;
+      const v532ctx={batchId:id,filename,month:data.source.month,source:data.source,cycle:data.cycle,totals,allocation,data,workbook:wb,summaryRows,adjustmentRows,sourceSheetRows,carryRows};
+      if(window.cnmiV532ExportGuard?.preExport)await window.cnmiV532ExportGuard.preExport(v532ctx);
       XLSX.writeFile(wb,filename);
       await markExported(data.rows,id,totals,data.source.month);
       const adjustmentIds=(data.adjustments||[]).filter(a=>a.id&&Number(a.hr_unit_delta||0)!==0).map(a=>a.id);
       if(adjustmentIds.length){const ar=await db().from('ot_adjustments').update({status:'exported',export_batch_id:id,exported_at:new Date().toISOString(),updated_at:new Date().toISOString()}).in('id',adjustmentIds);if(ar.error)throw ar.error;}
+      if(window.cnmiV532ExportGuard?.postExport)await window.cnmiV532ExportGuard.postExport(v532ctx);
       try{window.cnmiV527AdjustmentLedger?.refresh?.();}catch(_){ }
       try{window.cnmiV316?.clearCache?.();await window.cnmiV316?.loadPageData?.('ot',{force:true});}catch(_){ }
       st().otSubtabV241='summary';try{renderPage();}catch(_){ }
       const totalCarryIn=round2(totals.reduce((s,x)=>s+Number(x.carryIn||0),0)),totalCarry=round2(totals.reduce((s,x)=>s+Number(x.carry||0),0)),adjustUnits=totals.reduce((s,x)=>s+Number(x.adjustmentUnits||0),0);
       toast(`Export สำเร็จ ${allocation.rows.length} เวร 8 ชม. • ปรับย้อนหลัง ${adjustUnits>=0?'+':''}${adjustUnits} เวร • ยกมา ${hours(totalCarryIn)} ชม. • ทบเดือนหน้า ${hours(totalCarry)} ชม. • Batch ${id}`);
-    }catch(err){console.error(`[${VERSION}] export failed`,err);toast(String(err?.message||err||'Export ไม่สำเร็จ'),'error');}
+    }catch(err){console.error(`[${VERSION}] export failed`,err);try{if(window.cnmiV532ExportGuard?.exportFailed)await window.cnmiV532ExportGuard.exportFailed(window.__CNMI_V532_LAST_EXPORT__?.ctx||null,err);}catch(_){ }toast(String(err?.message||err||'Export ไม่สำเร็จ'),'error');}
     finally{busy(false);}
   }
 
@@ -633,6 +636,7 @@
 
   async function resetHistoryRows(ids){
     ids=[...new Set((ids||[]).filter(Boolean))];if(!ids.length)return toast('ไม่พบรายการที่ต้องตีกลับ','error');
+    if(window.cnmiV532ExportGuard?.lockedHistory)return window.cnmiV532ExportGuard.handleLegacyRevert(ids);
     const ok=typeof confirmDialog==='function'?await confirmDialog(`ต้องการตีกลับ ${ids.length} รายการเป็น Pending ใช่ไหม?`,'ยืนยันตีกลับ Export'):window.confirm(`ต้องการตีกลับ ${ids.length} รายการเป็น Pending ใช่ไหม?`);if(!ok)return;
     busy(true,'กำลังตีกลับ Export');
     try{const payload={claim_status:'pending',export_batch_id:null,exported_by:null,exported_at:null,batch_id:null,export_date:null,claim_batch_id:null,claimed_at:null,claimed_by:null},res=await db().from('ot_requests').update(payload).in('id',ids);if(res.error)throw res.error;historyCache.delete(historyKey(st().hrHistoryStaffV318,st().hrHistoryYearV318,st().hrHistoryMonthNumberV318));carryCache.clear();summaryCarryCache.clear();await loadHistory(true);toast(`ตีกลับเป็น Pending แล้ว ${ids.length} รายการ`);}catch(err){toast(`ตีกลับไม่สำเร็จ: ${err?.message||err}`,'error');}finally{busy(false);}
