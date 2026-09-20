@@ -1,6 +1,6 @@
 /* CNMI Staff Planner PWA service worker — V542 */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v542`;
+const CACHE_NAME = `${CACHE_PREFIX}v543`;
 const APP_SHELL = [
   './', './index.html', './site.webmanifest', './style.css', './app.js',
   './patch-v516-person-type-helper.js',

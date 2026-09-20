@@ -89,11 +89,11 @@
   function dateKey(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
   function bangkokDateParts(value=new Date()){
     try{
-      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(value);
+      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(value);
       const map=Object.fromEntries(parts.map(part=>[part.type,part.value]));
-      return {year:Number(map.year),month:Number(map.month),day:Number(map.day)};
+      return {year:Number(map.year),month:Number(map.month),day:Number(map.day),hour:Number(map.hour||0),minute:Number(map.minute||0)};
     }catch(_){
-      return {year:value.getFullYear(),month:value.getMonth()+1,day:value.getDate()};
+      return {year:value.getFullYear(),month:value.getMonth()+1,day:value.getDate(),hour:value.getHours(),minute:value.getMinutes()};
     }
   }
   function todayKey(){
@@ -103,7 +103,7 @@
   function defaultMonth(){
     const now=bangkokDateParts();
     let year=now.year,month=now.month;
-    if(now.day>=21){month+=1;if(month>12){month=1;year+=1;}}
+    if(now.day>21 || (now.day===21 && (now.hour>10 || (now.hour===10 && now.minute>=0)))){month+=1;if(month>12){month=1;year+=1;}}
     return `${year}-${pad(month)}`;
   }
   function thaiDate(value){
@@ -135,6 +135,9 @@
     d.setMonth(d.getMonth()-1,21);
     return dateKey(d);
   }
+  function openAtFor(workDate){ return `${openDateFor(workDate)}T10:00:00+07:00`; }
+  function isSignupOpenFor(workDate){ const t=Date.parse(openAtFor(workDate)); return Number.isFinite(t) && Date.now()>=t; }
+  function openLabelFor(workDate){ return `${thaiDate(openDateFor(workDate))} เวลา 10:00 น.`; }
   function slotKey(date,type,no){ return `${date}|${type}|${no}`; }
   function slotLabel(type,no){ return type==='clerk' ? 'Clerk' : `คนเจาะ ${no}`; }
   function statusText(status){ return ({confirmed:'ยืนยันแล้ว',cancel_requested:'ขอยกเลิก — รอหัวหน้าหน่วยอนุมัติ',cancelled:'ยกเลิกแล้ว',completed:'มาปฏิบัติงานแล้ว',no_show:'ไม่มาตามนัด (No Show)'})[status]||status||'-'; }
@@ -233,10 +236,10 @@
         return `<div class="slot-card empty holiday-closed"><div class="slot-label">${esc(label)}</div><div class="slot-unit">ปิดรับลงชื่อ</div></div>`;
       }
       const past=date<todayKey();
-      const open=todayKey()>=openDateFor(date);
+      const open=isSignupOpenFor(date);
       let reason='';
       if(past) reason='เลยวันทำงานแล้ว';
-      else if(!open) reason=`เปิดลงชื่อ ${thaiDate(openDateFor(date))}`;
+      else if(!open) reason=`เปิดลงชื่อ ${openLabelFor(date)}`;
       const history=cancelHistoryFor(date,type,no);
       return `<div class="slot-card empty">
         <div class="slot-label">${esc(label)}</div>
@@ -295,6 +298,7 @@
   function showSignup(payload){
     if(blockLineSignup())return;
     const [date,type,noRaw]=String(payload).split('|');const no=Number(noRaw);
+    if(!isSignupOpenFor(date)){showToast(`เปิดลงชื่อ ${openLabelFor(date)}`);return;}
     showModal(`<h2>ลงชื่อ ${esc(slotLabel(type,no))}</h2>
       <p>${esc(thaiDate(date))} • 09:00–17:00 น.</p>
       <form id="signupForm" class="form-grid">
@@ -326,6 +330,7 @@
   async function submitSignup(form){
     if(blockLineSignup())return;
     const fd=new FormData(form);const button=form.querySelector('button[type="submit"]');
+    if(!isSignupOpenFor(String(fd.get('work_date')||''))){showToast(`เปิดลงชื่อ ${openLabelFor(String(fd.get('work_date')||''))}`);return;}
     const helperName=normalizeFullName(fd.get('helper_name'));
     const unitName=String(fd.get('unit_name')||'').trim();
     const phone=formatPhone(fd.get('phone'));

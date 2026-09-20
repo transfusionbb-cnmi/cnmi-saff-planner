@@ -40,11 +40,11 @@
   }
   function bangkokDateParts(value=new Date()){
     try{
-      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(value);
+      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(value);
       const map=Object.fromEntries(parts.map(part=>[part.type,part.value]));
-      return {year:Number(map.year),month:Number(map.month),day:Number(map.day)};
+      return {year:Number(map.year),month:Number(map.month),day:Number(map.day),hour:Number(map.hour||0),minute:Number(map.minute||0)};
     }catch(_){
-      return {year:value.getFullYear(),month:value.getMonth()+1,day:value.getDate()};
+      return {year:value.getFullYear(),month:value.getMonth()+1,day:value.getDate(),hour:value.getHours(),minute:value.getMinutes()};
     }
   }
   function monthNow(){ const d=bangkokDateParts(); return `${d.year}-${String(d.month).padStart(2,'0')}`; }
@@ -65,6 +65,9 @@
   function openDateFor(workDate){
     const d=new Date(`${String(workDate).slice(0,7)}-01T12:00:00`); d.setMonth(d.getMonth()-1,21); return dateKey(d);
   }
+  function openAtFor(workDate){ return `${openDateFor(workDate)}T10:00:00+07:00`; }
+  function isSignupOpenFor(workDate){ const t=Date.parse(openAtFor(workDate)); return Number.isFinite(t) && Date.now()>=t; }
+  function openLabelFor(workDate){ return `${thaiDate(openDateFor(workDate))} เวลา 10:00 น.`; }
   function thaiDate(value){
     try { if (typeof formatThaiDate === 'function') return formatThaiDate(value); } catch (_) {}
     const d=new Date(`${dateKey(value)}T12:00:00`); return Number.isNaN(d.getTime())?String(value||'-'):d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'});
@@ -182,10 +185,10 @@
   }
 
   function emptyActions(date,type,no,isBlocked,myDuty){
-    const isPast=date<today(),isOpen=today()>=openDateFor(date),own=myActiveOn(date);
+    const isPast=date<today(),isOpen=isSignupOpenFor(date),own=myActiveOn(date);
     if(isBlocked)return'';
     if(isPast)return'';
-    if(!isOpen)return`<div class="donor-helper-empty-reason">เปิดลงชื่อ ${esc(thaiDate(openDateFor(date)))}</div>`;
+    if(!isOpen)return`<div class="donor-helper-empty-reason">เปิดลงชื่อ ${esc(openLabelFor(date))}</div>`;
     const selfLabel=own?'ลงชื่อวันนี้แล้ว':myDuty?'ตรวจสอบเวรก่อน':'ลงชื่อของฉัน';
     const selfClass=myDuty||own?'tiny-btn donor-helper-self-btn blocked':'tiny-btn donor-helper-self-btn';
     return `<div class="donor-helper-empty-actions">
@@ -249,7 +252,7 @@
     const filled=openDates.reduce((sum,date)=>sum+[['phlebotomist',1],['phlebotomist',2],['clerk',1]].filter(([type,no])=>map.has(slotKey(date,type,no))).length,0);
     const profile=payload().my_profile||{};
     return `<div class="donor-helper-page-v324 donor-helper-page-v327">
-      <div class="card donor-helper-hero"><div><span class="donor-helper-kicker">ห้องบริจาคโลหิต • 09:00–17:00 น.</span><h3>ตารางผู้มาช่วย ${esc(monthLabel(month))}</h3><p>คนเจาะ 2 คน • Clerk 1 คน • เปิดลงชื่อวันที่ 21</p></div><div class="donor-helper-hero-actions"><a class="primary-btn donor-helper-link-btn" href="${esc(publicUrl())}" target="_blank" rel="noopener">หน้าลงชื่อคนนอกหน่วย</a><button class="ghost-btn" type="button" data-v327-copy-link>คัดลอกลิงก์</button></div></div>
+      <div class="card donor-helper-hero"><div><span class="donor-helper-kicker">ห้องบริจาคโลหิต • 09:00–17:00 น.</span><h3>ตารางผู้มาช่วย ${esc(monthLabel(month))}</h3><p>คนเจาะ 2 คน • Clerk 1 คน • เปิดลงชื่อ 10:00 น. วันที่ 21</p></div><div class="donor-helper-hero-actions"><a class="primary-btn donor-helper-link-btn" href="${esc(publicUrl())}" target="_blank" rel="noopener">หน้าลงชื่อคนนอกหน่วย</a><button class="ghost-btn" type="button" data-v327-copy-link>คัดลอกลิงก์</button></div></div>
       <div class="notice soft-notice donor-helper-ot-note"><b>คนในหน่วย:</b> ใช้ “ลงชื่อของฉัน” • OT ขอที่ส่วนที่ 2 • ยกเลิกแจ้ง ${esc(payload().contact?.incharge_label||'อินชาร์จ/หัวหน้าหน่วย')} <button class="tiny-btn" type="button" data-v327-go-ot>ไปส่วน OT</button></div>
       ${profile.full_name?`<div class="card donor-helper-my-profile"><div><span class="muted">ข้อมูลของฉัน</span><b>${esc(profile.full_name)}</b></div><div><span class="muted">โทร</span><b>${esc(profile.phone?formatPhone(profile.phone):'ยังไม่มีเบอร์')}</b></div></div>`:''}
       ${myBookingsHtml()}
@@ -281,7 +284,7 @@
     if(blocked.has(date))return toast('วันนี้ไม่เปิดลงชื่อ เนื่องจากเป็นวันหยุดนักขัตฤกษ์','error');
     if(duties.has(date))return toast('วันนี้ลงไม่ได้ เนื่องจากอยู่เวร ต้องขายเวรก่อน','error');
     if(date<today())return toast('ไม่สามารถลงชื่อย้อนหลังได้','error');
-    if(today()<openDateFor(date))return toast(`เดือนนี้จะเปิดให้ลงชื่อวันที่ ${thaiDate(openDateFor(date))}`,'error');
+    if(!isSignupOpenFor(date))return toast(`เปิดลงชื่อ ${openLabelFor(date)}`,'error');
     if(myActiveOn(date))return toast('วันนี้คุณลงชื่อช่วยไว้แล้ว 1 ตำแหน่ง','error');
     const html=`<h2>ยืนยันลงชื่อของฉัน</h2><p class="muted">${esc(thaiDate(date))} • ${esc(slotLabel(type,no))} • 09:00–17:00 น.</p><form id="donorHelperSelfFormV327" class="form-grid"><input type="hidden" name="work_date" value="${esc(date)}"><input type="hidden" name="slot_type" value="${esc(type)}"><input type="hidden" name="slot_no" value="${esc(no)}"><div class="wide donor-helper-confirm-profile"><div><span>ชื่อ</span><b>${esc(profile.full_name||'-')}</b></div><div><span>หน่วยงาน</span><b>${esc(profile.unit_name||INTERNAL_UNIT)}</b></div><div><span>เบอร์โทร</span><b>${esc(profile.phone?formatPhone(profile.phone):'ยังไม่มีในข้อมูลส่วนตัว')}</b></div></div><label class="wide donor-helper-ack"><input type="checkbox" name="ack" required><span>ยืนยันว่าจะมาช่วยตามวันที่เลือก และรับทราบว่าหากต้องยกเลิกต้องส่งคำขอพร้อมเหตุผลเพื่อให้หัวหน้าหน่วยอนุมัติ</span></label><div class="wide form-actions"><button class="ghost-btn" type="button" data-v327-close>กลับ</button><button class="primary-btn" type="submit">ยืนยันลงชื่อ</button></div></form>`;
     try{showModal(html,{small:true});}catch(_){toast('เปิดหน้าต่างยืนยันไม่สำเร็จ','error');}
@@ -350,6 +353,7 @@
     event.preventDefault();event.stopPropagation();const fd=new FormData(form),button=form.querySelector('button[type="submit"]');if(button)button.disabled=true;
     try{
       if(form.id==='donorHelperSelfFormV327'){
+        if(!isSignupOpenFor(String(fd.get('work_date')||'')))return toast(`เปิดลงชื่อ ${openLabelFor(String(fd.get('work_date')||''))}`,'error');
         const result=await DB().rpc('signup_donor_helper_internal_v327',{p_work_date:fd.get('work_date'),p_slot_type:fd.get('slot_type'),p_slot_no:Number(fd.get('slot_no'))});if(result.error)throw result.error;
         try{closeModal();}catch(_){}await loadMonth(S().donorHelperMonthV327,{force:true});
         try{showModal(`<h2>ลงชื่อเรียบร้อยแล้ว</h2><p>ระบบเติมชื่อ เบอร์โทร และหน่วยงานจากข้อมูลส่วนตัวให้แล้ว</p><div class="notice soft-notice">รายการนี้ยังไม่สร้าง OT อัตโนมัติ กรุณาไปขอ OT ที่ <b>ส่วนที่ 2</b></div><div class="form-actions"><button class="primary-btn" type="button" data-v327-go-ot>ไปขอ OT ส่วนที่ 2</button><button class="ghost-btn" type="button" data-v327-close>ปิด</button></div>`,{small:true});}catch(_){toast('ลงชื่อเรียบร้อยแล้ว');}
