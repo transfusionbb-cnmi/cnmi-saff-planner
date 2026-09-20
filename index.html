@@ -10,15 +10,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Staff Planner" />
-  <link rel="manifest" href="site.webmanifest?v=544" />
+  <link rel="manifest" href="site.webmanifest?v=545" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=303" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=303" />
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=303" />
   <link rel="shortcut icon" href="favicon.ico?v=303" />
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css?v=423" />
   <link rel="stylesheet" href="patch-v489-dashboard-compact-density.css?v=489" />
   <link rel="stylesheet" href="pwa-install-v303.css?v=305" />
@@ -37,15 +33,21 @@
   <link rel="stylesheet" href="patch-v533-hr-pdf-reconciliation.css?v=533" />
   <link rel="stylesheet" href="patch-v534-manual-hr-pdf-check.css?v=534" />
   <script>
-  /* V544 mobile PWA recovery bootstrap.
-     Runs inline so an old Service Worker cannot replace this code with a cached copy. */
+  /* V545 one-time mobile PWA recovery.
+     If an older worker still controls this page, remove only CNMI Staff Planner
+     workers/caches and reload once. Never hide the document while waiting. */
   (() => {
     'use strict';
-    const VERSION = '544';
-    const RELOAD_KEY = 'cnmi-pwa-controller-reload-v544';
-    if (!('serviceWorker' in navigator)) return;
+    const VERSION = '545';
+    const RECOVERY_KEY = 'cnmi-pwa-recovery-v545';
+    const result = { reloading: false, fromVersion: '' };
 
-    const currentControllerVersion = () => {
+    if (!('serviceWorker' in navigator)) {
+      window.CNMI_V545_PWA_RECOVERY = Promise.resolve(result);
+      return;
+    }
+
+    const controllerVersion = () => {
       try {
         const controller = navigator.serviceWorker.controller;
         if (!controller) return '';
@@ -53,42 +55,53 @@
       } catch (_) { return ''; }
     };
 
-    const reloadOnce = () => {
-      if (sessionStorage.getItem(RELOAD_KEY) === '1') return;
-      sessionStorage.setItem(RELOAD_KEY, '1');
-      location.reload();
-    };
+    window.CNMI_V545_PWA_RECOVERY = (async () => {
+      const current = controllerVersion();
+      result.fromVersion = current;
 
-    if (currentControllerVersion() === VERSION) {
-      sessionStorage.removeItem(RELOAD_KEY);
-    } else if (navigator.serviceWorker.controller) {
-      /* Hide the mixed-version page while the new worker takes control. */
-      document.documentElement.style.visibility = 'hidden';
-      navigator.serviceWorker.addEventListener('controllerchange', reloadOnce, { once: true });
-      setTimeout(() => { document.documentElement.style.visibility = ''; }, 12000);
-    }
+      if (!navigator.serviceWorker.controller || current === VERSION) {
+        try { sessionStorage.removeItem(RECOVERY_KEY); } catch (_) {}
+        return result;
+      }
 
-    const workerUrl = new URL(`sw.js?v=${VERSION}`, document.baseURI);
-    navigator.serviceWorker.register(workerUrl.href, {
-      scope: new URL('./', document.baseURI).pathname,
-      updateViaCache: 'none'
-    }).then(async (registration) => {
-      const activateWaiting = () => {
-        try { registration.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
-      };
-      activateWaiting();
-      registration.addEventListener('updatefound', () => {
-        const installing = registration.installing;
-        if (!installing) return;
-        installing.addEventListener('statechange', () => {
-          if (installing.state === 'installed') activateWaiting();
-        });
-      });
-      await registration.update().catch(() => {});
-    }).catch((error) => {
-      console.warn('[PWA V544 bootstrap] update failed:', error);
-      document.documentElement.style.visibility = '';
-    });
+      try {
+        if (sessionStorage.getItem(RECOVERY_KEY) === '1') return result;
+        sessionStorage.setItem(RECOVERY_KEY, '1');
+      } catch (_) {}
+
+      result.reloading = true;
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => {
+          const urls = [
+            registration.active?.scriptURL,
+            registration.waiting?.scriptURL,
+            registration.installing?.scriptURL
+          ].filter(Boolean);
+          const isCnmiWorker = urls.some((url) => {
+            try {
+              const parsed = new URL(url);
+              return parsed.origin === location.origin && /\/sw\.js$/.test(parsed.pathname);
+            } catch (_) { return false; }
+          });
+          return isCnmiWorker ? registration.unregister().catch(() => false) : Promise.resolve(false);
+        }));
+      } catch (error) {
+        console.warn('[PWA V545] old worker unregister failed:', error);
+      }
+
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys
+          .filter((key) => key.startsWith('cnmi-staff-planner-pwa-'))
+          .map((key) => caches.delete(key)));
+      } catch (error) {
+        console.warn('[PWA V545] old cache cleanup failed:', error);
+      }
+
+      setTimeout(() => location.reload(), 0);
+      return result;
+    })();
   })();
   </script>
 </head>
@@ -188,18 +201,14 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script defer src="bootstrap-v545-dependency-failover.js?v=545"></script>
   <script defer src="config.js?v=422"></script>
   <script defer src="patch-v517-performance-interaction-feedback.js?v=517"></script>
   <script defer src="patch-v136-preauth.js?v=298"></script>
   <script defer src="patch-v315-interaction-preload.js?v=323"></script>
   <script defer src="patch-v316-egress-preload.js?v=323"></script>
   <script defer src="patch-v316-navigation-preload.js?v=323"></script>
-  <script defer src="app.js?v=392-leave-wording"></script>
+  <script defer src="app-v545.js?v=545"></script>
   <script defer src="patch-v516-person-type-helper.js?v=516"></script>
   <script defer src="patch-v136-auth-layout-tabs-final.js?v=298"></script>
   <script defer src="patch-v137-critical-regression-restore.js?v=298"></script>
@@ -278,7 +287,7 @@
   <script defer src="patch-v300-mobile-daily-position-card-stack-fix.js?v=301"></script>
   <script defer src="patch-v305-mobile-app-scroll-and-position-description.js?v=305"></script>
   <script defer src="patch-v311-mobile-popup-daily-summary-fix.js?v=467"></script>
-  <script defer src="pwa-install-v544.js?v=544"></script>
+  <script defer src="pwa-install-v545.js?v=545"></script>
   <script defer src="patch-v313-app-count-filter-pwa-trade-fix.js?v=315"></script>
   <script defer src="patch-v314-admin-ot-calendar-ch4-fix.js?v=442"></script>
   <script defer src="patch-v316-route-loader.js?v=323"></script>
@@ -389,7 +398,7 @@
   <script defer src="patch-v513-leave-sequence-tap-repair.js?v=513"></script>
   <script defer src="patch-v515-hash-routing-hr-deeplink.js?v=515"></script>
   <script defer src="patch-v519-activity-page-freeze-fix.js?v=519"></script>
-  <script defer src="patch-v542-single-sidebar-deeplink-controller.js?v=544"></script>
+  <script defer src="patch-v542-single-sidebar-deeplink-controller.js?v=545"></script>
   <script defer src="patch-v520-whole-app-ui-refresh.js?v=520"></script>
   <script defer src="patch-v521-mobile-ui-clarity-polish.js?v=521"></script>
   <script defer src="patch-v522-ot-submenu-mobile-navigation.js?v=522"></script>

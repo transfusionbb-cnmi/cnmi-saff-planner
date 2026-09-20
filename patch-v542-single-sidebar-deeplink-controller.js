@@ -13,7 +13,7 @@
   window.__CNMI_V542_NAV_OWNER__=true;
   window.__CNMI_V542_VERSION_OWNER__=true;
 
-  const VERSION='V544_PWA_CACHE_RECOVERY';
+  const VERSION='V545_MOBILE_STARTUP_SAFE_RECOVERY';
   const LEGACY_OPEN='cnmi-sidebar-tree-open-id';
   const OWNER_OPEN='cnmi-v542-sidebar-open-tree';
   const OLD_STICKY='cnmi-v536-sidebar-open-tree';
@@ -129,7 +129,7 @@
     if(!chip){
       chip=document.createElement('div');chip.className='v520-version-chip v542-version-chip';foot.prepend(chip);
     }
-    if(chip.textContent!=='v544')chip.textContent='v544';
+    if(chip.textContent!=='v545')chip.textContent='v545';
     if(chip.title!=='Donor Helper 10:00 Bangkok Opening')chip.title='Donor Helper 10:00 Bangkok Opening';
     chip.classList.add('v542-version-chip');
   }
