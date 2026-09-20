@@ -13,7 +13,7 @@
   window.__CNMI_V542_NAV_OWNER__=true;
   window.__CNMI_V542_VERSION_OWNER__=true;
 
-  const VERSION='V547_RACE_EFFECTIVE_ROSTER_SOURCE';
+  const VERSION='V548_RACE_TRADE_LINK_RECOVERY';
   const LEGACY_OPEN='cnmi-sidebar-tree-open-id';
   const OWNER_OPEN='cnmi-v542-sidebar-open-tree';
   const OLD_STICKY='cnmi-v536-sidebar-open-tree';
@@ -129,7 +129,7 @@
     if(!chip){
       chip=document.createElement('div');chip.className='v520-version-chip v542-version-chip';foot.prepend(chip);
     }
-    if(chip.textContent!=='v547')chip.textContent='v547';
+    if(chip.textContent!=='v548')chip.textContent='v548';
     if(chip.title!=='RACE uses the same effective duty source as the roster')chip.title='RACE uses the same effective duty source as the roster';
     chip.classList.add('v542-version-chip');
   }

@@ -324,10 +324,29 @@
     const rows = list || state?.rosterAssignments || [];
     return rows.find(a => String(a?.id || '') === String(id || '')) || null;
   }
+  // V548: roster rows can be re-created after a trade was completed, which changes the
+  // roster_assignment id while the trade request still points to the old id. Every V217
+  // request already stores SELL_DATE / SELL_DUTY snapshots, so use those snapshots as a
+  // safe fallback. requester_id must still equal the current slot owner to avoid binding
+  // an old whole-shift transfer to a slot that has already moved to the receiver.
+  function tradeSnapshot(note,key){
+    const m=String(note||'').match(new RegExp(`\\[${key}=([^\\]]+)\\]`,'i'));
+    if(!m?.[1])return '';
+    try{return decodeURIComponent(m[1]);}catch(_){return m[1];}
+  }
+  function tradeMatchesAssignment(r,a){
+    if(!r||!a)return false;
+    if(String(r?.from_assignment_id||'')===String(a?.id||''))return true;
+    const date=normDate(tradeSnapshot(r?.note,'SELL_DATE'));
+    const duty=String(tradeSnapshot(r?.note,'SELL_DUTY')||'').trim();
+    return !!date && date===normDate(a?.duty_date)
+      && !!duty && duty===String(a?.duty_code||'').trim()
+      && String(r?.requester_id||'')===String(a?.staff_id||'');
+  }
   function completedTradesForAssignment(a){
     if (!a?.id) return [];
     return (state?.tradeRequests || [])
-      .filter(r => String(r?.status || '') === 'completed' && String(r?.from_assignment_id || '') === String(a.id))
+      .filter(r => String(r?.status || '') === 'completed' && tradeMatchesAssignment(r,a))
       .map(r => {
         const spec=tradeSpecFromNote(r?.note,a);
         return {r,spec,part:spec.part,hours:spec.hours,intervals:spec.intervals||[]};
@@ -337,7 +356,7 @@
   function activeTradePartsForAssignment(a, excludeRequestId=''){
     if (!a?.id) return [];
     return (state?.tradeRequests || [])
-      .filter(r => String(r?.from_assignment_id || '') === String(a.id))
+      .filter(r => tradeMatchesAssignment(r,a))
       .filter(r => String(r?.id || '') !== String(excludeRequestId || ''))
       .filter(r => !['rejected','completed_deleted','cancelled','canceled'].includes(String(r?.status || '').toLowerCase()))
       .map(r => {
