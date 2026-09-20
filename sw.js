@@ -1,181 +1,146 @@
-/* CNMI Staff Planner PWA service worker — V542 */
+/* CNMI Staff Planner PWA service worker — V544 PWA recovery */
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v543`;
-const APP_SHELL = [
-  './', './index.html', './site.webmanifest', './style.css', './app.js',
-  './patch-v516-person-type-helper.js',
-  './patch-v517-performance-interaction-feedback.js',
-  './patch-v519-activity-page-freeze-fix.js',
-  './patch-v542-single-sidebar-deeplink-controller.js', './patch-v520-whole-app-ui-refresh.css', './patch-v520-whole-app-ui-refresh.js', './patch-v521-mobile-ui-clarity-polish.css', './patch-v521-mobile-ui-clarity-polish.js', './patch-v522-ot-submenu-mobile-navigation.css', './patch-v522-ot-submenu-mobile-navigation.js', './patch-v523-sidebar-tree-submenu.css', './patch-v523-sidebar-tree-submenu.js', './patch-v524-unified-sidebar-tree-navigation.css', './patch-v524-unified-sidebar-tree-navigation.js', './patch-v525-ot-payday-tracker.css', './patch-v525-ot-payday-tracker.js', './patch-v526-sidebar-navigation-hotfix.js', './patch-v527-ot-adjustment-ledger.css', './patch-v527-ot-adjustment-ledger.js', './patch-v528-ot-sidebar-subtree-leave-status.css', './patch-v528-ot-sidebar-subtree-leave-status.js', './patch-v529-ot-adjustment-visibility.css', './patch-v529-ot-adjustment-visibility.js', './patch-v532-export-snapshot-preflight-lock.js', './patch-v533-hr-pdf-reconciliation.css', './patch-v533-hr-pdf-reconciliation.js', './patch-v534-manual-hr-pdf-check.css', './patch-v534-manual-hr-pdf-check.js', './patch-v535-roster-admin-compact-staff-density.js', './patch-v540-submenu-deep-link-routing.js', './patch-v541-exact-action-deep-link-routing.js',
-  './pwa-install-v303.css', './pwa-install-v303.js',
-  './patch-v217-partial-sell-shift-segments.js',
-  './patch-v221-duty-date-slot-edit-month-ui.js',
-  './patch-v234-ot-admin-ch4-hr-cycle.js',
-  './patch-v315-interaction-preload.js',
-  './patch-v316-egress-preload.js',
-  './patch-v316-navigation-preload.js',
-  './patch-v316-route-loader.js',
-  './patch-v318-hr-carry-year-month-filter.js',
-  './patch-v319-fiscal-year-unlock.js',
-  './patch-v321-daily-role-options.js',
-  './patch-v322-daily-baseline-compare.js',
-  './patch-v323-popup-job-stability.js',
-  './patch-v331-ch4-daily-detail-staff-order.js',
-  './patch-v332-calendar-activity-time-location.js',
-  './patch-v427-mobile-calendar-popup-font-fix.js',
-  './patch-v429-staff-tracking-hide-completed.js',
-  './patch-v430-late-leave-after-roster.js',
-  './patch-v431-leave-sequence.js',
-  './patch-v432-compact-roster-leave-and-calendar-order.js',
-  './patch-v433-dashboard-manpower-after-leave.js',
-  './patch-v434-dashboard-daytime-positions.js',
-  './patch-v435-dashboard-position-description-popup.js',
-  './patch-v436-no-duty-sequence.js',
-  './patch-v437-hr-leave-period-pending-summary.js',
-  './patch-v438-no-duty-full-day-roster-sequence.js',
-  './patch-v440-dashboard-holiday-manpower-helper-count.js',
-  './patch-v441-ch4-transfer-to-cover.js',
-  './patch-v442-ch4-transfer-authoritative-fix.js',
-  './patch-v443-dashboard-date-navigation.js',
-  './patch-v444-dashboard-authoritative-position-date-loader.js',
-  './patch-v445-dashboard-selected-date-complete-sync.js',
-  './patch-v446-dashboard-position-leave-binding-fix.js',
-  './patch-v447-leave-sequence-detail-popup.js',
-  './patch-v448-dashboard-position-clean-ui-leave-border.js',
-  './patch-v449-dashboard-late-leave-border-only.js',
-  './patch-v450-daily-position-baseline-only.js',
-  './patch-v451-calendar-activity-linebreak-no-duty-submitdate.js',
-  './patch-v452-physician-consult-schedule.js',
-  './patch-v453-hr-status-and-late-leave-record-binding.js',
-  './patch-v454-hr-status-visible-to-all.js',
-  './patch-v455-physician-phone-popup.js',
-  './patch-v456-physician-consult-mobile-cards.js',
-  './patch-v457-hr-status-leave-only-calendar.js',
-  './patch-v459-hr-status-real-leave-only-final.js',
-  './patch-v460-offday-consult-helper-admin-alerts.js',
-  './patch-v461-dashboard-no-duty-detail-click.js',
-  './patch-v462-physician-month-staff-lifecycle.js',
-  './patch-v463-dashboard-offday-physician-only.js',
-  './patch-v464-admin-pending-auto-refresh-role-hint.js',
-  './patch-v465-admin-pending-admin-mode-only.js',
-  './patch-v466-ot-weekend-hr-helper-call-dashboard-cue.js',
-  './patch-v469-month-position-used-slot-cue.js',
-  './patch-v470-position-stat-room-groups-current-only.js',
-  './patch-v471-dashboard-room-groups-september.js',
-  './patch-v472-admin-month-hide-position-descriptions.js',
-  './patch-v473-position-stats-live-sync.js',
-  './patch-v474-clerk-rule-room-unification.js',
-  './patch-v475-position-management-clean-hints.js',
-  './patch-v476-position-stats-regular-start-gate.js',
-  './patch-v477-dashboard-date-picker-calendar.js',
-  './patch-v478-donor-helper-external-guard-ot.js',
-  './patch-v479-security-ot-rate-position-user-ui.js',
-  './patch-v481-staff-hr-confirm-admin-pending.js',
-  './patch-v483-position-master-authoritative-nav-fix.js',
-  './patch-v484-hr-confirm-workflow.js',
-  './patch-v487-activity-multi-attachments.js',
-  './patch-v488-training-position-shortage.js',
-  './patch-v489-dashboard-compact-density.css',
-  './patch-v492-admin-pending-manual-authoritative.js',
-  './patch-v493-admin-pending-effective-mode.js',
-  './patch-v496-blood-qc-weekly-owner-bridge.js',
-  './patch-v505-race-accountability-fullname-helper-roster.js',
-  './patch-v506-offday-hide-activity-dashboard.js',
-  './patch-v510-physician-dashboard-consult-sync.js',
-  './patch-v511-leave-list-physician-hr-split.js',
-  './patch-v512-physician-activity-consult-sync.js',
-  './patch-v504-physician-self-managed-leave.js',
-  './patch-v333-physician-direct-leave.js',
-  './patch-v335-daily-position-save-route-lock.js',
-  './patch-v336-continuous-balance-staff-color.js',
-  './patch-v337-daily-position-single-save-publish.js',
-  './patch-v338-partial-trade-current-balance-fix.js',
-  './patch-v339-thai-balance-label-holiday-carry.js',
-  './patch-v340-baseline-duty-holiday-columns.js',
-  './patch-v346-ot-carry-in-summary.js',
-  './patch-v360-carry-rate-mobile-summary-fix.js',
-  './patch-v366-continuous-ot-carry.js',
-  './patch-v368-authoritative-continuous-ot-carry.js',
-  './patch-v369-ot-menu-inventory-app-launch.js',
-  './patch-v370-ot-mobile-fit.js',
-  './patch-v372-position-admin-authoritative-mobile-jump.js',
-  './patch-v373-position-stat-colors-compact-offdays.js',
-  './patch-v374-outing-column-and-position-display-restore.js',
-  './patch-v377-staff-duty-tracking-and-menu-number-fix.js',
-  './patch-v378-daily-position-details-staff-color-clean.js',
-  './patch-v379-daily-position-configured-order.js',
-  './patch-v380-compact-ot-detail-text.js',
-  './patch-v381-daily-position-slot-metadata-source.js',
-  './patch-v396-training-integrated.js',
-  './patch-v347-ot-claim-details-money.js',
-  './patch-v348-ot-trade-rate-tabs-popup.js',
-  './patch-v326-donor-helper-unit-dropdown.js',
-  './patch-v327-donor-helper-internal-booking.js',
-  './donor-helper-v327.css',
-  './donor-helper.html',
-  './donor-helper-public-v327.js',
-  './donor-helper-public-v327.css',
-  './patch-v227-manual-as-blood-bank-zone.js',
-  './patch-v313-app-count-filter-pwa-trade-fix.js',
-  './patch-v314-admin-ot-calendar-ch4-fix.js',
-  './patch-v275-admin-manual-ui-corrections.js',
-  './patch-v278-slot-stats-holiday-balance-navigation-fix.js',
-  './patch-v292-schedule-image-export.js',
-  './patch-v297-position-month-image-export-slot-details.js',
-  './patch-v305-mobile-app-scroll-and-position-description.js',
-  './patch-v311-mobile-popup-daily-summary-fix.js',
-  './android-chrome-192x192.png', './android-chrome-512x512.png',
-  './maskable-icon-192x192.png', './maskable-icon-512x512.png',
-  './apple-touch-icon.png', './favicon-32x32.png', './favicon-16x16.png',
-  './patch-v513-leave-sequence-tap-repair.js',
-  './patch-v515-hash-routing-hr-deeplink.js'
+const CACHE_NAME = `${CACHE_PREFIX}v544`;
+
+/* Keep install intentionally small. Previous releases attempted to download hundreds
+   of files before activation, so a single slow request could leave mobile PWA on an
+   old worker for a long time. Remaining assets are cached on demand. */
+const CORE_SHELL = [
+  './',
+  './index.html',
+  './site.webmanifest',
+  './style.css',
+  './app.js',
+  './pwa-install-v303.css',
+  './pwa-install-v544.js',
+  './patch-v542-single-sidebar-deeplink-controller.js',
+  './android-chrome-192x192.png',
+  './android-chrome-512x512.png',
+  './apple-touch-icon.png',
+  './favicon-32x32.png',
+  './favicon-16x16.png'
 ];
-self.addEventListener('install', event => {
-  event.waitUntil((async()=>{
-    const cache=await caches.open(CACHE_NAME);
-    /* Cache files independently: one missing legacy file must not block the new PWA version. */
-    await Promise.allSettled(APP_SHELL.map(async url=>{
-      const request=new Request(url,{cache:'reload'});
-      const response=await fetch(request);
-      if(response?.ok) await cache.put(request,response.clone());
+
+async function fetchAndCache(cache, request, options = {}) {
+  const req = request instanceof Request
+    ? new Request(request, { cache: options.noStore ? 'no-store' : 'reload' })
+    : new Request(request, { cache: options.noStore ? 'no-store' : 'reload' });
+  const response = await fetch(req);
+  if (response && response.ok && response.type !== 'opaque') {
+    await cache.put(request, response.clone());
+  }
+  return response;
+}
+
+self.addEventListener('install', (event) => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await Promise.allSettled(CORE_SHELL.map(async (url) => {
+      try {
+        const request = new Request(url, { cache: 'reload' });
+        const response = await fetch(request);
+        if (response?.ok) await cache.put(url, response.clone());
+      } catch (_) {}
     }));
     await self.skipWaiting();
   })());
 });
-self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys
+      .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+      .map((key) => caches.delete(key)));
+    await self.clients.claim();
+  })());
 });
-self.addEventListener('fetch', event => {
-  const request=event.request;
-  if(request.method!=='GET') return;
-  const url=new URL(request.url);
-  if(url.origin!==self.location.origin) return;
-  if(url.pathname.endsWith('/config.js')||url.pathname.endsWith('config.js')) return;
-  if(request.mode==='navigate'){
-    const isHelperPage=url.pathname.endsWith('/donor-helper.html')||url.pathname.endsWith('donor-helper.html');
-    const fallback=isHelperPage?'./donor-helper.html':'./index.html';
-    event.respondWith(fetch(request).then(response=>{
-      if(response?.ok){const copy=response.clone();caches.open(CACHE_NAME).then(cache=>cache.put(fallback,copy));}
-      return response;
-    }).catch(async()=>await caches.match(request,{ignoreSearch:true})||await caches.match(fallback,{ignoreSearch:true})||Response.error()));
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data?.type === 'CLEAR_OLD_CACHES') {
+    event.waitUntil((async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+        .map((key) => caches.delete(key)));
+    })());
+  }
+});
+
+function isCriticalAsset(url) {
+  const path = url.pathname;
+  return path.endsWith('/app.js')
+    || path.endsWith('/pwa-install-v544.js')
+    || path.endsWith('/patch-v136-preauth.js')
+    || path.endsWith('/patch-v136-auth-layout-tabs-final.js')
+    || path.endsWith('/patch-v137-critical-regression-restore.js')
+    || path.endsWith('/patch-v138-password-complete-redirect.js')
+    || path.endsWith('/patch-v542-single-sidebar-deeplink-controller.js')
+    || path.endsWith('/style.css');
+}
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  /* Authentication config must always come from the network and must never be
+     satisfied by an old PWA cache. */
+  if (url.pathname.endsWith('/config.js') || url.pathname.endsWith('config.js')) return;
+
+  if (request.mode === 'navigate') {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const helper = url.pathname.endsWith('/donor-helper.html') || url.pathname.endsWith('donor-helper.html');
+      const fallback = helper ? './donor-helper.html' : './index.html';
+      try {
+        const response = await fetch(new Request(request, { cache: 'no-store' }));
+        if (response?.ok) await cache.put(fallback, response.clone());
+        return response;
+      } catch (_) {
+        return (await cache.match(request))
+          || (await cache.match(fallback))
+          || Response.error();
+      }
+    })());
     return;
   }
-  const cacheableDestinations=new Set(['script','style','image','font','manifest']);
-  if(!cacheableDestinations.has(request.destination)) return;
-  /* V517: same-origin static app assets are cache-first.
-     Every release bumps CACHE_NAME, so a new version is fetched during install,
-     while normal opens no longer wait for the network for hundreds of JS/CSS assets. */
-  event.respondWith((async()=>{
-    const cached=await caches.match(request)||await caches.match(request,{ignoreSearch:true});
-    if(cached) return cached;
-    try{
-      const response=await fetch(request);
-      if(response?.ok&&response.type==='basic'){
-        const copy=response.clone();
-        caches.open(CACHE_NAME).then(cache=>cache.put(request,copy));
+
+  const cacheableDestinations = new Set(['script', 'style', 'image', 'font', 'manifest']);
+  if (!cacheableDestinations.has(request.destination)) return;
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+
+    /* Startup/auth assets are network-first. This prevents a new HTML page from
+       running an old app.js/auth patch on installed phones. */
+    if (isCriticalAsset(url)) {
+      try {
+        const response = await fetch(new Request(request, { cache: 'no-store' }));
+        if (response?.ok && response.type === 'basic') await cache.put(request, response.clone());
+        return response;
+      } catch (_) {
+        return (await cache.match(request))
+          || (await cache.match(url.pathname.replace(/^\//, './')))
+          || Response.error();
+      }
+    }
+
+    /* IMPORTANT: exact request match only. Do not ignore query strings. Older SWs
+       used ignoreSearch:true, which could serve app files from another release. */
+    const cached = await cache.match(request);
+    if (cached) return cached;
+
+    try {
+      const response = await fetch(request);
+      if (response?.ok && response.type === 'basic') {
+        await cache.put(request, response.clone());
       }
       return response;
-    }catch(_){
+    } catch (_) {
       return Response.error();
     }
   })());

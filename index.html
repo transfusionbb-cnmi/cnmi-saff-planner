@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Staff Planner" />
-  <link rel="manifest" href="site.webmanifest?v=324" />
+  <link rel="manifest" href="site.webmanifest?v=544" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=303" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=303" />
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=303" />
@@ -36,6 +36,61 @@
   <link rel="stylesheet" href="patch-v529-ot-adjustment-visibility.css?v=529" />
   <link rel="stylesheet" href="patch-v533-hr-pdf-reconciliation.css?v=533" />
   <link rel="stylesheet" href="patch-v534-manual-hr-pdf-check.css?v=534" />
+  <script>
+  /* V544 mobile PWA recovery bootstrap.
+     Runs inline so an old Service Worker cannot replace this code with a cached copy. */
+  (() => {
+    'use strict';
+    const VERSION = '544';
+    const RELOAD_KEY = 'cnmi-pwa-controller-reload-v544';
+    if (!('serviceWorker' in navigator)) return;
+
+    const currentControllerVersion = () => {
+      try {
+        const controller = navigator.serviceWorker.controller;
+        if (!controller) return '';
+        return new URL(controller.scriptURL).searchParams.get('v') || '';
+      } catch (_) { return ''; }
+    };
+
+    const reloadOnce = () => {
+      if (sessionStorage.getItem(RELOAD_KEY) === '1') return;
+      sessionStorage.setItem(RELOAD_KEY, '1');
+      location.reload();
+    };
+
+    if (currentControllerVersion() === VERSION) {
+      sessionStorage.removeItem(RELOAD_KEY);
+    } else if (navigator.serviceWorker.controller) {
+      /* Hide the mixed-version page while the new worker takes control. */
+      document.documentElement.style.visibility = 'hidden';
+      navigator.serviceWorker.addEventListener('controllerchange', reloadOnce, { once: true });
+      setTimeout(() => { document.documentElement.style.visibility = ''; }, 12000);
+    }
+
+    const workerUrl = new URL(`sw.js?v=${VERSION}`, document.baseURI);
+    navigator.serviceWorker.register(workerUrl.href, {
+      scope: new URL('./', document.baseURI).pathname,
+      updateViaCache: 'none'
+    }).then(async (registration) => {
+      const activateWaiting = () => {
+        try { registration.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
+      };
+      activateWaiting();
+      registration.addEventListener('updatefound', () => {
+        const installing = registration.installing;
+        if (!installing) return;
+        installing.addEventListener('statechange', () => {
+          if (installing.state === 'installed') activateWaiting();
+        });
+      });
+      await registration.update().catch(() => {});
+    }).catch((error) => {
+      console.warn('[PWA V544 bootstrap] update failed:', error);
+      document.documentElement.style.visibility = '';
+    });
+  })();
+  </script>
 </head>
 <body>
   <div id="setupWarning" class="setup-warning hidden">
@@ -223,7 +278,7 @@
   <script defer src="patch-v300-mobile-daily-position-card-stack-fix.js?v=301"></script>
   <script defer src="patch-v305-mobile-app-scroll-and-position-description.js?v=305"></script>
   <script defer src="patch-v311-mobile-popup-daily-summary-fix.js?v=467"></script>
-  <script defer src="pwa-install-v303.js?v=488"></script>
+  <script defer src="pwa-install-v544.js?v=544"></script>
   <script defer src="patch-v313-app-count-filter-pwa-trade-fix.js?v=315"></script>
   <script defer src="patch-v314-admin-ot-calendar-ch4-fix.js?v=442"></script>
   <script defer src="patch-v316-route-loader.js?v=323"></script>
@@ -334,7 +389,7 @@
   <script defer src="patch-v513-leave-sequence-tap-repair.js?v=513"></script>
   <script defer src="patch-v515-hash-routing-hr-deeplink.js?v=515"></script>
   <script defer src="patch-v519-activity-page-freeze-fix.js?v=519"></script>
-  <script defer src="patch-v542-single-sidebar-deeplink-controller.js?v=543"></script>
+  <script defer src="patch-v542-single-sidebar-deeplink-controller.js?v=544"></script>
   <script defer src="patch-v520-whole-app-ui-refresh.js?v=520"></script>
   <script defer src="patch-v521-mobile-ui-clarity-polish.js?v=521"></script>
   <script defer src="patch-v522-ot-submenu-mobile-navigation.js?v=522"></script>
