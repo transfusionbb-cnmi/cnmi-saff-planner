@@ -31,7 +31,7 @@
   function toast(msg,tone){try{showToast(msg,tone?{tone}:undefined);}catch(_){console.info(msg);}}
   function busy(on,text){try{setBusy(on,text);}catch(_){} }
 
-  function versionChip(){
+  function versionChip(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     const selectors=['.v533-version-chip','.v532-version-chip','.v531-version-chip','.v530-version-chip','.v529-version-chip','.v528-version-chip','.v527-version-chip','.v526-version-chip','.v525-version-chip','.v524-version-chip','.v523-version-chip','.v522-version-chip','.v521-version-chip','.v520-version-chip'];
     const chip=document.querySelector(selectors.join(','));
     if(chip&&chip.textContent!=='v534'){

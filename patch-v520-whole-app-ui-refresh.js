@@ -11,7 +11,7 @@
   }
   function pageName(){return String(stateSafe()?.page||'').trim();}
 
-  function decorateVersion(){
+  function decorateVersion(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     const foot=document.querySelector('.sidebar-foot');
     if(!foot || foot.querySelector('.v520-version-chip')) return;
     const el=document.createElement('span');

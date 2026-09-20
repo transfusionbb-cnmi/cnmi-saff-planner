@@ -31,7 +31,7 @@
     document.body.dataset.cnmiRoute=routeName();
   }
 
-  function decorateVersion(){
+  function decorateVersion(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     const foot=document.querySelector('.sidebar-foot');
     if(!foot) return;
     const chip=foot.querySelector('.v520-version-chip, .v521-version-chip');

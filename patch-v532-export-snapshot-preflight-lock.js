@@ -166,7 +166,7 @@
     const w=window.open('','_blank','width=980,height=720');if(w){w.document.write(`<meta charset="utf-8"><title>Snapshot ${esc(batchId)}</title>${html}`);w.document.close();}
   }
 
-  function decorateVersion(){
+  function decorateVersion(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     const chip=document.querySelector('.v531-version-chip,.v530-version-chip,.v529-version-chip,.v528-version-chip,.v527-version-chip,.v526-version-chip,.v525-version-chip,.v524-version-chip,.v523-version-chip,.v522-version-chip,.v521-version-chip,.v520-version-chip');
     if(chip&&chip.textContent!=='v532'){chip.textContent='v532';chip.title='Export Guard + Locked Snapshot';chip.classList.add('v532-version-chip');}
   }

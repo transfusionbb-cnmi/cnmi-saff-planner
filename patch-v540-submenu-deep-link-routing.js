@@ -235,7 +235,7 @@
     if(label) document.title=`${label} | Staff Planner`;
   }
 
-  function decorateVersion(){
+  function decorateVersion(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     const chip=document.querySelector('.v539-version-chip,.v535-version-chip,.v534-version-chip,.v533-version-chip,.v532-version-chip,.v531-version-chip,.v530-version-chip,.v529-version-chip,.v528-version-chip,.v527-version-chip,.v526-version-chip,.v525-version-chip,.v524-version-chip,.v523-version-chip,.v522-version-chip,.v521-version-chip,.v520-version-chip');
     if(!chip) return;
     chip.textContent='v540';

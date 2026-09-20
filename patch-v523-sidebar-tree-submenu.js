@@ -6,8 +6,8 @@
   window.__CNMI_V523_SIDEBAR_SUBMENU__=true;
   const VERSION='V523_SIDEBAR_TREE_SUBMENU';
   const SIDEBAR_OPEN_KEY='cnmi-sidebar-tree-open-id';
-  function getOpenTree(){try{return sessionStorage.getItem(SIDEBAR_OPEN_KEY)||'';}catch(_){return '';} }
-  function setOpenTree(id){try{if(id)sessionStorage.setItem(SIDEBAR_OPEN_KEY,id);else sessionStorage.removeItem(SIDEBAR_OPEN_KEY);}catch(_){} }
+  function getOpenTree(){try{if(window.cnmiV542SidebarOwner?.getOpenTree)return window.cnmiV542SidebarOwner.getOpenTree();return sessionStorage.getItem(SIDEBAR_OPEN_KEY)||'';}catch(_){return '';} }
+  function setOpenTree(id){try{if(window.cnmiV542SidebarOwner?.setOpenTree){window.cnmiV542SidebarOwner.setOpenTree(id);return;}if(id)sessionStorage.setItem(SIDEBAR_OPEN_KEY,id);else sessionStorage.removeItem(SIDEBAR_OPEN_KEY);}catch(_){} }
   function announceOpenTree(id){setOpenTree(id);try{window.dispatchEvent(new CustomEvent('cnmi:sidebar-tree-open',{detail:{id}}));}catch(_){} }
 
   function S(){
@@ -77,7 +77,7 @@
     </div>`;
   }
 
-  function decorateVersion(){
+  function decorateVersion(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     const chip=document.querySelector('.v522-version-chip,.v521-version-chip,.v520-version-chip');
     if(chip){chip.textContent='v523';chip.title='Sidebar tree submenu';chip.classList.add('v523-version-chip');}
   }
@@ -108,7 +108,7 @@
     const parent=tree.querySelector('.v523-nav-parent');
     const sub=tree.querySelector('.v523-nav-submenu');
     const openId=getOpenTree();
-    const shouldOpen = openId ? openId==='ot' : S().page==='ot';
+    const shouldOpen = window.__CNMI_V542_NAV_OWNER__ ? openId==='ot' : (openId ? openId==='ot' : S().page==='ot');
     if(parent){
       parent.classList.toggle('active',S().page==='ot');
       parent.setAttribute('aria-expanded',shouldOpen?'true':'false');
@@ -136,7 +136,7 @@
   }
 
   function apply(){
-    if(S().page==='ot' && !getOpenTree()) announceOpenTree('ot');
+    if(!window.__CNMI_V542_NAV_OWNER__ && S().page==='ot' && !getOpenTree()) announceOpenTree('ot');
     installTree();
     refreshTree();
     compactOtTopCard();

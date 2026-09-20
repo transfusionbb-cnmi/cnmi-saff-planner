@@ -131,7 +131,7 @@
     updateTopCopy(page);
   }
 
-  function decorateVersion(){
+  function decorateVersion(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     const chip=document.querySelector('.v521-version-chip,.v520-version-chip');
     if(chip){chip.textContent='v522';chip.title='OT submenu mobile navigation';chip.classList.add('v522-version-chip');}
   }

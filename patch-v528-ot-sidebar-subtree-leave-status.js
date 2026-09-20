@@ -43,7 +43,7 @@
     ['activity','ขอ OT สำหรับประชุม / กิจกรรมร่วม','activity']
   ];
 
-  function decorateVersion(){
+  function decorateVersion(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     if(window.__CNMI_V529_OT_ADJUSTMENT_VISIBILITY__) return;
     const chip=document.querySelector('.v527-version-chip,.v526-version-chip,.v525-version-chip,.v524-version-chip,.v523-version-chip,.v522-version-chip,.v521-version-chip,.v520-version-chip');
     if(chip){

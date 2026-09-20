@@ -9,8 +9,8 @@
   window.__CNMI_V524_UNIFIED_TREE_NAV__=true;
   const VERSION='V524_UNIFIED_SIDEBAR_TREE_NAVIGATION';
   const SIDEBAR_OPEN_KEY='cnmi-sidebar-tree-open-id';
-  function getOpenTree(){try{return sessionStorage.getItem(SIDEBAR_OPEN_KEY)||'';}catch(_){return '';} }
-  function setOpenTree(id){try{if(id)sessionStorage.setItem(SIDEBAR_OPEN_KEY,id);else sessionStorage.removeItem(SIDEBAR_OPEN_KEY);}catch(_){} }
+  function getOpenTree(){try{if(window.cnmiV542SidebarOwner?.getOpenTree)return window.cnmiV542SidebarOwner.getOpenTree();return sessionStorage.getItem(SIDEBAR_OPEN_KEY)||'';}catch(_){return '';} }
+  function setOpenTree(id){try{if(window.cnmiV542SidebarOwner?.setOpenTree){window.cnmiV542SidebarOwner.setOpenTree(id);return;}if(id)sessionStorage.setItem(SIDEBAR_OPEN_KEY,id);else sessionStorage.removeItem(SIDEBAR_OPEN_KEY);}catch(_){} }
   function announceOpenTree(id){setOpenTree(id);try{window.dispatchEvent(new CustomEvent('cnmi:sidebar-tree-open',{detail:{id}}));}catch(_){} }
 
   function S(){
@@ -182,6 +182,7 @@
   function openKey(id){return `cnmi-v524-tree-${id}-open`;}
   function shouldOpen(def){
     const openId=getOpenTree();
+    if(window.__CNMI_V542_NAV_OWNER__) return openId===`v524:${def.id}`;
     if(openId) return openId===`v524:${def.id}`;
     const activeDef=defs().find(d=>!!d.active?.());
     return !!activeDef && activeDef.id===def.id;
@@ -230,7 +231,7 @@
     });
   }
 
-  function decorateVersion(){
+  function decorateVersion(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     const chip=document.querySelector('.v523-version-chip,.v522-version-chip,.v521-version-chip,.v520-version-chip');
     if(chip){chip.textContent='v524';chip.title='Unified sidebar tree navigation';chip.classList.add('v524-version-chip');}
   }
@@ -377,7 +378,7 @@
   function apply(){
     decorateVersion();
     const activeDef=defs().find(d=>!!d.active?.());
-    if(activeDef && !getOpenTree()) announceOpenTree(`v524:${activeDef.id}`);
+    if(!window.__CNMI_V542_NAV_OWNER__ && activeDef && !getOpenTree()) announceOpenTree(`v524:${activeDef.id}`);
     defs().forEach(installTree);
     defs().forEach(def=>{
       const tree=document.querySelector(`.v524-nav-tree[data-v524-tree="${CSS.escape(def.id)}"]`);

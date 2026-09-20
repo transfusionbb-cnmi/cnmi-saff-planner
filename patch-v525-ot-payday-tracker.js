@@ -152,7 +152,7 @@
     }
   },true);
 
-  function decorateVersion(){
+  function decorateVersion(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     const chip=document.querySelector('.v524-version-chip,.v523-version-chip,.v522-version-chip,.v521-version-chip,.v520-version-chip');
     if(chip){chip.textContent='v525';chip.title='OT payday tracker';chip.classList.add('v525-version-chip');}
   }

@@ -106,7 +106,7 @@
       console.warn('[V529] render adjustment visibility failed',err);
     }finally{busy=false;}
   }
-  function decorateVersion(){
+  function decorateVersion(){if(window.__CNMI_V542_VERSION_OWNER__) return;
     const chip=document.querySelector('.v528-version-chip,.v527-version-chip,.v526-version-chip,.v525-version-chip,.v524-version-chip,.v523-version-chip,.v522-version-chip,.v521-version-chip,.v520-version-chip');
     if(chip){chip.textContent='v529';chip.title='OT adjustment visibility for Staff + Export';chip.classList.add('v529-version-chip');}
   }
