@@ -16,7 +16,7 @@
  */
 (function(){
   'use strict';
-  const VERSION='V486_STAFF_HR_COMPACT_MONTH_VIEW';
+  const VERSION='V558_HC_ISERVICE_TWO_STEP_FLOW';
   const LEAVE_URL='https://www3.ra.mahidol.ac.th/leaveRama/';
   const VACATION_ADVANCE_DAYS=3;
   if(window.__CNMI_V481_STAFF_HR_CONFIRM_ADMIN_PENDING__)return;
@@ -84,6 +84,21 @@
     const a=norm(row?.start_date),b=norm(row?.end_date||row?.start_date)||a;if(!a)return false;
     return a<=last&&b>=first;
   }
+  const STEP1_KEY_PREFIX='cnmi-v558-hc-opened:';
+  function step1Key(id){return STEP1_KEY_PREFIX+String(id||'');}
+  function clearStep1(rowOrId){
+    const id=typeof rowOrId==='object'?rowOrId?.id:rowOrId;
+    try{if(id)localStorage.removeItem(step1Key(id));}catch(_){}
+  }
+  function step1Done(row){
+    if(!row?.id)return false;
+    if(retry(row)){clearStep1(row);return false;}
+    try{return localStorage.getItem(step1Key(row.id))==='1';}catch(_){return false;}
+  }
+  function markStep1(rowOrId){
+    const id=typeof rowOrId==='object'?rowOrId?.id:rowOrId;
+    try{if(id)localStorage.setItem(step1Key(id),'1');}catch(_){}
+  }
 
   function actionableRows(){
     if(effectiveAdmin())return [];
@@ -99,7 +114,7 @@
   }
 
   function vacationMeta(row){
-    if(!vacation(row))return {key:'normal',label:'อย่าลืมลาออนไลน์',detail:'หลังลาใน HC iService แล้ว ให้กดยืนยันด้านขวา'};
+    if(!vacation(row))return {key:'normal',label:'อย่าลืมลาออนไลน์',detail:'ทำขั้นตอน 1 แล้วให้กดขั้นตอน 2 เพื่อยืนยัน'};
     const d=Number(row?._v481DaysToDeadline||0),deadline=thaiDate(row?._v481Deadline);
     if(d<0)return {key:'late',label:'พ้นกำหนดล่วงหน้า 3 วัน',detail:`HC iService กำหนดให้ยื่นภายใน ${deadline} และอาจล็อกรายการแล้ว`};
     if(d===0)return {key:'today',label:'วันนี้วันสุดท้าย',detail:`ลาพักผ่อนต้องยื่น HC iService วันนี้ (${deadline})`};
@@ -109,16 +124,34 @@
 
   function statusInline(row){
     if(checked(row))return `<span class="v481-inline-status is-checked">✓ Admin ตรวจรายการใน HC iService แล้ว</span>`;
-    if(pendingAdmin(row))return `<span class="v481-inline-status is-pending">✓ ลาในระบบแล้ว • รอ Admin ตรวจ HR</span>`;
+    if(pendingAdmin(row))return `<span class="v481-inline-status is-pending">✓ ยืนยันแล้ว • รอ Admin ตรวจ HR</span>`;
     if(retry(row))return `<span class="v481-inline-status is-retry">⚠ Admin ตรวจไม่พบใน HC iService • กรุณาตรวจ/บันทึกใหม่</span>`;
-    return `<span class="v481-inline-status is-waiting">รอยืนยัน HC iService</span>`;
+    if(step1Done(row))return `<span class="v481-inline-status is-waiting is-step2">ขั้นตอน 2 • ยืนยันว่าลาแล้ว</span>`;
+    return `<span class="v481-inline-status is-waiting is-step1">ขั้นตอน 1 • เปิด HC iService ก่อน</span>`;
   }
   function actionBlock(row){
     if(checked(row)||pendingAdmin(row))return '';
-    return `<div class="v481-reminder-actions">
-      <a class="v481-open-link" href="${LEAVE_URL}" target="_blank" rel="noopener noreferrer external"><span class="v481-step-no">1</span> เปิด HC iService ↗</a>
-      <button type="button" class="v481-confirm-btn" data-v481-mark-hr="${esc(row.id)}"><span class="v481-step-no">2</span> ✓ ลาในระบบแล้ว</button>
+    const opened=step1Done(row);
+    return `<div class="v481-reminder-actions ${opened?'is-step2':'is-step1'}" data-v558-actions="${esc(row.id)}">
+      <a class="v481-open-link" data-v558-open-hc="${esc(row.id)}" href="${LEAVE_URL}" target="_blank" rel="noopener noreferrer external">
+        <span class="v481-step-no">${opened?'✓':'1'}</span><span class="v558-action-copy"><b>${opened?'เปิด HC iService แล้ว':'เปิด HC iService'}</b><small>${opened?'เปิดซ้ำได้':'เริ่มขั้นตอนนี้'}</small></span>
+      </a>
+      <span class="v481-step-arrow ${opened?'is-active':''}" aria-hidden="true">→</span>
+      <button type="button" class="v481-confirm-btn" data-v481-mark-hr="${esc(row.id)}">
+        <span class="v481-step-no">2</span><span class="v558-action-copy"><b>ยืนยันว่าลาแล้ว</b><small>${opened?'ทำขั้นตอนนี้ต่อ':'หลังบันทึก HC'}</small></span>
+      </button>
     </div>`;
+  }
+  function refreshActionBlock(leaveId){
+    const row=(S().leaves||[]).find(r=>String(r?.id||'')===String(leaveId||''));
+    if(!row)return;
+    const current=document.querySelector(`[data-v558-actions="${CSS.escape(String(leaveId||''))}"]`)||document.querySelector(`[data-v481-mark-hr="${CSS.escape(String(leaveId||''))}"]`)?.closest?.('.v481-reminder-actions');
+    if(current){
+      const t=document.createElement('template');t.innerHTML=actionBlock(row).trim();const next=t.content.firstElementChild;if(next)current.replaceWith(next);
+      const item=next?.closest?.('.v481-reminder-item');
+      const status=item?.querySelector?.('.v481-inline-status.is-waiting');
+      if(status)status.outerHTML=statusInline(row);
+    }
   }
   function rowHtml(row){
     const m=vacationMeta(row),type=typeOf(row),period=periodOf(row),done=checked(row),pending=pendingAdmin(row),again=retry(row);
@@ -143,12 +176,12 @@
     if(effectiveAdmin())return'';
     const month=selectedMonthKey(),rows=actionableRows();
     const waiting=rows.filter(r=>!reported(r)).length,pending=rows.filter(pendingAdmin).length,done=rows.filter(checked).length;
-    const head=`<div class="v481-reminder-head"><div><h3>ลาออนไลน์ HC iService</h3><p>รายการลาของคุณในเดือน <b>${esc(thaiMonthYear(month))}</b> • ทำ HC iService แล้วให้กด “ลาในระบบแล้ว” ที่รายการนั้น</p></div></div>`;
+    const head=`<div class="v481-reminder-head"><div><h3>ลาออนไลน์ HC iService</h3><p>รายการลาของคุณในเดือน <b>${esc(thaiMonthYear(month))}</b> • ทำตามขั้นตอน 1 → 2 ให้ครบในรายการนั้น</p></div></div>`;
     if(!rows.length)return `<section class="card v481-staff-hr-reminder is-clear" data-v481-staff-hr-reminder>${head}<div class="v481-clear"><span>✓</span><div><b>เดือนนี้ไม่มีรายการลา</b><small>เมื่อมีการบันทึกลาใน Staff Planner รายการจะขึ้นที่กล่องนี้ทันที</small></div></div></section>`;
     return `<section class="card v481-staff-hr-reminder" data-v481-staff-hr-reminder>${head}
       <div class="v481-month-summary"><span><b>${rows.length}</b> รายการ</span><span class="is-waiting"><b>${waiting}</b> รอยืนยัน</span><span class="is-pending"><b>${pending}</b> รอ Admin</span><span class="is-done"><b>${done}</b> ตรวจแล้ว</span></div>
       <div class="v481-reminder-list">${rows.map(rowHtml).join('')}</div>
-      <div class="v481-footnote"><b>ทำตามรายการ:</b> ① กด “เปิด HC iService” → บันทึกลาในระบบโรงพยาบาล → กลับมาที่ Staff Planner → ② กด “ลาในระบบแล้ว”</div>
+      <div class="v481-footnote"><b>ทำตามรายการ:</b> ① กด “เปิด HC iService” → บันทึกลาในระบบโรงพยาบาล → กลับมาที่ Staff Planner → ② กด “ยืนยันว่าลาแล้ว”</div>
     </section>`;
   }
 
@@ -176,7 +209,7 @@
 
   function leaveFormNoteHtml(){
     return `<div class="notice soft-notice wide v481-leave-form-note" data-v481-leave-form-note>
-      <div class="v481-form-note-main"><b>หลังบันทึกรายการลา</b><span>ไปลาออนไลน์ใน HC iService แล้วกลับมาที่ Dashboard กด <b>“ลาในระบบแล้ว”</b> เพื่อให้ Admin ทราบว่าพร้อมตรวจ HR</span></div>
+      <div class="v481-form-note-main"><b>หลังบันทึกรายการลา</b><span>ไปลาออนไลน์ใน HC iService แล้วกลับมาที่ Dashboard กด <b>“ยืนยันว่าลาแล้ว”</b> เพื่อให้ Admin ทราบว่าพร้อมตรวจ HR</span></div>
       <div class="v481-form-vacation-rule" data-v481-vacation-rule></div>
       <a href="${LEAVE_URL}" target="_blank" rel="noopener noreferrer external">เปิด HC iService ↗</a>
     </div>`;
@@ -229,7 +262,7 @@
     const row=(S().leaves||[]).find(r=>String(r?.id||'')===String(leaveId||''));
     if(!row||String(row?.staff_id||'')!==String(currentId()))return typeof showToast==='function'&&showToast('ยืนยันได้เฉพาะรายการลาของตัวเอง');
     if(!realLeave(row))return typeof showToast==='function'&&showToast('รายการนี้ไม่ใช่วันลาที่ต้องลง HC iService');
-    const ok=await confirmDialogSafe(`ยืนยันว่าได้บันทึก “${typeOf(row)}” วันที่ ${thaiRange(row)} ใน HC iService เรียบร้อยแล้วจริง?\n\nหลังยืนยัน Admin จะเห็นเป็น “รอตรวจสอบ HR”`,'ยืนยันลาในระบบแล้ว');
+    const ok=await confirmDialogSafe(`ยืนยันว่าได้บันทึก “${typeOf(row)}” วันที่ ${thaiRange(row)} ใน HC iService เรียบร้อยแล้วจริง?\n\nหลังยืนยัน Admin จะเห็นเป็น “รอตรวจสอบ HR”`,'ยืนยันว่าลาแล้ว');
     if(!ok)return;
     const db=DB();if(!db)return typeof showToast==='function'&&showToast('ยังเชื่อมต่อ Supabase ไม่สำเร็จ');
     const oldText=button?.textContent;try{if(button){button.disabled=true;button.textContent='กำลังบันทึก…';}}
@@ -245,16 +278,24 @@
       if(Array.isArray(payload))payload=payload[0]||null;
       if(typeof payload==='string'){try{payload=JSON.parse(payload);}catch(_){} }
       mergeHrResult(payload);
+      clearStep1(leaveId);
       try{if(window.cnmiHrStatusV454?.loadPublicHrStatus)await window.cnmiHrStatusV454.loadPublicHrStatus();}catch(_){}
       try{if(typeof renderPage==='function')renderPage();}catch(_){}
-      if(typeof showToast==='function')showToast('บันทึกว่า “ลาในระบบแล้ว” แล้ว • รอ Admin ตรวจสอบ HR');
+      if(typeof showToast==='function')showToast('ยืนยันแล้ว • รอ Admin ตรวจสอบ HR');
     }catch(err){
       console.warn(`[${VERSION}] mark HR reported`,err);
       if(typeof showToast==='function')showToast(txt(err?.message||err||'บันทึกไม่สำเร็จ'));
-    }finally{try{if(button){button.disabled=false;button.textContent=oldText||'✓ ลาในระบบแล้ว';}}catch(_){} }
+    }finally{try{if(button){button.disabled=false;refreshActionBlock(leaveId);}}catch(_){} }
   }
 
   document.addEventListener('click',e=>{
+    const open=e.target?.closest?.('[data-v558-open-hc]');
+    if(open){
+      const id=open.getAttribute('data-v558-open-hc');
+      markStep1(id);
+      setTimeout(()=>refreshActionBlock(id),0);
+      return;
+    }
     const btn=e.target?.closest?.('[data-v481-mark-hr]');if(!btn)return;
     e.preventDefault();e.stopPropagation();markHrReported(btn.getAttribute('data-v481-mark-hr'),btn);
   },true);
@@ -289,14 +330,14 @@
     .v481-head-link,.v481-open-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-weight:850;border-radius:10px;white-space:nowrap}.v481-head-link{padding:9px 12px;background:#e7f5ff;color:#1573ad;border:1px solid #bfe3f8;font-size:11px}.v481-open-link{padding:7px 9px;border:1px solid #d6e7f3;background:#f5fbff;color:#2573a3;font-size:10px}
     .v481-reminder-list{display:grid;gap:8px;margin-top:12px}.v481-reminder-item{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 12px;border:1px solid #e0e9f0;border-radius:13px;background:#fff}.v481-reminder-item.tone-late{border-color:#ffc8c3;background:#fff8f7}.v481-reminder-item.tone-today{border-color:#ffd795;background:#fffaf1}.v481-reminder-item.tone-soon{border-color:#cfe2f0;background:#fbfdff}
     .v481-reminder-main{display:grid;gap:4px;min-width:0;flex:1}.v481-compact-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;color:#29465b;font-size:10px;line-height:1.35}.v481-compact-type{font-size:13px;color:#29465b}.v481-period,.v481-vacation{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:850;white-space:nowrap}.v481-period{background:#eaf3ff;color:#275f94}.v481-vacation{background:#e8f7ed;color:#317e56}.v481-compact-date{color:#6c8091;white-space:nowrap}.v481-compact-date b{color:#3c566a}.v481-inline-status{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:9px;font-weight:850;white-space:nowrap}.v481-inline-status.is-checked{background:#eaf8ef;color:#236d49}.v481-inline-status.is-pending{background:#eef6ff;color:#2a628e}.v481-inline-status.is-retry{background:#fff1ef;color:#a84438}.v481-inline-status.is-waiting{background:#fff7e8;color:#8a5a08}.v481-reminder-rule{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-size:10px}.v481-reminder-rule strong{color:#2877a9}.v481-reminder-rule span{color:#788b9a}.tone-late .v481-reminder-rule strong{color:#b33228}.tone-today .v481-reminder-rule strong{color:#a86100}
-    .v481-reminder-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:255px}.v481-confirm-btn{appearance:none;border:1px solid #9ed7ba;border-radius:10px;background:#eaf8f0;color:#187449;font:inherit;font-size:10px;font-weight:900;padding:7px 9px;cursor:pointer}.v481-confirm-btn:hover{filter:brightness(.98)}.v481-confirm-btn:disabled{opacity:.55;cursor:wait}
+    .v481-reminder-actions{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);align-items:center;gap:6px;min-width:360px}.v481-open-link,.v481-confirm-btn{min-width:0;min-height:50px;gap:7px;white-space:normal;text-align:left}.v481-confirm-btn{appearance:none;border:1px solid #9ed7ba;border-radius:12px;background:#f0faf4;color:#187449;font:inherit;font-size:11px;font-weight:900;padding:8px 10px;cursor:pointer}.v481-confirm-btn:hover{filter:brightness(.98)}.v481-confirm-btn:disabled{opacity:.55;cursor:wait}.v558-action-copy{display:grid;gap:1px;line-height:1.15;min-width:0}.v558-action-copy b{font-size:11px;font-weight:950}.v558-action-copy small{font-size:8px;font-weight:800;opacity:.82}.v481-step-arrow{display:grid;place-items:center;width:24px;height:24px;border-radius:999px;background:#edf2f5;color:#8aa0ad;font-size:17px;font-weight:950;transition:.18s ease}.v481-reminder-actions.is-step1 .v481-open-link{background:#168fd3;border-color:#168fd3;color:#fff;box-shadow:0 4px 12px rgba(22,143,211,.22)}.v481-reminder-actions.is-step1 .v481-confirm-btn{background:#f2fbf6;border-color:#b8dfc9;color:#4f7f67}.v481-reminder-actions.is-step2 .v481-open-link{background:#e8f6ff;border-color:#abd9f3;color:#176d9b;box-shadow:none}.v481-reminder-actions.is-step2 .v481-confirm-btn{background:#22a06b;border-color:#22a06b;color:#fff;box-shadow:0 4px 12px rgba(34,160,107,.22)}.v481-reminder-actions.is-step2 .v481-step-arrow{background:#e8f8ef;color:#178b58;animation:v481ArrowNudge 1.25s ease-in-out infinite}.v481-inline-status.is-step1{background:#e7f5ff;color:#126f9f}.v481-inline-status.is-step2{background:#e9f8ef;color:#187449}@keyframes v481ArrowNudge{0%,100%{transform:translateX(0)}50%{transform:translateX(3px)}}
     .v481-month-summary{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.v481-month-summary>span{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:999px;background:#f2f6f9;color:#607687;font-size:10px;font-weight:800}.v481-month-summary .is-waiting{background:#fff7e8;color:#8a5a08}.v481-month-summary .is-pending{background:#eef6ff;color:#2b6795}.v481-month-summary .is-done{background:#eaf8ef;color:#23724a}
-    .v481-step-no{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:999px;background:rgba(255,255,255,.9);font-size:10px;font-weight:950}.v481-open-link{background:#eaf6ff;border-color:#b9dbf0;color:#176f9f}.v481-confirm-btn{background:#e9f8ef;border-color:#9bd3b4;color:#176f47}.v481-month-status{display:grid;gap:2px;margin-top:2px;padding:7px 9px;border-radius:9px;font-size:10px}.v481-month-status b{font-size:10px}.v481-month-status span{font-size:9px}.v481-month-status.is-checked{background:#eaf8ef;color:#236d49}.v481-month-status.is-pending{background:#eef6ff;color:#2a628e}.v481-month-status.is-retry{background:#fff1ef;color:#a84438}.v481-reminder-item.tone-checked{border-color:#bfe2cc;background:#fbfffc}.v481-reminder-item.tone-pending{border-color:#c8dff0;background:#fbfdff}.v481-reminder-item.tone-retry{border-color:#f2c0ba;background:#fff9f8}
+    .v481-step-no{display:inline-grid;place-items:center;flex:0 0 auto;width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.94);color:#1c6f9d;font-size:11px;font-weight:950}.v481-confirm-btn .v481-step-no{color:#197149}.v481-reminder-actions.is-step1 .v481-open-link .v481-step-no{color:#168fd3}.v481-reminder-actions.is-step2 .v481-confirm-btn .v481-step-no{color:#1d8d5f}.v481-month-status{display:grid;gap:2px;margin-top:2px;padding:7px 9px;border-radius:9px;font-size:10px}.v481-month-status b{font-size:10px}.v481-month-status span{font-size:9px}.v481-month-status.is-checked{background:#eaf8ef;color:#236d49}.v481-month-status.is-pending{background:#eef6ff;color:#2a628e}.v481-month-status.is-retry{background:#fff1ef;color:#a84438}.v481-reminder-item.tone-checked{border-color:#bfe2cc;background:#fbfffc}.v481-reminder-item.tone-pending{border-color:#c8dff0;background:#fbfdff}.v481-reminder-item.tone-retry{border-color:#f2c0ba;background:#fff9f8}
     .v481-clear{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px 12px;border:1px solid #d7ebde;border-radius:12px;background:#f7fcf9}.v481-clear>span{display:grid;place-items:center;width:25px;height:25px;border-radius:999px;background:#e2f5e8;color:#187745;font-weight:950}.v481-clear div{display:grid;gap:2px}.v481-clear b{font-size:11px;color:#37624a}.v481-clear small{font-size:9px;color:#789084}.v481-more,.v481-footnote{margin-top:8px;color:#788b9a;font-size:9px}.v481-footnote{border-top:1px dashed #e3ebf1;padding-top:7px}
     .v481-leave-form-note{display:grid!important;gap:7px;border-color:#bfe0f4!important;background:#f4fbff!important;color:#355c74!important}.v481-leave-form-note[hidden]{display:none!important}.v481-form-note-main{display:grid;gap:2px}.v481-form-note-main>b{color:#245d80}.v481-leave-form-note a{width:max-content;color:#1477b2;font-weight:850;text-decoration:none}.v481-form-vacation-rule>span{display:block;padding:7px 9px;border-radius:9px;font-size:11px;line-height:1.45}.v481-rule-ok{background:#eef9f2;color:#2e6e49}.v481-rule-warn{background:#fff7e8;color:#8b5a00}.v481-rule-danger{background:#fff0ef;color:#a43a32}.v481-rule-neutral{background:#f4f6f8;color:#647586}
     @media(max-width:820px){
       .v481-staff-hr-reminder{margin-bottom:12px}.v481-reminder-head{align-items:stretch;flex-direction:column;gap:8px}.v481-reminder-head h3{font-size:17px}.v481-reminder-head p{font-size:11px}.v481-head-link{width:100%;font-size:12px;padding:9px 10px}
-      .v481-reminder-item{align-items:stretch;flex-direction:column;gap:7px;padding:9px 10px}.v481-compact-line{gap:5px;font-size:10px}.v481-compact-type{font-size:13px}.v481-period,.v481-vacation{font-size:9px}.v481-compact-date{font-size:10px}.v481-inline-status{font-size:9px;padding:4px 7px}.v481-reminder-rule{font-size:10px}.v481-reminder-actions{min-width:0;grid-template-columns:1fr}.v481-open-link,.v481-confirm-btn{width:100%;font-size:12px;padding:9px 10px}.v481-clear b{font-size:12px}.v481-clear small,.v481-more,.v481-footnote{font-size:10px;line-height:1.4}.v481-month-summary>span{font-size:10px}.v481-month-status b{font-size:11px}.v481-month-status span{font-size:10px}.v481-step-no{width:20px;height:20px;font-size:11px}.v481-form-vacation-rule>span{font-size:11px}
+      .v481-reminder-item{align-items:stretch;flex-direction:column;gap:7px;padding:9px 10px}.v481-compact-line{gap:5px;font-size:10px}.v481-compact-type{font-size:13px}.v481-period,.v481-vacation{font-size:9px}.v481-compact-date{font-size:10px}.v481-inline-status{font-size:9px;padding:4px 7px}.v481-reminder-rule{font-size:10px}.v481-reminder-actions{min-width:0;width:100%;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);gap:5px}.v481-open-link,.v481-confirm-btn{width:100%;font-size:11px;padding:9px 7px;min-height:56px}.v558-action-copy b{font-size:11px}.v558-action-copy small{font-size:8px}.v481-step-arrow{width:24px;height:24px;font-size:17px}.v481-clear b{font-size:12px}.v481-clear small,.v481-more,.v481-footnote{font-size:10px;line-height:1.4}.v481-month-summary>span{font-size:10px}.v481-month-status b{font-size:11px}.v481-month-status span{font-size:10px}.v481-step-no{width:20px;height:20px;font-size:11px}.v481-form-vacation-rule>span{font-size:11px}
     }
   `;document.head.appendChild(style);
 
