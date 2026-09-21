@@ -1,4 +1,4 @@
-/* CNMI Staff Planner V316 — route-aware low-egress loader
+/* CNMI Staff Planner V550/V559 — route-aware low-egress loader + cached-render guard
    Loaded after every legacy patch so this becomes the final loadAllData/route loader.
    It does not alter roster, OT, balance, eligibility, or trade formulas.
 */
@@ -330,26 +330,63 @@
   finalLoad.__v316RouteAware=true;
   try{window.loadAllData=loadAllData=finalLoad;}catch(_){window.loadAllData=finalLoad;}
 
+  /* V559: avoid a second heavy DOM render when route data came from the same
+     in-memory objects. This is especially important on mobile Safari where rebuilding
+     the page + sidebar twice makes a normal menu tap feel frozen. */
+  const stampIds=new WeakMap();let stampSeq=0;
+  function refId(value){
+    if(!value||((typeof value!=='object')&&(typeof value!=='function')))return String(value);
+    let id=stampIds.get(value);if(!id){id=++stampSeq;stampIds.set(value,id);}return `@${id}`;
+  }
+  function stateStamp(){
+    const st=appState();if(!st)return '';
+    const parts=[];
+    for(const key of Object.keys(st).sort()){
+      const value=st[key];
+      if(value instanceof Date){parts.push(`${key}:${value.getTime()}`);continue;}
+      const type=typeof value;
+      if(value&&type==='object'){parts.push(`${key}:${refId(value)}`);continue;}
+      if(type==='string'||type==='number'||type==='boolean'||value==null)parts.push(`${key}:${String(value)}`);
+    }
+    return parts.join('|');
+  }
+
   const previousClick=window.handleClick||(typeof handleClick==='function'?handleClick:null);
   if(typeof previousClick==='function'){
-    const wrappedClick=async function handleClickV316(event){
+    const wrappedClick=async function handleClickV559(event){
       const target=event.target?.closest?.('button,[data-page],[data-cal-nav],[data-cal-view]');
       const page=String(target?.dataset?.page||'');
       if(page&&STANDARD_PAGES.has(page)){
         event.preventDefault();
         event.stopPropagation();
-        const st=appState();if(st)st.page=page;
+        const st=appState();
+        const samePage=String(st?.page||'')===page;
+        const plainMainNav=!!target?.closest?.('#mainNav .nav-btn[data-page]')&&!target?.closest?.('.v523-nav-tree,.v524-nav-tree');
+        if(samePage&&plainMainNav){
+          try{document.getElementById('sidebar')?.classList.remove('open');document.body.classList.remove('sidebar-open');}catch(_){ }
+          return;
+        }
+        if(st)st.page=page;
         try{document.getElementById('sidebar')?.classList.remove('open');document.body.classList.remove('sidebar-open');}catch(_){ }
         try{if(typeof renderPage==='function')renderPage();}catch(_){ }
+        const before=stateStamp();
         await loadPageData(page,{force:false});
-        try{if(appState()?.page===page&&typeof renderPage==='function')renderPage();}catch(_){ }
+        const after=stateStamp();
+        /* Re-render only when the loader actually replaced state/data. Cache hits no
+           longer force an identical second render. */
+        if(after!==before){
+          try{if(appState()?.page===page&&typeof renderPage==='function')renderPage();}catch(_){ }
+        }
         return;
       }
       const isCalendar=!!(target?.dataset?.calNav||target?.dataset?.calView);
       const result=await previousClick.apply(this,arguments);
       if(isCalendar&&appState()?.page==='calendar'){
+        const before=stateStamp();
         await loadPageData('calendar',{force:false});
-        try{if(typeof renderPage==='function')renderPage();}catch(_){ }
+        if(stateStamp()!==before){
+          try{if(typeof renderPage==='function')renderPage();}catch(_){ }
+        }
       }
       return result;
     };
@@ -359,14 +396,17 @@
   const previousChange=window.handleChange||(typeof handleChange==='function'?handleChange:null);
   if(typeof previousChange==='function'){
     const reloadIds=new Set(['rosterMonthInput','scheduleMonthInput','positionDateInput','positionMonthInput','positionMonthViewInput','otApprovalMonthFilter','otMoneyMonthV241','otSourceMonthV241','auditDateInput']);
-    const wrappedChange=async function handleChangeV316(event){
+    const wrappedChange=async function handleChangeV559(event){
       const id=String(event.target?.id||'');
       const result=previousChange.apply(this,arguments);
       if(result&&typeof result.then==='function')await result;
       if(reloadIds.has(id)){
         const page=appState()?.page||'dashboard';
+        const before=stateStamp();
         await loadPageData(page,{force:false});
-        try{if(typeof renderPage==='function')renderPage();}catch(_){ }
+        if(stateStamp()!==before){
+          try{if(typeof renderPage==='function')renderPage();}catch(_){ }
+        }
       }
       return result;
     };
