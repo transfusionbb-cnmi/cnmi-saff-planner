@@ -1,16 +1,40 @@
-/* CNMI Staff Planner PWA service worker — V545 mobile startup recovery */
+/* CNMI Staff Planner PWA service worker — V556 mobile controller recovery */
+const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v545`;
+const CACHE_NAME = `${CACHE_PREFIX}v556`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
   './', './index.html', './site.webmanifest', './style.css',
   './bootstrap-v545-dependency-failover.js', './app-v545.js',
-  './pwa-install-v303.css', './pwa-install-v545.js',
+  './pwa-install-v303.css', './pwa-install-v556.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
   './apple-touch-icon.png', './favicon-32x32.png', './favicon-16x16.png'
 ];
+
+function registeredWorkerVersion() {
+  try { return new URL(self.location.href).searchParams.get('v') || ''; }
+  catch (_) { return ''; }
+}
+
+async function clearPlannerCaches() {
+  const keys = await caches.keys();
+  await Promise.all(keys
+    .filter((key) => key.startsWith(CACHE_PREFIX))
+    .map((key) => caches.delete(key)));
+}
+
+async function forceClientsToNetwork() {
+  const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  await Promise.allSettled(clientList.map(async (client) => {
+    try {
+      const url = new URL(client.url);
+      url.searchParams.set('pwa_recover', WORKER_VERSION);
+      await client.navigate(url.href);
+    } catch (_) {}
+  }));
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -28,6 +52,18 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
+    /* Important V556 recovery:
+       Some installed phones still have the registration URL sw.js?v=544 even though
+       the server now serves this newer worker body. In that case the old registration
+       must remove itself, clear planner caches and navigate clients once through the
+       network. The fresh index then registers sw.js?v=556. */
+    if (registeredWorkerVersion() !== WORKER_VERSION) {
+      await clearPlannerCaches().catch(() => {});
+      await self.registration.unregister().catch(() => false);
+      await forceClientsToNetwork().catch(() => {});
+      return;
+    }
+
     const keys = await caches.keys();
     await Promise.all(keys.filter((key) => (
       (key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
@@ -51,7 +87,7 @@ function isCriticalAsset(url) {
   const path = url.pathname;
   return path.endsWith('/app-v545.js')
     || path.endsWith('/bootstrap-v545-dependency-failover.js')
-    || path.endsWith('/pwa-install-v545.js')
+    || path.endsWith('/pwa-install-v556.js')
     || path.endsWith('/patch-v136-preauth.js')
     || path.endsWith('/patch-v136-auth-layout-tabs-final.js')
     || path.endsWith('/patch-v137-critical-regression-restore.js')

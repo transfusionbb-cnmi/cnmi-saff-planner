@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Staff Planner" />
-  <link rel="manifest" href="site.webmanifest?v=545" />
+  <link rel="manifest" href="site.webmanifest?v=556" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=303" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=303" />
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=303" />
@@ -33,13 +33,13 @@
   <link rel="stylesheet" href="patch-v533-hr-pdf-reconciliation.css?v=533" />
   <link rel="stylesheet" href="patch-v534-manual-hr-pdf-check.css?v=534" />
   <script>
-  /* V545 one-time mobile PWA recovery.
+  /* V556 one-time mobile PWA recovery.
      If an older worker still controls this page, remove only CNMI Staff Planner
      workers/caches and reload once. Never hide the document while waiting. */
   (() => {
     'use strict';
-    const VERSION = '545';
-    const RECOVERY_KEY = 'cnmi-pwa-recovery-v545';
+    const VERSION = '556';
+    const RECOVERY_KEY = 'cnmi-pwa-recovery-v556';
     const result = { reloading: false, fromVersion: '' };
 
     if (!('serviceWorker' in navigator)) {
@@ -87,7 +87,7 @@
           return isCnmiWorker ? registration.unregister().catch(() => false) : Promise.resolve(false);
         }));
       } catch (error) {
-        console.warn('[PWA V545] old worker unregister failed:', error);
+        console.warn('[PWA V556] old worker unregister failed:', error);
       }
 
       try {
@@ -96,7 +96,7 @@
           .filter((key) => key.startsWith('cnmi-staff-planner-pwa-'))
           .map((key) => caches.delete(key)));
       } catch (error) {
-        console.warn('[PWA V545] old cache cleanup failed:', error);
+        console.warn('[PWA V556] old cache cleanup failed:', error);
       }
 
       setTimeout(() => location.reload(), 0);
@@ -287,7 +287,7 @@
   <script defer src="patch-v300-mobile-daily-position-card-stack-fix.js?v=301"></script>
   <script defer src="patch-v305-mobile-app-scroll-and-position-description.js?v=305"></script>
   <script defer src="patch-v311-mobile-popup-daily-summary-fix.js?v=467"></script>
-  <script defer src="pwa-install-v545.js?v=545"></script>
+  <script defer src="pwa-install-v556.js?v=556"></script>
   <script defer src="patch-v313-app-count-filter-pwa-trade-fix.js?v=315"></script>
   <script defer src="patch-v314-admin-ot-calendar-ch4-fix.js?v=442"></script>
   <script defer src="patch-v550-route-loader-trade-stability.js?v=550"></script>
