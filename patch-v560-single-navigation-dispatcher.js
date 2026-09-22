@@ -237,7 +237,7 @@
 
   // V560 owns the visible version chip. Do not touch the service worker version.
   function decorate(){
-    try{document.querySelectorAll('.v520-version-chip,.v542-version-chip').forEach(chip=>{chip.textContent='v560';chip.title='Single navigation dispatcher + responsive route paint (V560)';});}catch(_){ }
+    try{document.querySelectorAll('.v520-version-chip,.v542-version-chip').forEach(chip=>{chip.textContent='v561';chip.title='Compact HC iService completed leave rows + navigation stability (V561)';});}catch(_){ }
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',decorate,{once:true});else decorate();
   window.addEventListener('pageshow',()=>{decorate();setBusy(false);});
