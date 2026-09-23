@@ -142,27 +142,32 @@
     const points=new Set([start,end]);blocksById.forEach(bs=>bs.forEach(b=>{points.add(Math.max(start,b.start));points.add(Math.min(end,b.end));}));
     const p=[...points].filter(x=>x>=start&&x<=end).sort((a,b)=>a-b),segments=[];
     for(let i=0;i<p.length-1;i++){
-      const a=p[i],b=p[i+1];if(a>=b)continue;const mid=(a+b)/2,blocked=[];
-      staff.forEach(st=>{const bs=blocksById.get(String(st.id))||[];if(personBlockedAt(bs,mid))blocked.push({id:String(st.id),name:nick(st.id),group:groupOf(st),reason:reasonAt(bs,mid)});});
-      const blockedKey=blocked.map(x=>x.id).sort().join('|');
-      const available=staff.length-blocked.length;
+      const a=p[i],b=p[i+1];if(a>=b)continue;const mid=(a+b)/2,absent=[],blocked=[];
       const groupTotal={MT:0,'เคิก':0},groupBlocked={MT:0,'เคิก':0};
-      staff.forEach(st=>{const g=groupOf(st);if(g==='MT'||g==='เคิก')groupTotal[g]++;});
-      blocked.forEach(x=>{if(x.group==='MT'||x.group==='เคิก')groupBlocked[x.group]++;});
-      const groupAvailable={MT:(groupTotal.MT||0)-(groupBlocked.MT||0),'เคิก':(groupTotal['เคิก']||0)-(groupBlocked['เคิก']||0)};
+      staff.forEach(st=>{
+        const bs=blocksById.get(String(st.id))||[];
+        const leave=bs.find(x=>x.kind==='leave'&&x.start<=mid&&mid<x.end);
+        if(leave){absent.push({id:String(st.id),name:nick(st.id),reason:leave.label});return;}
+        const g=groupOf(st);if(g==='MT'||g==='เคิก')groupTotal[g]++;
+        const acts=bs.filter(x=>x.kind==='activity'&&x.start<=mid&&mid<x.end);
+        if(acts.length){blocked.push({id:String(st.id),name:nick(st.id),group:g,reason:[...new Set(acts.map(x=>x.label))].join('+')});if(g==='MT'||g==='เคิก')groupBlocked[g]++;}
+      });
+      const total=staff.length-absent.length,available=total-blocked.length;
+      const groupAvailable={MT:groupTotal.MT-groupBlocked.MT,'เคิก':groupTotal['เคิก']-groupBlocked['เคิก']};
+      const key=absent.map(x=>x.id).sort().join('|')+'/'+blocked.map(x=>x.id+':'+x.reason).sort().join('|');
       const last=segments[segments.length-1];
-      if(last&&last.blockedKey===blockedKey){last.end=b;}
-      else segments.push({start:a,end:b,available,blocked,blockedKey,groupAvailable,groupTotal});
+      if(last&&last.blockedKey===key)last.end=b;
+      else segments.push({start:a,end:b,total,available,absent,blocked,blockedKey:key,groupAvailable,groupTotal});
     }
-    if(!segments.length){segments.push({start,end,available:staff.length,blocked:[],blockedKey:'',groupAvailable:{MT:staff.filter(x=>groupOf(x)==='MT').length,'เคิก':staff.filter(x=>groupOf(x)==='เคิก').length},groupTotal:{MT:staff.filter(x=>groupOf(x)==='MT').length,'เคิก':staff.filter(x=>groupOf(x)==='เคิก').length}});}
+    if(!segments.length)segments.push({start,end,total:staff.length,available:staff.length,absent:[],blocked:[],blockedKey:'',groupAvailable:{MT:staff.filter(x=>groupOf(x)==='MT').length,'เคิก':staff.filter(x=>groupOf(x)==='เคิก').length},groupTotal:{MT:staff.filter(x=>groupOf(x)==='MT').length,'เคิก':staff.filter(x=>groupOf(x)==='เคิก').length}});
     return {staff,blocksById,segments};
   }
   function minSummary(timeline){
     const seg=timeline.segments;
     const minAvailable=Math.min(...seg.map(x=>x.available));
-    const total=timeline.staff.length;
-    const totalGroups={MT:timeline.staff.filter(x=>groupOf(x)==='MT').length,'เคิก':timeline.staff.filter(x=>groupOf(x)==='เคิก').length};
-    const minGroups={MT:Math.min(...seg.map(x=>x.groupAvailable.MT)), 'เคิก':Math.min(...seg.map(x=>x.groupAvailable['เคิก']))};
+    const total=Math.min(...seg.filter(x=>x.available===minAvailable).map(x=>x.total));
+    const minGroups={MT:Math.min(...seg.map(x=>x.groupAvailable.MT)),'เคิก':Math.min(...seg.map(x=>x.groupAvailable['เคิก']))};
+    const totalGroups={MT:Math.min(...seg.filter(x=>x.groupAvailable.MT===minGroups.MT).map(x=>x.groupTotal.MT)),'เคิก':Math.min(...seg.filter(x=>x.groupAvailable['เคิก']===minGroups['เคิก']).map(x=>x.groupTotal['เคิก']))};
     return {minAvailable,total,totalGroups,minGroups};
   }
   function impactSummary(staff,date){
@@ -170,15 +175,15 @@
     const activities=(renderCtx&&renderCtx.date===date)?renderCtx.relevantActivities:(S()?.activities||[]).filter(a=>a&&inRange(date,a)&&blockingActivity(a));
     activities.forEach(a=>{
       const ids=parseIds(a?.participant_ids),type=activityLabel(a);if(!byType.has(type))byType.set(type,new Set());
-      const set=byType.get(type);ids.forEach(id=>{if(staffIds.has(String(id)))set.add(String(id));});
+      const set=byType.get(type),interval=rawActivityInterval(a);ids.forEach(id=>{if(staffIds.has(String(id))){const ls=(renderCtx?.leavesById.get(String(id))||[]).map(leaveInterval);const relevant=clippedInterval(interval,[WORK_START,WORK_END]);if(relevant&&(!ls.length||[relevant[0],...ls.flat()].filter(t=>t>=relevant[0]&&t<relevant[1]).some(t=>!ls.some(l=>l[0]<=t&&t<l[1]))))set.add(String(id));}});
     });
     return [...byType.entries()].map(([type,set])=>({type,count:set.size})).filter(x=>x.count>0);
   }
   function periodBlockPeople(tl){const ids=new Set();tl.segments.forEach(s=>s.blocked.forEach(x=>ids.add(x.id)));return ids.size;}
   function renderTimelineRows(full,total){
     return full.segments.map(s=>{
-      const people=s.blocked.length?s.blocked.map(x=>`<span>${esc(x.name)} <small>${esc(x.reason)}</small></span>`).join(''):'<em>ไม่มีคนติดภารกิจ/ลา</em>';
-      return `<div class="v562-time-row"><b>${timeText(s.start)}–${timeText(s.end)}</b><strong class="${s.available<total?'is-low':''}">พร้อม ${s.available}/${total}</strong><div>${people}</div></div>`;
+      const people=s.blocked.length?s.blocked.map(x=>`<span>${esc(x.name)} <small>${esc(x.reason)}</small></span>`).join(''):'<em>ไม่มีคนติดประชุม/กิจกรรม</em>';
+      return `<div class="v562-time-row"><b>${timeText(s.start)}–${timeText(s.end)}</b><strong class="${s.available<total?'is-low':''}">พร้อม ${s.available}/${s.total}</strong><div>${people}</div></div>`;
     }).join('');
   }
   function manpowerCard(date){
@@ -186,7 +191,7 @@
     const morningTL=buildTimeline(staff,date,WORK_START,MIDDAY),afternoonTL=buildTimeline(staff,date,MIDDAY,WORK_END),fullTL=buildTimeline(staff,date,WORK_START,WORK_END);
     const am=minSummary(morningTL),pm=minSummary(afternoonTL),impacts=impactSummary(staff,date);
     const activityPills=impacts.length?impacts.map(x=>`<span>${esc(x.type)} <b>${x.count}</b></span>`).join(''):'<span class="muted">ไม่มีกิจกรรมที่หักกำลังคน</span>';
-    const lowSegments=fullTL.segments.filter(s=>s.available<staff.length).length;
+    const lowSegments=fullTL.segments.filter(s=>s.available<s.total).length;
     return `<div class="card v433-manpower-card v562-manpower-card" data-v433-manpower data-v562-manpower>
       <div class="v562-title-row"><div class="v433-manpower-title">กำลังคนพร้อมปฏิบัติงาน <small>หักลา + กิจกรรมตามเวลาจริง</small></div><span class="v562-live-pill">08:00–16:00</span></div>
       <div class="v433-period-totals v562-period-totals">
@@ -200,7 +205,7 @@
       </div>
       <div class="v562-activity-impact">${activityPills}</div>
       <details class="v562-time-details" ${lowSegments?'':'data-no-impact'}><summary>ดูตามช่วงเวลา</summary><div class="v562-time-list">${renderTimelineRows(fullTL,staff.length)}</div></details>
-      <div class="v433-manpower-note">คนเดียวมีหลายประชุม/กิจกรรมจะไม่ถูกหักซ้ำในช่วงเวลาเดียวกัน · แพทย์ดูสถานะตามเวลาจริงที่ Consult</div>
+      <div class="v433-manpower-note">ผู้ลาถูกตัดออกจากฐานในช่วงที่ลา · ประชุม/อบรมหักเฉพาะคนที่ยังปฏิบัติงาน · แพทย์ดูสถานะตามเวลาจริงที่ Consult</div>
     </div>`;
   }
 
@@ -320,7 +325,7 @@
     }
   `;document.head.appendChild(style);
 
-  function versionChip(){try{document.querySelectorAll('.v520-version-chip,.v542-version-chip').forEach(chip=>{chip.textContent='v562';chip.title='Realtime manpower availability by leave + activity time (V562)';});}catch(_){ }}
+  function versionChip(){try{document.querySelectorAll('.v520-version-chip,.v542-version-chip').forEach(chip=>{chip.textContent='v564';chip.title='Realtime manpower availability by leave + activity time (V562)';});}catch(_){ }}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',versionChip,{once:true});else versionChip();
   window.addEventListener('pageshow',versionChip);
   window.cnmiAvailabilityV562={version:VERSION,personBlocks,buildTimeline,manpowerCard,blockingActivity};
