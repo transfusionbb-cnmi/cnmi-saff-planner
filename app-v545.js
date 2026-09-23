@@ -3501,7 +3501,7 @@ function handleInput(e) {
   if (e.target.id === 'otApprovalSearch') {
     state.otApprovalSearch = e.target.value || '';
     clearTimeout(state.otApprovalSearchTimer);
-    state.otApprovalSearchTimer = setTimeout(() => renderPage(), 180);
+    state.otApprovalSearchTimer = setTimeout(() => window.refreshOtApprovalResultsV565?.(e.target), 180);
   }
 }
 document.addEventListener('input', handleInput, true);
@@ -10784,26 +10784,28 @@ function bindGlobalEvents() {
     }).sort((a,b) => normalize183(b?.work_date).localeCompare(normalize183(a?.work_date)) || String(b?.created_at || '').localeCompare(String(a?.created_at || '')));
   };
 
-  document.addEventListener('change', function(e){
-    const t = e.target;
-    if (!t || !['otApprovalStartDate', 'otApprovalEndDate'].includes(t.id)) return;
-    state.otApprovalStartDate = document.getElementById('otApprovalStartDate')?.value || '';
-    state.otApprovalEndDate = document.getElementById('otApprovalEndDate')?.value || '';
-    // Keep native date inputs mounted while their calendar is closing. Rebuild only
-    // the OT results; replacing the entire page here can interrupt the picker.
-    const filter = t.closest('.ot-approval-filter');
+  function refreshOtApprovalResultsV565(t){
+    // The select, dates and search box stay mounted; only the rows change.
+    const filter = t?.closest?.('.ot-approval-filter');
     const panel = filter?.parentElement;
     if (!panel || typeof renderOtTable !== 'function') return;
     const holder = document.createElement('div');
     holder.innerHTML = renderOtTable(state.otRequests || []);
     holder.querySelector('.ot-approval-filter')?.remove();
     let sibling = filter.nextSibling;
-    while (sibling) {
-      const next = sibling.nextSibling;
-      sibling.remove();
-      sibling = next;
-    }
+    while (sibling) { const next = sibling.nextSibling; sibling.remove(); sibling = next; }
     while (holder.firstChild) panel.appendChild(holder.firstChild);
+  }
+  window.refreshOtApprovalResultsV565 = refreshOtApprovalResultsV565;
+  document.addEventListener('change', function(e){
+    const t = e.target;
+    if (!t || !['otApprovalStartDate', 'otApprovalEndDate', 'otApprovalStatusFilter', 'otApprovalSearch'].includes(t.id)) return;
+    e.stopImmediatePropagation();
+    if (t.id === 'otApprovalStatusFilter') state.otApprovalStatusFilter = t.value;
+    if (t.id === 'otApprovalSearch') state.otApprovalSearch = t.value;
+    state.otApprovalStartDate = document.getElementById('otApprovalStartDate')?.value || '';
+    state.otApprovalEndDate = document.getElementById('otApprovalEndDate')?.value || '';
+    refreshOtApprovalResultsV565(t);
   }, true);
 
   document.addEventListener('click', function(e){

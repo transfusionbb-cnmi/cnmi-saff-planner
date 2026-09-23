@@ -129,7 +129,7 @@
     if(!chip){
       chip=document.createElement('div');chip.className='v520-version-chip v542-version-chip';foot.prepend(chip);
     }
-    if(chip.textContent!=='v550')chip.textContent='v550';
+    if(chip.textContent!=='v565')chip.textContent='v565';
     if(chip.title!=='RACE uses completed trade state that remains stable across async route refreshes (V550)')chip.title='RACE uses completed trade state that remains stable across async route refreshes (V550)';
     chip.classList.add('v542-version-chip');
   }
