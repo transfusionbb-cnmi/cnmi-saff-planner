@@ -10789,7 +10789,21 @@ function bindGlobalEvents() {
     if (!t || !['otApprovalStartDate', 'otApprovalEndDate'].includes(t.id)) return;
     state.otApprovalStartDate = document.getElementById('otApprovalStartDate')?.value || '';
     state.otApprovalEndDate = document.getElementById('otApprovalEndDate')?.value || '';
-    renderPage();
+    // Keep native date inputs mounted while their calendar is closing. Rebuild only
+    // the OT results; replacing the entire page here can interrupt the picker.
+    const filter = t.closest('.ot-approval-filter');
+    const panel = filter?.parentElement;
+    if (!panel || typeof renderOtTable !== 'function') return;
+    const holder = document.createElement('div');
+    holder.innerHTML = renderOtTable(state.otRequests || []);
+    holder.querySelector('.ot-approval-filter')?.remove();
+    let sibling = filter.nextSibling;
+    while (sibling) {
+      const next = sibling.nextSibling;
+      sibling.remove();
+      sibling = next;
+    }
+    while (holder.firstChild) panel.appendChild(holder.firstChild);
   }, true);
 
   document.addEventListener('click', function(e){
