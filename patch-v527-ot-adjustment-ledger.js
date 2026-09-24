@@ -147,7 +147,7 @@
       const {data:existing,error:qerr}=await db.from('ot_requests').select('id,staff_id,note').eq('work_date',date).eq('reason','ประชุม / กิจกรรมร่วม').in('staff_id',ids);if(qerr)throw qerr;
       const duplicated=new Set((existing||[]).filter(r=>String(r.note||'').includes(marker)).map(r=>String(r.staff_id))),todo=ids.filter(id=>!duplicated.has(id));
       if(!todo.length)throw new Error('รายการกิจกรรมนี้ถูกบันทึกให้ผู้ที่เลือกครบแล้ว ไม่มีการสร้างซ้ำ');
-      const rows=todo.map(id=>({staff_id:id,work_date:date,start_time:'00:00',end_time:'00:00',reason:'ประชุม / กิจกรรมร่วม',note:`${marker} | [OT_RATE_TYPE=${rateTypeFor(id)}] | จำนวนเวลา OT: ${hours} ชั่วโมง | กิจกรรม: ${title}${note?` | ${note}`:''}`.slice(0,900),status:'อนุมัติ',device:`${VERSION} admin group activity`.slice(0,250)}));
+      const rows=todo.map(id=>({staff_id:id,work_date:date,end_time:'00:00',reason:'ประชุม / กิจกรรมร่วม',note:`${marker} | [OT_RATE_TYPE=${rateTypeFor(id)}] | จำนวนเวลา OT: ${hours} ชั่วโมง | กิจกรรม: ${title}${note?` | ${note}`:''}`.slice(0,900),status:'อนุมัติ',device:`${VERSION} admin group activity`.slice(0,250)}));
       const {error}=await db.from('ot_requests').insert(rows);if(error)throw error;
       try{await window.cnmiV316?.loadPageData?.('ot',{force:true});}catch(_){}
       toast(`บันทึก OT กิจกรรม ${todo.length} คน${duplicated.size?` • ข้ามรายการซ้ำ ${duplicated.size} คน`:''}`);try{renderPage();}catch(_){}
