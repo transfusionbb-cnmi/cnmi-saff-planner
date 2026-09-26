@@ -19,6 +19,12 @@
   function isAdminSafe(){
     try{return typeof isAdmin==='function' && isAdmin();}catch(_){return false;}
   }
+  function isPhysicianSafe(){
+    const s=S(),p=s?.profile||(s?.staff||[]).find(x=>String(x.id)===String(typeof currentStaffId==='function'?currentStaffId():''));
+    if(!p)return false;
+    try{if(window.cnmiPersonTypeV516?.isPhysician)return !!window.cnmiPersonTypeV516.isPhysician(p);}catch(_){ }
+    return [p.staff_type,p.position,p.role].some(v=>/^(แพทย์|หมอ|physician|doctor)/i.test(String(v||'').trim()));
+  }
   function esc(v){
     return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -139,7 +145,7 @@
         ]
       },
       {
-        id:'physician', anchor:'physicianConsult', members:['physicianConsult'], label:'ตารางแพทย์ Consult', emoji:'🩺', adminOnly:true,
+        id:'physician', anchor:'physicianConsult', members:['physicianConsult'], label:'ตารางแพทย์ Consult', emoji:'🩺', adminOnly:!isPhysicianSafe(),
         active:()=>page()==='physicianConsult',
         children:[
           {key:'physician-daytime',label:'ในเวลา จ.–ศ.',kind:'calendar',page:'physicianConsult',viewKey:'physician',view:'daytime'},

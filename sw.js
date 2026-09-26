@@ -1,7 +1,7 @@
 /* CNMI Staff Planner PWA service worker — V556 mobile controller recovery */
 const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v566`;
+const CACHE_NAME = `${CACHE_PREFIX}v568`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [

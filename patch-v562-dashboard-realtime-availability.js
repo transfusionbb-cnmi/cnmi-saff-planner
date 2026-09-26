@@ -325,7 +325,7 @@
     }
   `;document.head.appendChild(style);
 
-  function versionChip(){try{document.querySelectorAll('.v520-version-chip,.v542-version-chip').forEach(chip=>{chip.textContent='v566';chip.title='Realtime manpower availability by leave + activity time (V562)';});}catch(_){ }}
+  function versionChip(){try{document.querySelectorAll('.v520-version-chip,.v542-version-chip').forEach(chip=>{chip.textContent='v568';chip.title='Realtime manpower availability by leave + activity time (V562)';});}catch(_){ }}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',versionChip,{once:true});else versionChip();
   window.addEventListener('pageshow',versionChip);
   window.cnmiAvailabilityV562={version:VERSION,personBlocks,buildTimeline,manpowerCard,blockingActivity};

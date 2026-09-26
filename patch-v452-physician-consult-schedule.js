@@ -22,6 +22,12 @@
   function client(){try{return window.supabaseClient||(typeof sb!=='undefined'?sb:null);}catch(_){return window.supabaseClient||null;}}
   function esc(v){try{return typeof escapeHtml==='function'?escapeHtml(v==null?'':String(v)):String(v==null?'':v);}catch(_){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}}
   function admin(){try{return typeof isAdmin==='function'&&!!isAdmin();}catch(_){return false;}}
+  function physician(){
+    const p=S()?.profile||(S()?.staff||[]).find(x=>String(x.id)===String(currentStaff()))||null;
+    if(!p)return false;
+    try{if(window.cnmiPersonTypeV516?.isPhysician)return !!window.cnmiPersonTypeV516.isPhysician(p);}catch(_){ }
+    return [p.staff_type,p.position,p.role].some(v=>/^(แพทย์|หมอ|physician|doctor)/i.test(String(v||'').trim()));
+  }
   function toastSafe(msg){try{if(typeof toast==='function')return toast(msg);}catch(_){ } try{if(typeof showToast==='function')return showToast(msg);}catch(_){ } console.info('[V452]',msg);}
   function currentStaff(){try{return typeof currentStaffId==='function'?currentStaffId():S()?.profile?.id||null;}catch(_){return S()?.profile?.id||null;}}
   function normDate(v){const s=String(v||'').slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(s)?s:'';}
@@ -124,7 +130,7 @@
     return `<div class="table-wrap v452-list-wrap"><table><thead><tr><th>ประเภท</th><th>ช่วงวันที่</th><th>แพทย์</th><th>Version/หมายเหตุ</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(scheduleTypeLabel(r.schedule_type))}</td><td>${esc(rangeLabel(r))}</td><td>${esc(doctorSummary(r))}</td><td>${esc([r.version_label,r.note].filter(Boolean).join(' · ')||'-')}</td><td><button type="button" class="tiny-btn danger" data-v452-delete="${esc(r.id)}">ลบ</button></td></tr>`).join('')}</tbody></table></div>`;
   }
   function renderAdminPage(){
-    if(!admin())return '<div class="card"><div class="empty-state">หน้านี้สำหรับ Admin เท่านั้น</div></div>';
+    if(!admin()&&!physician())return '<div class="card"><div class="empty-state">หน้านี้สำหรับ Admin และแพทย์เท่านั้น</div></div>';
     if(cache.unavailable)return setupNotice();
     if(!cache.loaded){ensureLoaded();return '<div class="card"><div class="empty-state">กำลังโหลดตารางแพทย์ Consult…</div></div>';}
     const now=today(),month=now.slice(0,7);
@@ -140,7 +146,7 @@
   }
 
   async function savePayload(type,form){
-    if(!admin())return toastSafe('เฉพาะ Admin เท่านั้น');
+    if(!admin()&&!physician())return toastSafe('เฉพาะ Admin และแพทย์เท่านั้น');
     const c=client();if(!c)return toastSafe('ยังไม่เชื่อมต่อ Supabase');
     const fd=new FormData(form),actor=currentStaff();let payload={schedule_type:type,is_active:true,version_label:String(fd.get('version_label')||'').trim()||null,updated_by_staff_id:actor||null};
     let existing=null;
@@ -165,7 +171,7 @@
     await ensureLoaded(true);toastSafe('บันทึกตารางแพทย์แล้ว');
   }
   async function softDelete(id){
-    if(!admin()||!id)return;
+    if((!admin()&&!physician())||!id)return;
     if(!confirm('ลบรายการตารางแพทย์นี้ใช่ไหม?'))return;
     const c=client();if(!c)return;
     const {error}=await c.from(TABLE).update({is_active:false,updated_by_staff_id:currentStaff()||null}).eq('id',id);
@@ -182,7 +188,17 @@
     }
   }catch(err){console.warn('[V452] nav item',err);}
 
-  // Custom Admin page renderer.
+  // Doctors can manage all Consult schedule sections in their Staff menu.
+  const previousRenderNav=window.renderNav||(typeof renderNav==='function'?renderNav:null);
+  if(typeof previousRenderNav==='function'){
+    const wrappedNav=function(){
+      try{const item=NAV_ITEMS.find(x=>x.id==='physicianConsult');if(item)item.group=physician()&&!admin()?'staff':'admin';}catch(_){ }
+      return previousRenderNav.apply(this,arguments);
+    };
+    try{window.renderNav=renderNav=wrappedNav;}catch(_){window.renderNav=wrappedNav;}
+  }
+
+  // Consult schedule page renderer for admins and physicians.
   const oldRenderPage=window.renderPage||(typeof renderPage==='function'?renderPage:null);
   if(typeof oldRenderPage==='function'){
     const wrappedPage=function renderPageV452(){
