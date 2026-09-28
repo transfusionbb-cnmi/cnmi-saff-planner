@@ -172,7 +172,7 @@
   }
   async function softDelete(id){
     if((!admin()&&!physician())||!id)return;
-    if(!confirm('ลบรายการตารางแพทย์นี้ใช่ไหม?'))return;
+    if(!(await confirmDialog('ลบรายการตารางแพทย์นี้ใช่ไหม?','ยืนยันลบตารางแพทย์')))return;
     const c=client();if(!c)return;
     const {error}=await c.from(TABLE).update({is_active:false,updated_by_staff_id:currentStaff()||null}).eq('id',id);
     if(error)return toastSafe(`ลบไม่สำเร็จ: ${error.message||error}`);

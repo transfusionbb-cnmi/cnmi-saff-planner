@@ -801,12 +801,22 @@ function confirmDialog(message, title='ยืนยันการทำรา�
   return new Promise(resolve => {
     showModal(`<div class="confirm-box app-confirm"><div class="app-alert-icon warn">?</div><h2>${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p><div class="confirm-actions"><button class="ghost-btn" data-confirm-no>ยกเลิก</button><button class="primary-btn" data-confirm-yes>ตกลง</button></div></div>`, { small:true });
     const modal = $('modal');
-    const cleanup = (answer) => { modal.removeEventListener('click', onClick); closeModal(); resolve(answer); };
+    let settled = false;
+    const cleanup = (answer) => {
+      if (settled) return;
+      settled = true;
+      modal.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKeydown);
+      closeModal(); resolve(answer);
+    };
+    const onKeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); cleanup(false); } };
     const onClick = (e) => {
       if (e.target.closest('[data-confirm-yes]')) cleanup(true);
-      if (e.target.closest('[data-confirm-no]') || e.target.id === 'modalClose') cleanup(false);
+      if (e.target.closest('[data-confirm-no]') || e.target.id === 'modalClose' || e.target === modal) cleanup(false);
     };
     modal.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKeydown);
+    requestAnimationFrame(() => modal.querySelector('[data-confirm-yes]')?.focus());
   });
 }
 function promptDialog(message, title='กรอกข้อมูลเพิ่มเติม', defaultValue='') {
@@ -815,12 +825,21 @@ function promptDialog(message, title='กรอกข้อมูลเพิ่
     const modal = $('modal');
     const input = $('promptDialogInput');
     setTimeout(() => input?.focus(), 50);
-    const cleanup = (value) => { modal.removeEventListener('click', onClick); closeModal(); resolve(value); };
+    let settled = false;
+    const cleanup = (value) => {
+      if (settled) return;
+      settled = true;
+      modal.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKeydown);
+      closeModal(); resolve(value);
+    };
+    const onKeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); cleanup(null); } };
     const onClick = (e) => {
       if (e.target.closest('[data-prompt-ok]')) cleanup(input?.value || '');
-      if (e.target.closest('[data-prompt-cancel]') || e.target.id === 'modalClose') cleanup(null);
+      if (e.target.closest('[data-prompt-cancel]') || e.target.id === 'modalClose' || e.target === modal) cleanup(null);
     };
     modal.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKeydown);
   });
 }
 function configReady() {

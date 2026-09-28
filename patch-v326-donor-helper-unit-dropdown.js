@@ -359,7 +359,7 @@
     if (!ok) return;
     let note = null;
     if (nextStatus === 'cancelled' && row.status !== 'cancel_requested') {
-      note = window.prompt('เหตุผลที่ Admin ยกเลิก (ถ้ามี)', '') || null;
+      note = await promptDialog('เหตุผลที่ Admin ยกเลิก (ถ้ามี)', 'ระบุเหตุผล', '') || null;
     }
     try {
       const result = await db().rpc('admin_update_donor_helper_status_v324', {
@@ -379,7 +379,7 @@
       await navigator.clipboard.writeText(link);
       toast('คัดลอกลิงก์หน้าลงชื่อคนนอกหน่วยแล้ว');
     } catch (_) {
-      window.prompt('คัดลอกลิงก์นี้', link);
+      await promptDialog('คัดลอกลิงก์นี้', 'ลิงก์หน้าลงชื่อ', link);
     }
   }
 

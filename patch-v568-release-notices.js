@@ -1,10 +1,10 @@
 /* In-app release notes, per signed-in user. Remote manifest also alerts open older tabs. */
 (()=>{
   'use strict';
-  const RUNNING_VERSION=568;
-  const bundled={version:'568',title:'อัปเดต Staff Planner v568',changes:[
-    'แพทย์จัดการตาราง Consult ได้ครบ: ในเวลา นอกเวลา แก้เฉพาะวัน และรายการที่บันทึก',
-    'เพิ่มหน้าต่างแจ้งรายการอัปเดตให้ผู้ใช้แต่ละคนเมื่อเปิดแอพหรือกลับมาใช้งาน'
+  const RUNNING_VERSION=569;
+  const bundled={version:'569',title:'อัปเดต Staff Planner v569',changes:[
+    'ข้อความที่ต้องกดรับทราบและยืนยันแสดงเป็นหน้าต่างกลางแอพ',
+    'เปิดแอพและสลับหน้าได้ลื่นขึ้นด้วยไฟล์แอพที่รวมแล้วและลดการวาดหน้าซ้ำ'
   ]};
   let checking=false, showing=false, lastFetch=0, pending=null;
   function signedIn(){return !!(typeof state!=='undefined'&&state.profile&&document.getElementById('appView')&&!document.getElementById('appView').classList.contains('hidden'));}

@@ -1783,7 +1783,7 @@
     (async()=>{
       try {
         if (saveBtn) {
-          const ok = window.confirm ? window.confirm('ยืนยันใช้รายละเอียดตำแหน่งล่าสุด V240 ตามไฟล์ที่มัสส่งมา และบันทึกทับฐาน Slot เดิมทั้งหมด?') : true;
+          const ok = await confirmDialog('ยืนยันใช้รายละเอียดตำแหน่งล่าสุด V240 ตามไฟล์ที่มัสส่งมา และบันทึกทับฐาน Slot เดิมทั้งหมด?', 'ยืนยันบันทึก Slot');
           if (!ok) return;
           saveBtn.disabled = true;
           saveBtn.textContent = 'กำลังบันทึก...';

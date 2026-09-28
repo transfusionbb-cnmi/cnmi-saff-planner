@@ -88,7 +88,7 @@
 
     const st = getStaff(staffId) || {};
     const name = st.nickname || st.full_name || 'เจ้าหน้าที่นี้';
-    if (!confirm(`ยืนยันรีเซ็ตยอดสะสมของ ${name} เป็น 0 ?`)) return;
+    if (!(await confirmDialog(`ยืนยันรีเซ็ตยอดสะสมของ ${name} เป็น 0 ?`, 'ยืนยันรีเซ็ตยอดสะสม'))) return;
 
     try {
       if (typeof setBusy === 'function') setBusy(true, 'กำลังรีเซ็ตยอดสะสม');

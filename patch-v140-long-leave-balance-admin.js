@@ -276,7 +276,7 @@
     if (!client) return showToast('ยังไม่ได้เชื่อม Supabase', { tone: 'error' });
     const st = (state.staff || []).find(s => String(s.id) === String(staffId)) || {};
     const name = st.nickname || st.full_name || 'เจ้าหน้าที่นี้';
-    if (!confirm(`ยืนยันรีเซ็ตยอดสะสมของ ${name} เป็น 0 ?`)) return;
+    if (!(await confirmDialog(`ยืนยันรีเซ็ตยอดสะสมของ ${name} เป็น 0 ?`, 'ยืนยันรีเซ็ตยอดสะสม'))) return;
     setBusy && setBusy(true, 'กำลังรีเซ็ตยอดสะสม');
     try {
       const resetAt = new Date().toISOString();

@@ -318,10 +318,10 @@
     const row=rowById(id);if(!row)return toast('ไม่พบรายการ','error');
     const prompts={cancelled:`ยืนยัน “ยกเลิกตามคำขอ” ของ ${row.helper_name} ใช่หรือไม่? ประวัติจะยังคงอยู่`,confirmed:`ไม่อนุมัติคำขอยกเลิกของ ${row.helper_name} และคงชื่อไว้ใช่หรือไม่?`,completed:`ยืนยันว่า ${row.helper_name} มาปฏิบัติงานแล้วใช่หรือไม่?`,no_show:`ยืนยันบันทึกว่า ${row.helper_name} ไม่มาตามนัด (No Show) ใช่หรือไม่?`};
     if(!await confirmAction(prompts[next]||'ยืนยันเปลี่ยนสถานะหรือไม่?'))return;
-    let note=null;if(next==='cancelled')note=window.prompt('เหตุผลที่ยกเลิกตามคำขอ',row.cancel_reason||'')||row.cancel_reason||null;
+    let note=null;if(next==='cancelled')note=await promptDialog('เหตุผลที่ยกเลิกตามคำขอ','ระบุเหตุผล',row.cancel_reason||'')||row.cancel_reason||null;
     try{const result=await DB().rpc('admin_update_donor_helper_status_v324',{p_signup_id:id,p_status:next,p_note:note});if(result.error)throw result.error;await loadMonth(S().donorHelperMonthV327,{force:true});toast('บันทึกสถานะแล้ว');}catch(error){toast(errorText(error),'error');}
   }
-  async function copyLink(){const link=publicUrl();try{await navigator.clipboard.writeText(link);toast('คัดลอกลิงก์แล้ว');}catch(_){window.prompt('คัดลอกลิงก์นี้',link);}}
+  async function copyLink(){const link=publicUrl();try{await navigator.clipboard.writeText(link);toast('คัดลอกลิงก์แล้ว');}catch(_){await promptDialog('คัดลอกลิงก์นี้','ลิงก์หน้าลงชื่อ',link);}}
   function goOt(){const st=S();if(!st)return;try{closeModal();}catch(_){}st.page='ot';rerender();}
 
   document.addEventListener('change',event=>{

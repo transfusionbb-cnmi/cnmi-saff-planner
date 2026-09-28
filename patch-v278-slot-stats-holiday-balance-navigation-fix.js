@@ -423,7 +423,7 @@
     if(!person||!DB()) return;
     const reset=action!=='undo';
     const message=reset?`ยืนยันเริ่มนับความสมดุลวันหยุดของ ${staffName(person)} ใหม่ตั้งแต่เดือน ${key} หรือไม่?\nผลต่างวันหยุดก่อนเดือนนี้จะไม่นำมาคิด`:`ยืนยันยกเลิกการเริ่มนับวันหยุดใหม่ของ ${staffName(person)} ในเดือน ${key} หรือไม่?`;
-    if(!window.confirm(message)) return;
+    if(!(await confirmDialog(message,'ยืนยันยอดวันหยุด'))) return;
     try{
       try { setBusy?.(true,'กำลังบันทึกการเริ่มนับวันหยุด'); } catch (_) {}
       const res=await DB().rpc('set_staff_holiday_balance_reset_month_v278',{p_staff_id:staffId,p_month_key:key,p_reset:reset});

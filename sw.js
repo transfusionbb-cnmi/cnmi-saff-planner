@@ -1,12 +1,14 @@
-/* CNMI Staff Planner PWA service worker — V556 mobile controller recovery */
+/* CNMI Staff Planner PWA service worker — V556 recovery, V569 versioned assets */
 const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v568`;
+const CACHE_NAME = `${CACHE_PREFIX}v569`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
-  './', './index.html', './site.webmanifest', './style.css',
-  './bootstrap-v545-dependency-failover.js', './app-v545.js',
+  './', './index.html', './site.webmanifest',
+  './app-styles-v569.css?v=569',
+  './bootstrap-v545-dependency-failover.js?v=545',
+  './app-bundle-v569-pre.js?v=569', './app-v545.js?v=569',
   './pwa-install-v303.css', './pwa-install-v556.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
@@ -83,19 +85,6 @@ self.addEventListener('message', (event) => {
   }
 });
 
-function isCriticalAsset(url) {
-  const path = url.pathname;
-  return path.endsWith('/app-v545.js')
-    || path.endsWith('/bootstrap-v545-dependency-failover.js')
-    || path.endsWith('/pwa-install-v556.js')
-    || path.endsWith('/patch-v136-preauth.js')
-    || path.endsWith('/patch-v136-auth-layout-tabs-final.js')
-    || path.endsWith('/patch-v137-critical-regression-restore.js')
-    || path.endsWith('/patch-v138-password-complete-redirect.js')
-    || path.endsWith('/patch-v542-single-sidebar-deeplink-controller.js')
-    || path.endsWith('/style.css');
-}
-
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -124,16 +113,8 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    if (isCriticalAsset(url)) {
-      try {
-        const response = await fetch(new Request(request, { cache: 'no-store' }));
-        if (response?.ok && response.type === 'basic') await cache.put(request, response.clone());
-        return response;
-      } catch (_) {
-        return (await cache.match(request)) || (await cache.match(url.pathname.replace(/^\//, './'))) || Response.error();
-      }
-    }
-
+    // HTML navigations stay network-first above. Static files have versioned
+    // URLs, so an exact cache hit avoids a network round trip on every launch.
     const cached = await cache.match(request);
     if (cached) return cached;
     try {

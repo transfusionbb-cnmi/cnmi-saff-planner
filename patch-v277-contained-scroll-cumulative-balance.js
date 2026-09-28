@@ -243,7 +243,7 @@
     const message=reset
       ? `ยืนยันเริ่มนับยอดสะสมของ ${staffName(person)} ใหม่ตั้งแต่เดือน ${key} หรือไม่?\nยอดก่อนเดือนนี้จะไม่นำมาคิด แต่เวรที่จัดในเดือนนี้ยังคำนวณตามปกติ`
       : `ยืนยันยกเลิกการเริ่มนับใหม่ของ ${staffName(person)} ในเดือน ${key} หรือไม่?\nระบบจะนำยอดตั้งแต่ต้นปีงบประมาณกลับมาคำนวณ`;
-    if(!window.confirm(message)) return;
+    if(!(await confirmDialog(message,'ยืนยันยอดสะสม'))) return;
     try{
       try { setBusy?.(true,'กำลังบันทึกยอดสะสม'); } catch (_) {}
       const rpc=await DB().rpc('set_staff_balance_reset_month_v277',{p_staff_id:staffId,p_month_key:key,p_reset:reset});

@@ -90,9 +90,14 @@
   }
   function applyRows(name,rows){
     const st=appState();if(!st)return;
-    if(name==='staff') st.staff=ordered(rows||[]);
-    else st[name]=rows||[];
+    if(name==='staff') {
+      // Preserve the ordered list identity on a TTL cache hit. Navigation uses
+      // object identity to decide whether the page needs another full render.
+      if(staffOrderSource!==rows){staffOrderSource=rows;staffOrderValue=ordered(rows||[]);}
+      if(st.staff!==staffOrderValue)st.staff=staffOrderValue;
+    }else if(st[name]!==rows)st[name]=rows||[];
   }
+  let staffOrderSource=null,staffOrderValue=null;
   function mergeRowsById(name,rows){
     const st=appState();if(!st)return;
     const current=Array.isArray(st[name])?st[name]:[];
@@ -102,7 +107,8 @@
       const key=String(row.id??`${row.from_assignment_id||''}|${row.requester_id||''}|${row.receiver_id||''}|${row.created_at||''}`);
       if(key)map.set(key,row);
     });
-    st[name]=[...map.values()];
+    const merged=[...map.values()];
+    if(current.length!==merged.length||current.some((row,index)=>row!==merged[index]))st[name]=merged;
   }
   async function cached(key,ttl,fetcher,apply,options={}){
     const force=!!options.force;
@@ -268,7 +274,9 @@
     const p=String(page||st.page||'dashboard');
     setSync('กำลังโหลด');
     try{
-      await qStaff(force);
+      // Start independent route requests immediately; the staff list is only
+      // required before the caller renders the completed page.
+      const staffTask=qStaff(force);
       const today=dateKey(new Date());
       const todayRange={start:today,end:today};
       const mr=monthRange(selectedMonthFor(p));
@@ -315,6 +323,7 @@
       }else if(p==='myProfile'||p==='profileRequests'){
         await qProfileRequests(force);
       }
+      await staffTask;
       setSync('พร้อมใช้งาน');
     }catch(error){
       console.error(`[${VERSION}] page load failed`,p,error);
