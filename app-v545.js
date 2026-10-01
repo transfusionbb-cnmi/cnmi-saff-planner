@@ -6348,7 +6348,7 @@ function bindGlobalEvents() {
         <div class="profile-info-list compact-info"><div><span>ชื่อ</span><b>${escapeHtml(p.nickname || p.full_name || '-')}</b></div><div><span>Email</span><b>${escapeHtml(p.email || '-')}</b></div><div><span>รหัสพนักงาน</span><b>${escapeHtml(p.employee_code || '-')}</b></div></div>
         <form id="v161ForceAccountForm" class="form-grid compact-form">
           <label>Username ใหม่ <input name="login_name" value="${escapeHtml(recommended)}" placeholder="เช่น gift123 หรือรหัสพนักงาน" autocomplete="username" required></label>
-          <label>Password ใหม่ <input name="password" type="password" placeholder="อย่างน้อย 6 ตัวอักษร" autocomplete="new-password" required></label>
+          <label>Password ใหม่ <input name="password" type="password" placeholder="อย่างน้อย 8 ตัวอักษร" autocomplete="new-password" required></label>
           <label>ยืนยัน Password ใหม่ <input name="password2" type="password" placeholder="กรอกซ้ำ" autocomplete="new-password" required></label>
           <button class="primary-btn wide" type="submit">บันทึกและเริ่มใช้งาน</button>
         </form>
@@ -6364,7 +6364,7 @@ function bindGlobalEvents() {
     const password2 = String(fd.get('password2') || '');
     if (!loginName) return showToast('กรุณาตั้ง Username', { tone:'error' });
     if (!/^[a-zA-Z0-9._-]{2,30}$/.test(loginName)) return showToast('Username ใช้ได้เฉพาะอังกฤษ ตัวเลข จุด ขีดกลาง หรือขีดล่าง 2–30 ตัว', { tone:'error' });
-    if (password.length < 6) return showToast('Password อย่างน้อย 6 ตัวอักษร', { tone:'error' });
+    if (password.length < 6) return showToast('Password อย่างน้อย 8 ตัวอักษร', { tone:'error' });
     if (password !== password2) return showToast('Password ไม่ตรงกัน', { tone:'error' });
     setBusy(true, 'กำลังบันทึก Username / Password');
     try {

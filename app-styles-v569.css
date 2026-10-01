@@ -5016,3 +5016,14 @@ body.v520-ui-refresh .v527-person-main small{align-items:center}
   .cnmi-alert-card-v569 { animation: none; }
 }
 
+
+/* V570 Admin temporary password reset */
+[data-reset-user-email],[data-reset-default-password-staff]{display:none!important}
+.v570-password-btn{white-space:nowrap}
+.v570-reset-box{display:grid;gap:12px}
+.v570-reset-box h2{margin:0}
+.v570-reset-note{margin:0;padding:10px 12px;border-radius:12px;background:#f5f9ff;color:#36506b;font-size:.92rem;line-height:1.55}
+.v570-password-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch;margin-top:6px}
+.v570-password-row input{min-width:0;width:100%}
+.v570-password-row .v570-eye{min-width:64px}
+@media(max-width:640px){.v570-password-row{grid-template-columns:minmax(0,1fr) 58px}.v570-reset-box .confirm-actions{display:grid;grid-template-columns:1fr 1fr}}

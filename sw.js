@@ -1,14 +1,15 @@
-/* CNMI Staff Planner PWA service worker — V556 recovery, V569 versioned assets */
+/* CNMI Staff Planner PWA service worker — V556 recovery, V570 admin temp password edge assets */
 const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v569`;
+const CACHE_NAME = `${CACHE_PREFIX}v570`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
   './', './index.html', './site.webmanifest',
-  './app-styles-v569.css?v=569',
+  './app-styles-v569.css?v=570',
   './bootstrap-v545-dependency-failover.js?v=545',
-  './app-bundle-v569-pre.js?v=569', './app-v545.js?v=569',
+  './app-bundle-v569-pre.js?v=569', './app-v545.js?v=570',
+  './patch-v570-admin-temp-password-edge.js?v=570',
   './pwa-install-v303.css', './pwa-install-v556.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
