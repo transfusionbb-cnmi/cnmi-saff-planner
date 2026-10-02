@@ -43,11 +43,11 @@
     const staff = (state.staff || []).find(s => String(s.id) === String(staffId));
     if (!staff) return showToast('ไม่พบข้อมูลเจ้าหน้าที่', { tone:'error' });
     const name = staff.nickname || staff.full_name || staff.email || 'เจ้าหน้าที่';
-    showModal(`<div class="v570-reset-box">
+    showModal(`<div class="v570-reset-box v573-reset-box">
       <h2>ตั้ง / รีเซ็ตรหัสชั่วคราว</h2>
       <p class="hint">${esc(name)}${staff.email ? ` • ${esc(staff.email)}` : ''}</p>
       <p class="v570-reset-note">Admin กำหนดรหัสชั่วคราวให้น้องใช้ Login ครั้งถัดไป หลัง Login ระบบจะบังคับให้น้องตั้งรหัสส่วนตัวใหม่ และ Admin จะไม่เห็นรหัสส่วนตัวนั้น</p>
-      <form id="v570TempPasswordForm" data-staff-id="${esc(staff.id)}" class="form-grid compact-form">
+      <form id="v570TempPasswordForm" data-staff-id="${esc(staff.id)}" class="v573-password-form">
         <label>รหัสชั่วคราว
           <div class="v570-password-row"><input id="v570TempPassword" name="temp_password" type="password" minlength="8" autocomplete="new-password" placeholder="อย่างน้อย 8 ตัวอักษร" required><button type="button" class="ghost-btn v570-eye" data-v570-toggle="#v570TempPassword">ดู</button></div>
         </label>
@@ -56,8 +56,8 @@
         </label>
         <div class="confirm-actions"><button type="button" class="ghost-btn" data-v570-cancel>ยกเลิก</button><button type="submit" class="primary-btn">ตั้ง / รีเซ็ตรหัส</button></div>
       </form>
-      <p class="hint">Audit Log จะเก็บเฉพาะว่าใครรีเซ็ตบัญชีใครและเวลาใด — ไม่บันทึกรหัสผ่าน</p>
-    </div>`, { small:true, className:'modal-v570-password' });
+      <p class="hint v573-audit-hint">Audit Log จะเก็บเฉพาะว่าใครรีเซ็ตบัญชีใครและเวลาใด — ไม่บันทึกรหัสผ่าน</p>
+    </div>`, { className:'modal-v570-password modal-v573-password' });
     requestAnimationFrame(() => document.getElementById('v570TempPassword')?.focus());
   }
 

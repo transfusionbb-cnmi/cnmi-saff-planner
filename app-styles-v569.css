@@ -5027,3 +5027,25 @@ body.v520-ui-refresh .v527-person-main small{align-items:center}
 .v570-password-row input{min-width:0;width:100%}
 .v570-password-row .v570-eye{min-width:64px}
 @media(max-width:640px){.v570-password-row{grid-template-columns:minmax(0,1fr) 58px}.v570-reset-box .confirm-actions{display:grid;grid-template-columns:1fr 1fr}}
+
+
+/* V573 — Admin temp-password modal readability */
+.modal-v573-password .modal-card{width:min(720px,calc(100vw - 32px));max-width:720px;padding:28px 30px 24px}
+.modal-v573-password .v573-reset-box{gap:16px}
+.modal-v573-password .v573-reset-box h2{font-size:1.45rem;line-height:1.25;padding-right:38px}
+.modal-v573-password .v570-reset-note{font-size:.98rem;line-height:1.65;padding:14px 16px;background:#f3f8ff;border:1px solid #dceafa}
+.modal-v573-password .v573-password-form{display:grid;grid-template-columns:1fr;gap:16px;margin-top:2px}
+.modal-v573-password .v573-password-form>label{display:block;font-weight:700;color:#19324d;min-width:0}
+.modal-v573-password .v570-password-row{display:grid;grid-template-columns:minmax(0,1fr) 72px;gap:10px;align-items:stretch;margin-top:8px}
+.modal-v573-password .v570-password-row input{height:44px;font-size:1rem;padding:0 13px;border-radius:10px}
+.modal-v573-password .v570-password-row .v570-eye{min-width:72px;height:44px;padding:0 10px}
+.modal-v573-password .confirm-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:12px;margin-top:2px}
+.modal-v573-password .confirm-actions button{min-height:44px;white-space:normal;line-height:1.25}
+.modal-v573-password .v573-audit-hint{margin:0;padding-top:2px;line-height:1.5}
+@media(max-width:640px){
+  .modal-v573-password .modal-card{width:calc(100vw - 20px);padding:22px 18px 20px}
+  .modal-v573-password .v573-reset-box h2{font-size:1.25rem}
+  .modal-v573-password .v570-password-row{grid-template-columns:minmax(0,1fr) 62px;gap:8px}
+  .modal-v573-password .v570-password-row .v570-eye{min-width:62px}
+  .modal-v573-password .confirm-actions{grid-template-columns:1fr}
+}
