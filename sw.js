@@ -1,7 +1,7 @@
-/* CNMI Staff Planner PWA service worker — V587 OT parity assets */
+/* CNMI Staff Planner PWA service worker — V588 Approval canonical OT parity assets */
 const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v587`;
+const CACHE_NAME = `${CACHE_PREFIX}v588`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
@@ -17,6 +17,7 @@ const CORE_SHELL = [
   './patch-v584-approved-tracking-source-of-truth.js?v=587',
   './patch-v585-ot-detail-performance.js?v=585',
   './patch-v587-staff-admin-ot-parity.js?v=587',
+  './patch-v588-approval-canonical-parity.js?v=588',
   './pwa-install-v303.css', './pwa-install-v556.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
