@@ -184,24 +184,39 @@ try {
   }
 
   function completedTrades(){ return (S()?.tradeRequests||[]).filter(t=>String(t?.status||'')==='completed'&&t?.from_assignment_id&&t?.receiver_id); }
+  function v583Time(v){ const m=String(v||'').match(/(\d{1,2}):(\d{2})/); return m?`${String(+m[1]).padStart(2,'0')}:${m[2]}`:''; }
+  function v583Marker(note,key){ const m=String(note||'').match(new RegExp(`\\[${key}=([^\\]]+)\\]`,'i')); return m?String(m[1]||'').trim():''; }
+  function v583WindowHours(row,base){
+    const st=v583Time(row?.start_time),en=v583Time(row?.end_time); if(!st||!en)return Number(base?.actualHours||0);
+    const wd=normDate(row?.work_date),ed=normDate(row?.end_date)||wd;
+    let a=new Date(`${wd}T${st}:00`),b=new Date(`${ed}T${en}:00`);
+    if(!Number.isFinite(a.getTime())||!Number.isFinite(b.getTime()))return Number(base?.actualHours||0);
+    if(b<=a){ b=new Date(a.getTime()+24*3600000); b.setHours(+en.slice(0,2),+en.slice(3,5),0,0); if(b<=a)b=new Date(b.getTime()+24*3600000); }
+    const h=round2((b-a)/3600000);
+    return h>0&&h<=24?h:Number(base?.actualHours||0);
+  }
   function tradeForOtRow(row,base){
     const sid=String(row?.staff_id||'');
     const date=normDate(row?.work_date);
     if(!sid||!date)return null;
-    const actual=Number(base?.actualHours||0);
+    const actual=v583WindowHours(row,base);
     const explicit=String(row?.duty_code||row?.shift_type||row?.shift_code||row?.ot_type||'').trim();
     const text=`${row?.reason||''} ${row?.note||''}`;
+    const rst=v583Time(row?.start_time),ren=v583Time(row?.end_time);
     let best=null,bestScore=-1;
     completedTrades().forEach(trade=>{
       if(String(trade.receiver_id)!==sid)return;
       const a=assignmentById(trade.from_assignment_id);
       if(!a||normDate(a.duty_date)!==date)return;
       const code=assignmentCode(a),sold=sellHours(trade,a);
+      const sellStart=v583Time(v583Marker(trade?.note,'SELL_START'));
+      const sellEnd=v583Time(v583Marker(trade?.note,'SELL_END'));
       let score=1;
+      if(rst&&ren&&sellStart===rst&&sellEnd===ren)score+=250;
       if(String(row?.assignment_id||row?.roster_assignment_id||'')===String(a.id))score+=100;
+      if(actual>0&&sold>0&&Math.abs(actual-sold)<=0.11)score+=60;
       if(explicit&&explicit===code)score+=20;
       if(code&&text.includes(code))score+=12;
-      if(actual>0&&sold>0&&Math.abs(actual-sold)<=0.11)score+=10;
       if(/ยืนยันอยู่เวรตามตาราง|ยืนยันอยู่เวร/.test(text))score+=4;
       if(score>bestScore){bestScore=score;best={trade,assignment:a,soldHours:sold};}
     });
@@ -212,24 +227,20 @@ try {
     const found=tradeForOtRow(row,base);
     if(!found)return null;
     const {trade,assignment}=found;
-    const actual=round2(base?.actualHours||found.soldHours||0);
+    const actual=round2(v583WindowHours(row,base)||found.soldHours||0);
     const soldHoursValue=round2(found.soldHours||actual);
     const receiverType=rateTypeFor(trade.receiver_id,assignmentCode(assignment));
     const receiverNormalRate=normalRateFor(trade.receiver_id,assignmentCode(assignment));
     const mode=String(trade.rate_mode||'receiver');
     const paidType=soldRateType(trade,assignment);
-    // V580: saved amount_from is audit history only for normal MT/Clerk/owner/receiver trades.
-    // Recalculate from the actual purchased hours and the rate that applies on the duty date.
-    // Only an explicit custom-price trade may keep the saved amount as authoritative.
-    let amount=0;
-    let paidRate=0;
-    if(mode==='custom'){
-      amount=round2(Math.max(0,Number(trade.amount_from)||0));
-      paidRate=soldHoursValue>0?round2(amount/soldHoursValue):0;
-    }else{
-      paidRate=paidType==='กำหนดเอง'?0:rateForType(paidType,assignment.duty_date);
-      amount=round2(Math.max(0,soldHoursValue*paidRate));
+    let amount=Number(trade.amount_from);
+    const hasSavedAmount=Number.isFinite(amount)&&(amount>0||mode==='custom');
+    if(!hasSavedAmount){
+      const paidRate=paidType==='กำหนดเอง'?0:rateForType(paidType,assignment.duty_date);
+      amount=round2(soldHoursValue*paidRate);
     }
+    amount=round2(Math.max(0,amount||0));
+    const paidRate=soldHoursValue>0?round2(amount/soldHoursValue):0;
     const claimHours=receiverNormalRate>0?round2(amount/receiverNormalRate):0;
     return {
       trade,assignment,actualHours:actual,soldHours:soldHoursValue,amount,paidRate,paidType,
@@ -247,7 +258,7 @@ try {
       base={actualHours:round2(actual),hrHours:round2(actual),segments:[],shiftType:row?.duty_code||'-',rateType:rateTypeFor(row?.staff_id,row?.duty_code),isHoliday:isHoliday(row?.work_date)};
     }
     const info=tradeClaimInfo(row,base);
-    if(info)return {...base,hrHours:info.claimHours,rateType:info.receiverType,tradeInfo:info,isTradeRate:true};
+    if(info)return {...base,actualHours:info.actualHours,hrHours:info.claimHours,rateType:info.receiverType,tradeInfo:info,isTradeRate:true,v583Authoritative:true};
     const helper=helperClaimInfo(row,base);
     if(!helper)return base;
     const segment={
