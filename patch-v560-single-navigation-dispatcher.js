@@ -131,6 +131,32 @@
     openTree('ot');
     return 'ot';
   }
+  function setExactOtUrl(){
+    const st=S();
+    const adminMap={
+      'admin-duty':'confirm-duty','admin-extra':'request-extra','tracking':'staff-tracking',
+      'approve':'approval','summary':'monthly-summary','admin-details':'staff-detail',
+      'export':'hr-export','history':'export-history'
+    };
+    const staffMap={
+      'staff-track':'my-duty','staff-confirm':'confirm-duty','staff-extra':'request-extra',
+      'staff-list':'my-ot','staff-details':'claim-detail','staff-summary':'monthly-summary'
+    };
+    const section=(admin()?adminMap:staffMap)[txt(st.otMenuV369)];
+    if(!section)return false;
+    const params=new URLSearchParams();params.set('section',section);
+    const month=txt(st.otMenuMonthV369||st.otSourceMonthV241||st.otMoneyMonthV241||st.myDutyMonthFilter||'');
+    if(/^\d{4}-\d{2}$/.test(month))params.set('month',month);
+    if(admin()&&txt(st.otMenuV369)==='admin-extra'){
+      const mode=['work','adjustment','activity'].includes(txt(st.v527ExtraMode))?txt(st.v527ExtraMode):'work';
+      params.set('mode',mode);
+    }
+    const target=`#/ot?${params.toString()}`;
+    try{
+      if(String(location.hash||'')!==target)history.pushState({cnmiV571:true},'',target);
+    }catch(_){location.hash=target;}
+    return true;
+  }
 
   let navSeq=0;
   let finishTimer=0;
@@ -144,7 +170,10 @@
 
     const samePage=txt(st.page)===p;
     st.page=p;
-    setUrl(p);
+    // V571: OT submenu must update its exact ?section= URL BEFORE renderPage().
+    // V541 re-applies URL state before every render; leaving the old section in the URL
+    // caused every submenu click to snap back to the previous screen (usually confirm-duty).
+    if(!(p==='ot'&&sameSubview&&setExactOtUrl()))setUrl(p);
     paintShell(p);
 
     // Critical: give Chrome/Safari one real paint before any legacy-heavy render/data work.

@@ -1,7 +1,7 @@
-/* CNMI Staff Planner PWA service worker — V556 recovery, V570 admin temp password edge assets */
+/* CNMI Staff Planner PWA service worker — V556 recovery, V572 leave overlap guard assets */
 const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v570`;
+const CACHE_NAME = `${CACHE_PREFIX}v572`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
@@ -10,6 +10,7 @@ const CORE_SHELL = [
   './bootstrap-v545-dependency-failover.js?v=545',
   './app-bundle-v569-pre.js?v=569', './app-v545.js?v=570',
   './patch-v570-admin-temp-password-edge.js?v=570',
+  './patch-v572-leave-overlap-guard.js?v=572',
   './pwa-install-v303.css', './pwa-install-v556.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
