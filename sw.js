@@ -1,7 +1,7 @@
 /* CNMI Staff Planner PWA service worker — V556 recovery, V572 leave overlap guard assets */
 const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v578`;
+const CACHE_NAME = `${CACHE_PREFIX}v579`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
@@ -13,6 +13,7 @@ const CORE_SHELL = [
   './patch-v572-leave-overlap-guard.js?v=572',
   './patch-v577-ot-attendance-source-export-fix.js?v=577',
   './patch-v578-long-weekend-noduty-quota.js?v=578',
+  './patch-v579-ot-attendance-authoritative-trade-rate-fix.js?v=579',
   './pwa-install-v303.css', './pwa-install-v556.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
