@@ -218,14 +218,18 @@ try {
     const receiverNormalRate=normalRateFor(trade.receiver_id,assignmentCode(assignment));
     const mode=String(trade.rate_mode||'receiver');
     const paidType=soldRateType(trade,assignment);
-    let amount=Number(trade.amount_from);
-    const hasSavedAmount=Number.isFinite(amount)&&(amount>0||mode==='custom');
-    if(!hasSavedAmount){
-      const paidRate=paidType==='กำหนดเอง'?0:rateForType(paidType,assignment.duty_date);
-      amount=round2(soldHoursValue*paidRate);
+    // V580: saved amount_from is audit history only for normal MT/Clerk/owner/receiver trades.
+    // Recalculate from the actual purchased hours and the rate that applies on the duty date.
+    // Only an explicit custom-price trade may keep the saved amount as authoritative.
+    let amount=0;
+    let paidRate=0;
+    if(mode==='custom'){
+      amount=round2(Math.max(0,Number(trade.amount_from)||0));
+      paidRate=soldHoursValue>0?round2(amount/soldHoursValue):0;
+    }else{
+      paidRate=paidType==='กำหนดเอง'?0:rateForType(paidType,assignment.duty_date);
+      amount=round2(Math.max(0,soldHoursValue*paidRate));
     }
-    amount=round2(Math.max(0,amount||0));
-    const paidRate=soldHoursValue>0?round2(amount/soldHoursValue):0;
     const claimHours=receiverNormalRate>0?round2(amount/receiverNormalRate):0;
     return {
       trade,assignment,actualHours:actual,soldHours:soldHoursValue,amount,paidRate,paidType,
