@@ -4909,13 +4909,13 @@ try {
       const order=['morning','afternoon','night'],set=new Set(),hours=Math.round(effective.reduce((sum,x)=>sum+Number(x._effective_hours||0),0)*100)/100;
       effective.forEach(x=>(x._effective_segments||[]).forEach(s=>set.add(s)));
       const segs=order.filter(s=>set.has(s)),key=segs.join(',');
-      if(key==='morning')return {start_time:'08:00',end_date:d,end_time:'16:00',hours,label:'08:00 - 16:00'};
-      if(key==='afternoon')return {start_time:'16:00',end_date:addDays(d,1),end_time:'00:00',hours,label:'16:00 - 00:00 (+1 วัน)'};
-      if(key==='night')return {start_time:'00:00',end_date:d,end_time:'08:00',hours,label:'00:00 - 08:00'};
-      if(key==='morning,afternoon')return {start_time:'08:00',end_date:addDays(d,1),end_time:'00:00',hours,label:'08:00 - 00:00 (+1 วัน)'};
-      if(key==='afternoon,night')return {start_time:'16:00',end_date:addDays(d,1),end_time:'08:00',hours,label:'16:00 - 08:00 (+1 วัน)'};
-      if(key==='morning,night')return {start_time:'00:00',end_date:d,end_time:'16:00',hours,label:'ดึก-เช้า รวม 16 ชม.'};
-      if(key==='morning,afternoon,night')return {start_time:'08:00',end_date:addDays(d,1),end_time:'08:00',hours,label:'08:00 - 08:00 (+1 วัน)'};
+      if(key==='morning')return {start_time:'08:00',end_date:d,end_time:'16:00',hours:8,label:'08:00 - 16:00'};
+      if(key==='afternoon')return {start_time:'16:00',end_date:addDays(d,1),end_time:'00:00',hours:8,label:'16:00 - 00:00 (+1 วัน)'};
+      if(key==='night')return {start_time:'00:00',end_date:d,end_time:'08:00',hours:8,label:'00:00 - 08:00'};
+      if(key==='morning,afternoon')return {start_time:'08:00',end_date:addDays(d,1),end_time:'00:00',hours:16,label:'08:00 - 00:00 (+1 วัน)'};
+      if(key==='afternoon,night')return {start_time:'16:00',end_date:addDays(d,1),end_time:'08:00',hours:16,label:'16:00 - 08:00 (+1 วัน)'};
+      if(key==='morning,night')return {start_time:'00:00',end_date:d,end_time:'16:00',hours:16,label:'ดึก-เช้า รวม 16 ชม.'};
+      if(key==='morning,afternoon,night')return {start_time:'08:00',end_date:addDays(d,1),end_time:'08:00',hours:24,label:'08:00 - 08:00 (+1 วัน)'};
       return {start_time:'08:00',end_date:d,end_time:'16:00',hours:hours||8,label:`${hours||8} ชั่วโมง`};
     }
     if (hasChbd(list)) {
@@ -5500,13 +5500,13 @@ try {
       const order=['morning','afternoon','night'],set=new Set(),hours=Math.round(effective.reduce((sum,x)=>sum+Number(x._effective_hours||0),0)*100)/100;
       effective.forEach(x=>(x._effective_segments||[]).forEach(s=>set.add(s)));
       const key=order.filter(s=>set.has(s)).join(',');
-      if(key==='morning')return {start_time:'08:00',end_date:d,end_time:'16:00',hours,label:'08:00 - 16:00'};
-      if(key==='afternoon')return {start_time:'16:00',end_date:addDays(d,1),end_time:'00:00',hours,label:'16:00 - 00:00 (+1 วัน)'};
-      if(key==='night')return {start_time:'00:00',end_date:d,end_time:'08:00',hours,label:'00:00 - 08:00'};
-      if(key==='morning,afternoon')return {start_time:'08:00',end_date:addDays(d,1),end_time:'00:00',hours,label:'08:00 - 00:00 (+1 วัน)'};
-      if(key==='afternoon,night')return {start_time:'16:00',end_date:addDays(d,1),end_time:'08:00',hours,label:'16:00 - 08:00 (+1 วัน)'};
-      if(key==='morning,night')return {start_time:'00:00',end_date:d,end_time:'16:00',hours,label:'ดึก-เช้า รวม 16 ชม.'};
-      if(key==='morning,afternoon,night')return {start_time:'08:00',end_date:addDays(d,1),end_time:'08:00',hours,label:'08:00 - 08:00 (+1 วัน)'};
+      if(key==='morning')return {start_time:'08:00',end_date:d,end_time:'16:00',hours:8,label:'08:00 - 16:00'};
+      if(key==='afternoon')return {start_time:'16:00',end_date:addDays(d,1),end_time:'00:00',hours:8,label:'16:00 - 00:00 (+1 วัน)'};
+      if(key==='night')return {start_time:'00:00',end_date:d,end_time:'08:00',hours:8,label:'00:00 - 08:00'};
+      if(key==='morning,afternoon')return {start_time:'08:00',end_date:addDays(d,1),end_time:'00:00',hours:16,label:'08:00 - 00:00 (+1 วัน)'};
+      if(key==='afternoon,night')return {start_time:'16:00',end_date:addDays(d,1),end_time:'08:00',hours:16,label:'16:00 - 08:00 (+1 วัน)'};
+      if(key==='morning,night')return {start_time:'00:00',end_date:d,end_time:'16:00',hours:16,label:'ดึก-เช้า รวม 16 ชม.'};
+      if(key==='morning,afternoon,night')return {start_time:'08:00',end_date:addDays(d,1),end_time:'08:00',hours:24,label:'08:00 - 08:00 (+1 วัน)'};
       return {start_time:'08:00',end_date:d,end_time:'16:00',hours:hours||8,label:`${hours||8} ชั่วโมง`};
     }
     if (hasChbd(list)) {
