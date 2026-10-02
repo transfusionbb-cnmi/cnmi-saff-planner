@@ -1,7 +1,7 @@
-/* CNMI Staff Planner PWA service worker — V556 recovery, V572 leave overlap guard assets */
+/* CNMI Staff Planner PWA service worker — V587 OT parity assets */
 const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v578`;
+const CACHE_NAME = `${CACHE_PREFIX}v587`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
@@ -11,8 +11,12 @@ const CORE_SHELL = [
   './app-bundle-v569-pre.js?v=569', './app-v545.js?v=570',
   './patch-v570-admin-temp-password-edge.js?v=570',
   './patch-v572-leave-overlap-guard.js?v=572',
-  './patch-v577-ot-attendance-source-export-fix.js?v=577',
+  './patch-v574-multi-trade-hr-normalization.js?v=587',
+  './patch-v577-ot-attendance-source-export-fix.js?v=585',
   './patch-v578-long-weekend-noduty-quota.js?v=578',
+  './patch-v584-approved-tracking-source-of-truth.js?v=587',
+  './patch-v585-ot-detail-performance.js?v=585',
+  './patch-v587-staff-admin-ot-parity.js?v=587',
   './pwa-install-v303.css', './pwa-install-v556.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',

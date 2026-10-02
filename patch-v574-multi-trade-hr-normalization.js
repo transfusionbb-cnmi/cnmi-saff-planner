@@ -24,7 +24,21 @@
   }
   function isHoliday(d){ try{return !!isHolidayDate(d);}catch(_){return false;} }
   function rateForType(type,date){ return type==='เคิก'?(isHoliday(date)?120:90):(isHoliday(date)?160:130); }
+  function marker(note,key){ const m=String(note||'').match(new RegExp(`\\[${key}=([^\\]]+)\\]`,'i')); return m?String(m[1]||'').trim():''; }
   function assignmentById(id){ return (S().rosterAssignments||[]).find(a=>String(a?.id||'')===String(id||''))||null; }
+  function assignmentForTrade(trade){
+    const real=assignmentById(trade?.from_assignment_id);
+    if(real) return real;
+    const date=marker(trade?.note,'SELL_DATE');
+    const code=marker(trade?.note,'SELL_DUTY');
+    if(!date||!code) return null;
+    return {id:trade?.from_assignment_id||`note:${date}:${code}`,duty_date:date,duty_code:code,staff_id:trade?.requester_id||''};
+  }
+  function attendanceLike(row){ return /ยืนยัน(?:อยู่)?เวร|อยู่เวรตามตาราง|รับช่วง/i.test(`${row?.reason||''} ${row?.note||''}`); }
+  function effectiveRow(row){
+    if(!attendanceLike(row)) return row;
+    try{ const fn=window.cnmiV221DutyOt?.correctedOtRow; return typeof fn==='function'?(fn(row)||row):row; }catch(_){ return row; }
+  }
   function codeOf(a){ return String(a?.duty_code||a?.shift_type||'').trim(); }
   function sellHours(trade,a){
     const marker=Number(String(trade?.note||'').match(/\[SELL_HOURS=(\d+(?:\.\d+)?)\]/i)?.[1]||0);
@@ -58,7 +72,7 @@
     (S().tradeRequests||[]).forEach(trade=>{
       if(String(trade?.status||'')!=='completed') return;
       if(String(trade?.receiver_id||'')!==sid) return;
-      const a=assignmentById(trade?.from_assignment_id);
+      const a=assignmentForTrade(trade);
       if(!a||normDate(a?.duty_date)!==date) return;
       const key=String(trade?.id||`${trade?.from_assignment_id}|${trade?.receiver_id}|${trade?.requester_id}|${trade?.note||''}`);
       if(seen.has(key)) return;
@@ -77,17 +91,21 @@
     const previous=api.otNormalizationBreakdown190;
     const wrapped=function(row){
       let base;
-      try{ base=previous(row); }catch(err){ console.warn(`[${VERSION}] previous breakdown`,err); return previous(row); }
+      const workRow=effectiveRow(row);
+      try{ base=previous(workRow); }catch(err){ console.warn(`[${VERSION}] previous breakdown`,err); return previous(row); }
       try{
         const actual=round2(Number(base?.actualHours||0));
         if(actual<=0) return base;
-        const matches=completedTradesForRow(row);
+        const matches=completedTradesForRow(workRow);
         if(matches.length<2) return base;
 
         const totalSold=round2(matches.reduce((s,x)=>s+x.soldHours,0));
-        // Only aggregate when this OT row is clearly the combined representation
-        // of those purchased duties. This prevents unrelated same-day trades from leaking in.
-        if(Math.abs(totalSold-actual)>0.25) return base;
+        // Canonical attendance rows can be stale legacy rows (for example the DB row still says 8 h)
+        // while the Staff view already represents multiple received segments in the same day.
+        // Aggregate only when either hours already match OR the attendance text explicitly says รับช่วง.
+        const receivedCombined=attendanceLike(workRow)&&/รับช่วง/i.test(`${workRow?.reason||''} ${workRow?.note||''}`)&&totalSold>actual+0.25;
+        if(Math.abs(totalSold-actual)>0.25&&!receivedCombined) return base;
+        const combinedActual=receivedCombined?totalSold:actual;
 
         const segments=[];
         let hrTotal=0, amountTotal=0;
@@ -116,7 +134,7 @@
 
         return {
           ...base,
-          actualHours:actual,
+          actualHours:combinedActual,
           hrHours:hrTotal,
           segments,
           rateType:[...new Set(segments.map(s=>s.rateType))].join('/')||base?.rateType,
@@ -124,7 +142,7 @@
           tradeInfo:{
             aggregate:true,
             count:matches.length,
-            actualHours:actual,
+            actualHours:combinedActual,
             soldHours:totalSold,
             amount:amountTotal,
             claimHours:hrTotal,
