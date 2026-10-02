@@ -1252,28 +1252,25 @@ try {
       return rows;
     };
     let rows = renderRows();
+    // Load the carry summary and trade/helper references once in parallel.
+    // The previous flow queried carry-in twice and could be restarted by V577/V584
+    // full-page re-renders, which made Staff Detail appear to hang.
     try {
-      const map = await window.cnmiV318?.queryCarryInSummary?.(month);
-      if (token !== adminDetailToken || !document.body.contains(root)) return;
-      const carry = map instanceof Map ? (map.get(sid) || {amount:0,sourceMonth:''}) : {amount:0,sourceMonth:''};
-      const slot = root.querySelector('.v369-detail-summary');
-      if (slot && window.cnmiV347?.summaryHtml) slot.innerHTML = window.cnmiV347.summaryHtml(sid, rows, carry);
-    } catch (_) {
-      const slot = root.querySelector('.v369-detail-summary');
-      if (slot) slot.innerHTML = '<div class="notice error-notice compact">ยังอ่านยอดทบจากรอบก่อนไม่สำเร็จ กรุณาลองใหม่</div>';
-    }
-    try {
-      await Promise.all([
+      const [map] = await Promise.all([
+        window.cnmiV318?.queryCarryInSummary?.(month),
         window.cnmiV348?.ensureTrades?.(month, sid),
         window.cnmiV348?.ensureHelpers?.(month)
       ]);
       if (token !== adminDetailToken || !document.body.contains(root)) return;
       rows = renderRows();
-      const map = await window.cnmiV318?.queryCarryInSummary?.(month);
       const carry = map instanceof Map ? (map.get(sid) || {amount:0,sourceMonth:''}) : {amount:0,sourceMonth:''};
       const slot = root.querySelector('.v369-detail-summary');
       if (slot && window.cnmiV347?.summaryHtml) slot.innerHTML = window.cnmiV347.summaryHtml(sid, rows, carry);
-    } catch (_) {}
+    } catch (_) {
+      if (token !== adminDetailToken || !document.body.contains(root)) return;
+      const slot = root.querySelector('.v369-detail-summary');
+      if (slot) slot.innerHTML = '<div class="notice error-notice compact">ยังอ่านยอดทบจากรอบก่อนไม่สำเร็จ กรุณาลองใหม่</div>';
+    }
   }
 
   function renderOtPageV369(){

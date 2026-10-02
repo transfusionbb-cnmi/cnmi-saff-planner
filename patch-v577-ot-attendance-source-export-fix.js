@@ -73,14 +73,21 @@
   }
 
   function isOtPage(){ return String(location.hash||'').startsWith('#/ot'); }
+  function isStaffDetailPage(){
+    const h=String(location.hash||'');
+    return h.startsWith('#/ot') && /(?:\?|&)section=staff-detail(?:&|$)/.test(h);
+  }
   function rerender(){ try{ if(typeof renderPage==='function') return renderPage(); }catch(_){ } try{return window.renderPage?.();}catch(_){ } }
   function warm({force=false,render=true}={}){
     if(!isOtPage()) return;
     clearTimeout(warmTimer);
     warmTimer=setTimeout(async()=>{
       try{
-        await preloadOtReferenceData(routeMonth(),{force});
-        if(render) rerender();
+        // Staff detail already hydrates itself. Re-rendering the whole page here causes
+        // the loading card to be destroyed/recreated repeatedly and can look frozen.
+        const detail=isStaffDetailPage();
+        await preloadOtReferenceData(routeMonth(),{force: detail ? false : force});
+        if(render && !detail) rerender();
       }catch(err){ console.warn(`[${VERSION}] warm preload`,err); }
     },80);
   }
