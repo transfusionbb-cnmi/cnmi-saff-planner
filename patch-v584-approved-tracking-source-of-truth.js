@@ -92,6 +92,9 @@
     });
 
     groups.forEach(items=>{
+      // V586 hotfix: sid was scoped only inside trades.forEach above.
+      // Resolve the receiver again for each grouped trade set before creating synthetic rows.
+      const sid=String(items?.[0]?.trade?.receiver_id||items?.[0]?.base?.[0]?.staff_id||'');
       const base=items[0].base;
       const baseTotal=round2(base.reduce((s,r)=>s+rowWindowHours(r),0));
       const tradeTotal=round2(items.reduce((s,x)=>s+x.spec.hours,0));
