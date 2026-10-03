@@ -1,7 +1,7 @@
-/* CNMI Staff Planner PWA service worker — V588 Approval canonical OT parity assets */
+/* CNMI Staff Planner PWA service worker — V589 Trade-chain net hours + OT rate override */
 const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v588`;
+const CACHE_NAME = `${CACHE_PREFIX}v589`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
@@ -18,6 +18,7 @@ const CORE_SHELL = [
   './patch-v585-ot-detail-performance.js?v=585',
   './patch-v587-staff-admin-ot-parity.js?v=587',
   './patch-v588-approval-canonical-parity.js?v=588',
+  './patch-v589-trade-chain-net-hours-rate-override.js?v=589',
   './pwa-install-v303.css', './pwa-install-v556.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
