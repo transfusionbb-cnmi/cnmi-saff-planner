@@ -209,8 +209,12 @@
     const win = shiftWindowForDuties(d, duties);
     const out = { ...row, start_time: win.start_time, end_date: win.end_date, end_time: win.end_time };
     // V424: attendance OT must follow the effective owner after partial trade.
-    // Rebuild the explicit-hours note so seller/receiver does not keep the old full-shift hours.
-    out.note = autoNote(row.staff_id, d, 'ปรับตามเวรปัจจุบัน/ขายเวร V424');
+    // V591: preserve an explicit Admin OT-rate override while rebuilding the attendance note.
+    // Otherwise a corrected MT/CLERK rate disappears and trade HR falls back to the old sold amount.
+    const rateMatchV591 = String(`${row?.note || ''} ${row?.device || ''}`).match(/\[OT_RATE_TYPE=(MT|CLERK)\]/i);
+    const rateTokenV591 = rateMatchV591 ? `[OT_RATE_TYPE=${String(rateMatchV591[1]).toUpperCase()}]` : '';
+    const autoV591 = autoNote(row.staff_id, d, 'ปรับตามเวรปัจจุบัน/ขายเวร V424');
+    out.note = `${rateTokenV591}${rateTokenV591 && autoV591 ? ' | ' : ''}${autoV591}`.slice(0, 900);
     return out;
   }
   function normalizeOtStateRows(){

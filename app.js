@@ -11638,6 +11638,18 @@ function bindGlobalEvents() {
     const hours = Number(fd.get('requested_hours'));
     const reason = String(fd.get('reason') || '').trim();
     const noteText = String(fd.get('note') || '').trim();
+    // V591: persist the Admin-selected OT rate in the same atomic save as the OT edit.
+    // Do not rely on a later click/timer patch: V221 may normalize attendance rows immediately.
+    const rateElV591 = form.querySelector('[name="rate_type_v479"]');
+    const oldRateMatchV591 = String(`${row?.note || ''} ${row?.device || ''}`).match(/\[OT_RATE_TYPE=(MT|CLERK)\]/i);
+    const rateOverrideV591 = rateElV591
+      ? (String(rateElV591.value || 'MT').toUpperCase() === 'CLERK' ? 'CLERK' : 'MT')
+      : (oldRateMatchV591 ? String(oldRateMatchV591[1]).toUpperCase() : '');
+    const stripRateV591 = (value) => String(value || '').replace(/\[OT_RATE_TYPE=(MT|CLERK)\]/ig, '').replace(/^\s*\|\s*|\s*\|\s*$/g, '').trim();
+    const noteCoreV591 = stripRateV591(noteText);
+    const savedNoteTextV591 = rateOverrideV591 ? `[OT_RATE_TYPE=${rateOverrideV591}]${noteCoreV591 ? ` | ${noteCoreV591}` : ''}` : noteText;
+    const deviceCoreV591 = stripRateV591(row?.device || '');
+    const savedDeviceV591 = rateOverrideV591 ? `[OT_RATE_TYPE=${rateOverrideV591}]${deviceCoreV591 ? ` | ${deviceCoreV591}` : ''}` : String(row?.device || '');
     if (!staffId) return showToast('กรุณาเลือกชื่อผู้ขอ', { tone:'error' });
     if (!workDate) return showToast('กรุณาระบุวันที่ทำ OT', { tone:'error' });
     if (!Number.isFinite(hours) || hours < 0) return showToast('กรุณาระบุจำนวนชั่วโมงให้ถูกต้อง', { tone:'error' });
@@ -11649,8 +11661,8 @@ function bindGlobalEvents() {
       end_date: endDate || workDate,
       end_time: endTime || null,
       reason,
-      note: buildNote191(hours, noteText),
-      device: `${row.device || ''} | edited ${VERSION_V191} by ${staffNick(currentSid191())}`.slice(0,250)
+      note: buildNote191(hours, savedNoteTextV591),
+      device: `${savedDeviceV591}${savedDeviceV591 ? ' | ' : ''}edited ${VERSION_V191} by ${staffNick(currentSid191())}`.slice(0,250)
     };
     if (!admin || isApproved191(row) || isRejected191(row) || statusText191(row) === 'ส่งกลับแก้ไข') {
       payload.status = 'รออนุมัติ';
