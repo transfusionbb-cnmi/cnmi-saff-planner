@@ -10,83 +10,16 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Staff Planner" />
-  <link rel="manifest" href="site.webmanifest?v=597" />
+  <link rel="manifest" href="site.webmanifest?v=598" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=303" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=303" />
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=303" />
   <link rel="shortcut icon" href="favicon.ico?v=303" />
   <link rel="stylesheet" href="app-styles-v569.css?v=573" />
   <script>
-  /* V597 one-time mobile PWA recovery.
-     If an older worker still controls this page, remove only CNMI Staff Planner
-     workers/caches and reload once. Never hide the document while waiting. */
-  (() => {
-    'use strict';
-    const VERSION = '597';
-    const RECOVERY_KEY = 'cnmi-pwa-recovery-v597';
-    const result = { reloading: false, fromVersion: '' };
-
-    if (!('serviceWorker' in navigator)) {
-      window.CNMI_V545_PWA_RECOVERY = Promise.resolve(result);
-      return;
-    }
-
-    const controllerVersion = () => {
-      try {
-        const controller = navigator.serviceWorker.controller;
-        if (!controller) return '';
-        return new URL(controller.scriptURL).searchParams.get('v') || '';
-      } catch (_) { return ''; }
-    };
-
-    window.CNMI_V545_PWA_RECOVERY = (async () => {
-      const current = controllerVersion();
-      result.fromVersion = current;
-
-      if (!navigator.serviceWorker.controller || current === VERSION) {
-        try { sessionStorage.removeItem(RECOVERY_KEY); } catch (_) {}
-        return result;
-      }
-
-      try {
-        if (sessionStorage.getItem(RECOVERY_KEY) === '1') return result;
-        sessionStorage.setItem(RECOVERY_KEY, '1');
-      } catch (_) {}
-
-      result.reloading = true;
-      try {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(registrations.map((registration) => {
-          const urls = [
-            registration.active?.scriptURL,
-            registration.waiting?.scriptURL,
-            registration.installing?.scriptURL
-          ].filter(Boolean);
-          const isCnmiWorker = urls.some((url) => {
-            try {
-              const parsed = new URL(url);
-              return parsed.origin === location.origin && /\/sw\.js$/.test(parsed.pathname);
-            } catch (_) { return false; }
-          });
-          return isCnmiWorker ? registration.unregister().catch(() => false) : Promise.resolve(false);
-        }));
-      } catch (error) {
-        console.warn('[PWA V597] old worker unregister failed:', error);
-      }
-
-      try {
-        const keys = await caches.keys();
-        await Promise.all(keys
-          .filter((key) => key.startsWith('cnmi-staff-planner-pwa-'))
-          .map((key) => caches.delete(key)));
-      } catch (error) {
-        console.warn('[PWA V597] old cache cleanup failed:', error);
-      }
-
-      setTimeout(() => location.reload(), 0);
-      return result;
-    })();
-  })();
+  /* V598 startup guard: do not unregister workers or reload during Auth startup.
+     Service Worker updates are handled passively after the app is ready. */
+  window.CNMI_V545_PWA_RECOVERY = Promise.resolve({ reloading:false, fromVersion:'598' });
   </script>
 </head>
 <body>
@@ -99,7 +32,7 @@
     <div class="auth-card">
       <div class="brand-mark"><img src="app-icon-1024.png?v=299" alt="CNMI Staff Planner"></div>
       <h1>ระบบเวรและกิจกรรมหน่วยงาน</h1>
-      <p class="muted">กรอก Username หรือ อีเมล Mahidol และ Password เพื่อเข้าสู่ระบบ</p>
+      <p class="muted">เลือกวิธีเข้าสู่ระบบ แล้วกรอกรหัสผ่าน</p>
 
       <div class="auth-tabs hidden" aria-hidden="true">
         <button class="auth-tab active" data-auth-tab="login" type="button">เข้าสู่ระบบ</button>
@@ -107,17 +40,26 @@
       </div>
 
       <form id="loginForm" class="auth-panel active">
-        <label>Username หรือ อีเมล Mahidol
-          <input id="loginEmail" type="text" placeholder="Username หรือ name@mahidol.ac.th" autocomplete="username" required>
+        <label class="v598-login-identity-label">
+          <span class="v598-field-title">เข้าสู่ระบบด้วย</span>
+          <span class="v598-login-mode" role="group" aria-label="เลือกวิธีเข้าสู่ระบบ">
+            <button type="button" class="active" data-v598-login-mode="mahidol" aria-pressed="true">Mahidol ID</button>
+            <button type="button" data-v598-login-mode="username" aria-pressed="false">Username ที่ตั้งไว้</button>
+          </span>
+          <span class="v598-login-input-wrap">
+            <input id="loginEmail" type="text" placeholder="เช่น somchai.sur" autocomplete="username" aria-label="Mahidol ID ด้านหน้าอีเมล" required>
+            <span id="v598MahidolSuffix" class="v598-mahidol-suffix">@mahidol.ac.th</span>
+          </span>
+          <span id="v598LoginIdentityHint" class="hint v598-login-hint">กรอกเฉพาะด้านหน้าอีเมล ระบบเติม @mahidol.ac.th ให้อัตโนมัติ</span>
         </label>
         <label>รหัสผ่าน
           <span class="password-field">
-            <input id="loginPassword" type="password" placeholder="เช่น CNMI@รหัสพนักงาน" autocomplete="current-password" required>
+            <input id="loginPassword" type="password" placeholder="กรอกรหัสผ่าน" autocomplete="current-password" required>
             <button class="password-toggle" type="button" data-toggle-password="loginPassword" aria-label="แสดงรหัสผ่าน" aria-pressed="false">👁</button>
           </span>
         </label>
         <button class="primary-btn full-btn" type="submit">เข้าสู่ระบบ</button>
-        <p class="hint login-helper-text">สำหรับการล็อกอินครั้งแรก หรือ ลืมรหัสผ่าน กรุณาใช้อีเมลมหิดล ส่วนรหัสผ่านคือ CNMI@ ตามด้วยรหัสพนักงาน</p>
+        <p class="hint login-helper-text">เข้าได้ทั้ง Mahidol ID หรือ Username ที่ตั้งไว้ • ครั้งแรกใช้รหัสชั่วคราวจาก Admin • ลืมรหัสผ่านให้ติดต่อ Admin</p>
       </form>
 
       <form id="setupPasswordForm" class="auth-panel hidden" aria-hidden="true">
@@ -193,7 +135,7 @@
   <script defer src="app-bundle-v569-02.js?v=569"></script>
   <script defer src="app-bundle-v569-03.js?v=569"></script>
   <script defer src="app-bundle-v569-04.js?v=569"></script>
-  <script defer src="app-bundle-v569-05.js?v=597"></script>
+  <script defer src="app-bundle-v569-05.js?v=598"></script>
   <script defer src="app-bundle-v569-06.js?v=585"></script>
   <script defer src="app-bundle-v569-07.js?v=569"></script>
   <script defer src="app-bundle-v569-08.js?v=569"></script>
@@ -218,5 +160,6 @@
   <script defer src="patch-v594-cancel-renumber-quota-release.js?v=594"></script>
   <script defer src="patch-v597-physician-quota-exclusion-safe-startup.js?v=597"></script>
   <script defer src="patch-v596-physician-leave-daytime-oncall-fix.js?v=597"></script>
+  <script defer src="patch-v598-login-stability-ux.js?v=598"></script>
 </body>
 </html>

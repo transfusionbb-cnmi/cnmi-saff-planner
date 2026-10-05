@@ -896,7 +896,7 @@ try {
         if (choice?.outcome === 'accepted') setButtonsBusy(true, 'กำลังติดตั้ง…');
         else setButtonsBusy(false, 'ติดตั้งแอป');
       } catch (error) {
-        console.warn('[PWA V597] Install prompt failed:', error);
+        console.warn('[PWA V598] Install prompt failed:', error);
         setButtonsBusy(false, 'ติดตั้งแอป');
         showManualInstructions();
       }
@@ -942,7 +942,7 @@ try {
   async function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
     try {
-      const workerUrl = new URL('sw.js?v=597', scriptBaseUrl);
+      const workerUrl = new URL('sw.js?v=598', scriptBaseUrl);
       const registration = await navigator.serviceWorker.register(workerUrl.href, {
         scope: scriptBaseUrl.pathname,
         updateViaCache: 'none'
@@ -961,9 +961,9 @@ try {
         if (installing) installing.addEventListener('statechange', activateWaiting);
       });
 
-      console.info('[PWA V597] Service Worker registered:', registration.scope);
+      console.info('[PWA V598] Service Worker registered:', registration.scope);
     } catch (error) {
-      console.warn('[PWA V597] Service Worker registration failed:', error);
+      console.warn('[PWA V598] Service Worker registration failed:', error);
     }
   }
 
