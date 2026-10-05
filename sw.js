@@ -1,7 +1,7 @@
-/* CNMI Staff Planner PWA service worker — V591 OT rate override core persistence */
+/* CNMI Staff Planner PWA service worker — V594 Cancel Renumber + Quota Release */
 const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v591`;
+const CACHE_NAME = `${CACHE_PREFIX}v594`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
@@ -21,6 +21,9 @@ const CORE_SHELL = [
   './patch-v589-trade-chain-net-hours-rate-override.js?v=589',
   './patch-v590-ot-rate-override-persistence.js?v=590',
   './patch-v591-ot-rate-core-persistence.js?v=591',
+  './patch-v592-flat-admin-extra-menu.js?v=592',
+  './patch-v593-admin-ot-zone-and-guard.js?v=593',
+  './patch-v594-cancel-renumber-quota-release.js?v=594',
   './pwa-install-v303.css', './pwa-install-v556.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
