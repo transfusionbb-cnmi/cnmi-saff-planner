@@ -2,24 +2,17 @@
 <html lang="th">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Staff Planner | Blood Bank CNMI</title>
-  <script>
-  (() => {
-    'use strict';
-    try {
-      const target = new URL('/', window.location.origin);
-      target.search = window.location.search;
-      target.hash = window.location.hash;
-      window.location.replace(target.href);
-    } catch (_) {
-      window.location.replace('/');
-    }
-  })();
-  </script>
+  <meta name="robots" content="noindex">
 </head>
 <body>
-  <p>กำลังกลับเข้าสู่ Staff Planner…</p>
+  <p>กำลังกลับไปหน้า Staff Planner…</p>
+  <script>
+    (function(){
+      var target = '/' + (location.search || '') + (location.hash || '');
+      location.replace(target);
+    })();
+  </script>
 </body>
 </html>

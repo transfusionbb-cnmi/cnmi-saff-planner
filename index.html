@@ -10,16 +10,83 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Staff Planner" />
-  <link rel="manifest" href="site.webmanifest?v=599" />
+  <link rel="manifest" href="site.webmanifest?v=556" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=303" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=303" />
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=303" />
   <link rel="shortcut icon" href="favicon.ico?v=303" />
   <link rel="stylesheet" href="app-styles-v569.css?v=573" />
-  <link rel="stylesheet" href="login-v599.css?v=599" />
   <script>
-  /* V599 startup guard: never unregister/reload during Auth startup. */
-  window.CNMI_V545_PWA_RECOVERY = Promise.resolve({ reloading:false, fromVersion:'599' });
+  /* V556 one-time mobile PWA recovery.
+     If an older worker still controls this page, remove only CNMI Staff Planner
+     workers/caches and reload once. Never hide the document while waiting. */
+  (() => {
+    'use strict';
+    const VERSION = '556';
+    const RECOVERY_KEY = 'cnmi-pwa-recovery-v556';
+    const result = { reloading: false, fromVersion: '' };
+
+    if (!('serviceWorker' in navigator)) {
+      window.CNMI_V545_PWA_RECOVERY = Promise.resolve(result);
+      return;
+    }
+
+    const controllerVersion = () => {
+      try {
+        const controller = navigator.serviceWorker.controller;
+        if (!controller) return '';
+        return new URL(controller.scriptURL).searchParams.get('v') || '';
+      } catch (_) { return ''; }
+    };
+
+    window.CNMI_V545_PWA_RECOVERY = (async () => {
+      const current = controllerVersion();
+      result.fromVersion = current;
+
+      if (!navigator.serviceWorker.controller || current === VERSION) {
+        try { sessionStorage.removeItem(RECOVERY_KEY); } catch (_) {}
+        return result;
+      }
+
+      try {
+        if (sessionStorage.getItem(RECOVERY_KEY) === '1') return result;
+        sessionStorage.setItem(RECOVERY_KEY, '1');
+      } catch (_) {}
+
+      result.reloading = true;
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => {
+          const urls = [
+            registration.active?.scriptURL,
+            registration.waiting?.scriptURL,
+            registration.installing?.scriptURL
+          ].filter(Boolean);
+          const isCnmiWorker = urls.some((url) => {
+            try {
+              const parsed = new URL(url);
+              return parsed.origin === location.origin && /\/sw\.js$/.test(parsed.pathname);
+            } catch (_) { return false; }
+          });
+          return isCnmiWorker ? registration.unregister().catch(() => false) : Promise.resolve(false);
+        }));
+      } catch (error) {
+        console.warn('[PWA V556] old worker unregister failed:', error);
+      }
+
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys
+          .filter((key) => key.startsWith('cnmi-staff-planner-pwa-'))
+          .map((key) => caches.delete(key)));
+      } catch (error) {
+        console.warn('[PWA V556] old cache cleanup failed:', error);
+      }
+
+      setTimeout(() => location.reload(), 0);
+      return result;
+    })();
+  })();
   </script>
 </head>
 <body>
@@ -30,14 +97,9 @@
 
   <section id="authView" class="auth-view">
     <div class="auth-card">
-      <div class="v599-brand-row">
-        <div class="brand-mark"><img src="app-icon-1024.png?v=299" alt="CNMI Staff Planner"></div>
-        <div class="v599-brand-copy">
-          <h1 class="v599-app-name">Staff Planner</h1>
-          <p class="v599-app-subtitle">เวชศาสตร์บริการโลหิต · Blood Bank CNMI</p>
-        </div>
-      </div>
-      <p class="v599-login-intro">เลือกวิธีเข้าสู่ระบบ แล้วกรอกรหัสผ่านของบัญชี</p>
+      <div class="brand-mark"><img src="app-icon-1024.png?v=299" alt="CNMI Staff Planner"></div>
+      <h1>ระบบเวรและกิจกรรมหน่วยงาน</h1>
+      <p class="muted">กรอก Username หรือ อีเมล Mahidol และ Password เพื่อเข้าสู่ระบบ</p>
 
       <div class="auth-tabs hidden" aria-hidden="true">
         <button class="auth-tab active" data-auth-tab="login" type="button">เข้าสู่ระบบ</button>
@@ -45,17 +107,8 @@
       </div>
 
       <form id="loginForm" class="auth-panel active">
-        <label class="v599-login-identity-label">
-          <span class="v599-field-title">บัญชีผู้ใช้</span>
-          <span class="v599-login-mode" role="group" aria-label="เลือกวิธีเข้าสู่ระบบ">
-            <button type="button" class="active" data-v599-login-mode="mahidol" aria-pressed="true">Mahidol ID</button>
-            <button type="button" data-v599-login-mode="username" aria-pressed="false">Username</button>
-          </span>
-          <span class="v599-login-input-wrap">
-            <input id="loginEmail" type="text" placeholder="เช่น somchai.sur" autocomplete="username" aria-label="Mahidol ID ด้านหน้าอีเมล" required>
-            <span id="v599MahidolSuffix" class="v599-mahidol-suffix">@mahidol.ac.th</span>
-          </span>
-          <span id="v599LoginIdentityHint" class="hint v599-login-hint">กรอกเฉพาะด้านหน้าอีเมล ระบบเติม @mahidol.ac.th ให้</span>
+        <label>Username หรือ อีเมล Mahidol
+          <input id="loginEmail" type="text" placeholder="Username หรือ name@mahidol.ac.th" autocomplete="username" required>
         </label>
         <label>รหัสผ่าน
           <span class="password-field">
@@ -64,7 +117,7 @@
           </span>
         </label>
         <button class="primary-btn full-btn" type="submit">เข้าสู่ระบบ</button>
-        <div class="v599-login-footer"><b>บัญชีใหม่ / ลืมรหัสผ่าน</b> ติดต่อ Admin เพื่อกำหนดรหัสชั่วคราว</div>
+        <p class="hint login-helper-text">หากเป็นการเข้าใช้ครั้งแรกหรือลืมรหัสผ่าน ให้ใช้ข้อมูลที่ได้รับจาก Admin หรือดำเนินการตามขั้นตอนตั้งรหัสผ่านของหน่วยงาน</p>
       </form>
 
       <form id="setupPasswordForm" class="auth-panel hidden" aria-hidden="true">
@@ -77,7 +130,7 @@
 
       <form id="resetPasswordForm" class="auth-panel reset-panel hidden">
         <label>ตั้งชื่อผู้ใช้
-          <input id="recoveryLoginName" type="text" placeholder="เช่น gift123 หรือรหัสพนักงาน" autocomplete="username" required>
+          <input id="recoveryLoginName" type="text" placeholder="เช่น user หรือ gift123 หรือ 012345" autocomplete="username" required>
         </label>
         <label>รหัสผ่านใหม่
           <span class="password-field">
@@ -85,8 +138,8 @@
             <button class="password-toggle" type="button" data-toggle-password="newPassword" aria-label="แสดงรหัสผ่าน" aria-pressed="false">👁</button>
           </span>
         </label>
-        <button class="primary-btn full-btn" type="submit">บันทึก Username / Password ใหม่</button>
-        <p class="hint">Username ใช้ตัวอักษรอังกฤษ ตัวเลข จุด ขีดกลาง หรือขีดล่าง</p>
+        <button class="primary-btn full-btn" type="submit">บันทึกชื่อผู้ใช้และรหัสผ่านใหม่</button>
+        <p class="hint">ชื่อผู้ใช้ใช้ตัวอักษรอังกฤษหรือตัวเลขได้ เช่น user, gift123, 012345</p>
       </form>
     </div>
   </section>
@@ -140,7 +193,7 @@
   <script defer src="app-bundle-v569-02.js?v=569"></script>
   <script defer src="app-bundle-v569-03.js?v=569"></script>
   <script defer src="app-bundle-v569-04.js?v=569"></script>
-  <script defer src="app-bundle-v569-05.js?v=599"></script>
+  <script defer src="app-bundle-v569-05.js?v=569"></script>
   <script defer src="app-bundle-v569-06.js?v=585"></script>
   <script defer src="app-bundle-v569-07.js?v=569"></script>
   <script defer src="app-bundle-v569-08.js?v=569"></script>
@@ -162,9 +215,6 @@
   <script defer src="patch-v591-ot-rate-core-persistence.js?v=591"></script>
   <script defer src="patch-v592-flat-admin-extra-menu.js?v=592"></script>
   <script defer src="patch-v593-admin-ot-zone-and-guard.js?v=593"></script>
-  <script defer src="patch-v594-cancel-renumber-quota-release.js?v=594"></script>
-  <script defer src="patch-v597-physician-quota-exclusion-safe-startup.js?v=597"></script>
-  <script defer src="patch-v596-physician-leave-daytime-oncall-fix.js?v=597"></script>
-  <script defer src="patch-v599-login-stability-ui.js?v=599"></script>
+  <script defer src="patch-v600-stable-post593-oncall.js?v=600"></script>
 </body>
 </html>
