@@ -1,15 +1,15 @@
-/* CNMI Staff Planner PWA service worker — V594 Cancel Renumber + Quota Release */
-const WORKER_VERSION = '556';
+/* CNMI Staff Planner PWA service worker — V597 Mobile Login Freeze Recovery */
+const WORKER_VERSION = '597';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v594`;
+const CACHE_NAME = `${CACHE_PREFIX}v597`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
-  './', './index.html', './site.webmanifest',
-  './app-styles-v569.css?v=570',
+  './', './index.html', './site.webmanifest?v=597',
+  './app-styles-v569.css?v=573',
   './bootstrap-v545-dependency-failover.js?v=545',
-  './app-bundle-v569-pre.js?v=569', './app-v545.js?v=591', './app-bundle-v569-01.js?v=591',
-  './patch-v570-admin-temp-password-edge.js?v=570',
+  './app-bundle-v569-pre.js?v=569', './app-v545.js?v=591', './app-bundle-v569-01.js?v=591', './app-bundle-v569-05.js?v=597',
+  './patch-v570-admin-temp-password-edge.js?v=573',
   './patch-v572-leave-overlap-guard.js?v=572',
   './patch-v574-multi-trade-hr-normalization.js?v=587',
   './patch-v577-ot-attendance-source-export-fix.js?v=585',
@@ -24,6 +24,8 @@ const CORE_SHELL = [
   './patch-v592-flat-admin-extra-menu.js?v=592',
   './patch-v593-admin-ot-zone-and-guard.js?v=593',
   './patch-v594-cancel-renumber-quota-release.js?v=594',
+  './patch-v597-physician-quota-exclusion-safe-startup.js?v=597',
+  './patch-v596-physician-leave-daytime-oncall-fix.js?v=597',
   './pwa-install-v303.css', './pwa-install-v556.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
@@ -69,11 +71,11 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    /* Important V556 recovery:
+    /* Important V597 recovery:
        Some installed phones still have the registration URL sw.js?v=544 even though
        the server now serves this newer worker body. In that case the old registration
        must remove itself, clear planner caches and navigate clients once through the
-       network. The fresh index then registers sw.js?v=556. */
+       network. The fresh index then registers sw.js?v=597. */
     if (registeredWorkerVersion() !== WORKER_VERSION) {
       await clearPlannerCaches().catch(() => {});
       await self.registration.unregister().catch(() => false);

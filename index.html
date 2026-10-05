@@ -10,20 +10,20 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Staff Planner" />
-  <link rel="manifest" href="site.webmanifest?v=556" />
+  <link rel="manifest" href="site.webmanifest?v=597" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=303" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=303" />
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=303" />
   <link rel="shortcut icon" href="favicon.ico?v=303" />
   <link rel="stylesheet" href="app-styles-v569.css?v=573" />
   <script>
-  /* V556 one-time mobile PWA recovery.
+  /* V597 one-time mobile PWA recovery.
      If an older worker still controls this page, remove only CNMI Staff Planner
      workers/caches and reload once. Never hide the document while waiting. */
   (() => {
     'use strict';
-    const VERSION = '556';
-    const RECOVERY_KEY = 'cnmi-pwa-recovery-v556';
+    const VERSION = '597';
+    const RECOVERY_KEY = 'cnmi-pwa-recovery-v597';
     const result = { reloading: false, fromVersion: '' };
 
     if (!('serviceWorker' in navigator)) {
@@ -71,7 +71,7 @@
           return isCnmiWorker ? registration.unregister().catch(() => false) : Promise.resolve(false);
         }));
       } catch (error) {
-        console.warn('[PWA V556] old worker unregister failed:', error);
+        console.warn('[PWA V597] old worker unregister failed:', error);
       }
 
       try {
@@ -80,7 +80,7 @@
           .filter((key) => key.startsWith('cnmi-staff-planner-pwa-'))
           .map((key) => caches.delete(key)));
       } catch (error) {
-        console.warn('[PWA V556] old cache cleanup failed:', error);
+        console.warn('[PWA V597] old cache cleanup failed:', error);
       }
 
       setTimeout(() => location.reload(), 0);
@@ -193,7 +193,7 @@
   <script defer src="app-bundle-v569-02.js?v=569"></script>
   <script defer src="app-bundle-v569-03.js?v=569"></script>
   <script defer src="app-bundle-v569-04.js?v=569"></script>
-  <script defer src="app-bundle-v569-05.js?v=569"></script>
+  <script defer src="app-bundle-v569-05.js?v=597"></script>
   <script defer src="app-bundle-v569-06.js?v=585"></script>
   <script defer src="app-bundle-v569-07.js?v=569"></script>
   <script defer src="app-bundle-v569-08.js?v=569"></script>
@@ -216,6 +216,7 @@
   <script defer src="patch-v592-flat-admin-extra-menu.js?v=592"></script>
   <script defer src="patch-v593-admin-ot-zone-and-guard.js?v=593"></script>
   <script defer src="patch-v594-cancel-renumber-quota-release.js?v=594"></script>
-  <script defer src="patch-v595-physician-quota-exclusion.js?v=595"></script>
+  <script defer src="patch-v597-physician-quota-exclusion-safe-startup.js?v=597"></script>
+  <script defer src="patch-v596-physician-leave-daytime-oncall-fix.js?v=597"></script>
 </body>
 </html>
