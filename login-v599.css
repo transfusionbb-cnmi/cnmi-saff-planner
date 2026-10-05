@@ -1,0 +1,56 @@
+/* CNMI Staff Planner V599 — Login UI */
+:root{--v599-blue:#63b7e6;--v599-blue-dark:#216f9f;--v599-ink:#183247;--v599-muted:#6f8293;--v599-line:#d8e5ee;--v599-soft:#eef7fc;--v599-shadow:0 24px 70px rgba(42,92,126,.13)}
+#authView.auth-view{min-height:100vh;padding:28px 18px;background:
+  radial-gradient(circle at 14% 12%,rgba(125,203,248,.20),transparent 28%),
+  radial-gradient(circle at 86% 8%,rgba(165,194,255,.17),transparent 25%),
+  linear-gradient(180deg,#f7fbfe 0%,#f3f7fa 100%)}
+#authView .auth-card{width:min(480px,100%);padding:30px 30px 26px;border:1px solid rgba(208,224,234,.92);border-radius:24px;background:rgba(255,255,255,.96);box-shadow:var(--v599-shadow);backdrop-filter:none}
+#authView .v599-brand-row{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+#authView .brand-mark{width:60px;height:60px;flex:0 0 60px;margin:0;border-radius:18px;border:1px solid #e2edf4;background:#fff;box-shadow:0 8px 20px rgba(31,96,139,.09)}
+#authView .v599-brand-copy{min-width:0}
+#authView .v599-app-name{margin:0;color:var(--v599-ink);font-size:24px;line-height:1.08;font-weight:900;letter-spacing:-.2px}
+#authView .v599-app-subtitle{margin:5px 0 0;color:var(--v599-muted);font-size:14px;line-height:1.35;font-weight:600}
+#authView .v599-login-intro{margin:0 0 18px;padding:12px 14px;border:1px solid #e3eef5;border-radius:14px;background:#f8fbfd;color:#587084;font-size:14px;line-height:1.5}
+#authView .auth-panel.active{display:grid;gap:15px}
+#authView .v599-login-identity-label{display:grid;gap:9px}
+#authView .v599-field-title,#authView .auth-panel>label{color:#2e475b;font-size:14px;font-weight:800}
+#authView .v599-login-mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border:1px solid #dbe8f0;border-radius:13px;background:#eef5f9}
+#authView .v599-login-mode button{appearance:none;border:0;border-radius:10px;background:transparent;color:#607689;min-height:42px;padding:8px 10px;font:inherit;font-size:14px;font-weight:800;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s}
+#authView .v599-login-mode button.active{background:#fff;color:#176e9f;box-shadow:0 2px 8px rgba(31,93,132,.10)}
+#authView .v599-login-input-wrap{display:flex;align-items:center;min-height:52px;border:1px solid var(--v599-line);border-radius:14px;background:#fff;overflow:hidden;box-shadow:0 1px 2px rgba(20,62,88,.03);transition:border-color .15s,box-shadow .15s}
+#authView .v599-login-input-wrap:focus-within{border-color:#69b9e6;box-shadow:0 0 0 4px rgba(105,185,230,.14)}
+#authView .v599-login-input-wrap input{flex:1;min-width:0;height:50px;min-height:50px;margin:0;padding:0 13px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;outline:0!important;color:#203a4e;font-size:15px;font-weight:650}
+#authView .v599-login-input-wrap input::placeholder{color:#9aaab7;font-weight:500}
+#authView .v599-mahidol-suffix{flex:0 0 auto;padding:0 13px 0 4px;color:#47677f;font-size:14px;font-weight:800;white-space:nowrap}
+#authView .v599-mahidol-suffix[hidden]{display:none!important}
+#authView .v599-login-hint{margin:0;color:#7a8d9c;font-size:12.5px;line-height:1.45;font-weight:500}
+#authView .password-field{display:block;position:relative;width:100%}
+#authView .password-field input{width:100%;min-height:52px;padding:13px 50px 13px 14px!important;border:1px solid var(--v599-line);border-radius:14px;background:#fff;color:#203a4e;font-size:15px;box-shadow:0 1px 2px rgba(20,62,88,.03)}
+#authView .password-field input:focus{border-color:#69b9e6;box-shadow:0 0 0 4px rgba(105,185,230,.14)}
+#authView .password-toggle{right:8px;width:38px;height:38px;min-height:38px;border-radius:11px;background:#edf6fb;color:#3579a2;font-size:15px}
+#authView #loginForm>.primary-btn{min-height:52px;border-radius:14px;background:linear-gradient(180deg,#78c7ef 0%,#63b7e6 100%);color:#14384e;font-size:15px;font-weight:900;box-shadow:0 8px 18px rgba(76,164,214,.18);transition:transform .15s,filter .15s,box-shadow .15s}
+#authView #loginForm>.primary-btn:hover{transform:translateY(-1px);filter:none;box-shadow:0 10px 22px rgba(76,164,214,.22)}
+#authView #loginForm>.primary-btn:disabled{opacity:.62;transform:none;box-shadow:none;cursor:wait}
+#authView .v599-login-footer{margin-top:2px;padding:11px 12px;border:1px solid #e4edf3;border-radius:13px;background:#f8fafc;color:#6f8291;font-size:12.5px;line-height:1.5;text-align:left}
+#authView .v599-login-footer b{color:#486276}
+#authView .pwa-install-auth-wrap{margin:4px 0 0!important}
+#authView .pwa-install-note{font-size:12px!important}
+#authView .auth-tabs{display:none!important}
+@media(max-width:520px){
+  #authView.auth-view{padding:16px 12px}
+  #authView .auth-card{padding:22px 18px 20px;border-radius:20px}
+  #authView .v599-brand-row{gap:12px;margin-bottom:15px}
+  #authView .brand-mark{width:54px;height:54px;flex-basis:54px;border-radius:16px}
+  #authView .v599-app-name{font-size:21px}
+  #authView .v599-app-subtitle{font-size:13px}
+  #authView .v599-login-intro{margin-bottom:15px;padding:10px 12px;font-size:13px}
+  #authView .v599-login-mode button{font-size:13px;padding:7px 6px}
+  #authView .v599-mahidol-suffix{padding-right:10px;font-size:12.5px}
+}
+@media(max-height:690px) and (min-width:700px){
+  #authView.auth-view{padding:14px}
+  #authView .auth-card{padding:20px 24px}
+  #authView .v599-brand-row{margin-bottom:12px}
+  #authView .v599-login-intro{margin-bottom:12px;padding:9px 12px}
+  #authView .auth-panel.active{gap:11px}
+}

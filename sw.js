@@ -1,14 +1,14 @@
-/* CNMI Staff Planner PWA service worker — V598 Stable Login Startup */
-const WORKER_VERSION = '598';
+/* CNMI Staff Planner PWA service worker — V599 Stable Navigation + Login */
+const WORKER_VERSION = '599';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v598`;
+const CACHE_NAME = `${CACHE_PREFIX}v599`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
-  './', './index.html', './site.webmanifest?v=598',
-  './app-styles-v569.css?v=573',
+  './', './index.html', './site.webmanifest?v=599',
+  './app-styles-v569.css?v=573', './login-v599.css?v=599',
   './bootstrap-v545-dependency-failover.js?v=545',
-  './app-bundle-v569-pre.js?v=569', './app-v545.js?v=591', './app-bundle-v569-01.js?v=591', './app-bundle-v569-05.js?v=598',
+  './app-bundle-v569-pre.js?v=569', './app-v545.js?v=591', './app-bundle-v569-01.js?v=591', './app-bundle-v569-05.js?v=599',
   './patch-v570-admin-temp-password-edge.js?v=573',
   './patch-v572-leave-overlap-guard.js?v=572',
   './patch-v574-multi-trade-hr-normalization.js?v=587',
@@ -26,34 +26,21 @@ const CORE_SHELL = [
   './patch-v594-cancel-renumber-quota-release.js?v=594',
   './patch-v597-physician-quota-exclusion-safe-startup.js?v=597',
   './patch-v596-physician-leave-daytime-oncall-fix.js?v=597',
-  './patch-v598-login-stability-ux.js?v=598',
-  './pwa-install-v303.css', './pwa-install-v556.js',
+  './patch-v599-login-stability-ui.js?v=599',
+  './pwa-install-v303.css', './pwa-install-v599.js',
   './patch-v542-single-sidebar-deeplink-controller.js',
   './android-chrome-192x192.png', './android-chrome-512x512.png',
   './apple-touch-icon.png', './favicon-32x32.png', './favicon-16x16.png'
 ];
 
-function registeredWorkerVersion() {
-  try { return new URL(self.location.href).searchParams.get('v') || ''; }
-  catch (_) { return ''; }
-}
-
-async function clearPlannerCaches() {
-  const keys = await caches.keys();
-  await Promise.all(keys
-    .filter((key) => key.startsWith(CACHE_PREFIX))
-    .map((key) => caches.delete(key)));
-}
-
-async function forceClientsToNetwork() {
-  const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-  await Promise.allSettled(clientList.map(async (client) => {
-    try {
-      const url = new URL(client.url);
-      url.searchParams.set('pwa_recover', WORKER_VERSION);
-      await client.navigate(url.href);
-    } catch (_) {}
-  }));
+async function fetchWithTimeout(request, ms = 5000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(request, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 self.addEventListener('install', (event) => {
@@ -62,7 +49,7 @@ self.addEventListener('install', (event) => {
     await Promise.allSettled(CORE_SHELL.map(async (url) => {
       try {
         const request = new Request(url, { cache: 'reload' });
-        const response = await fetch(request);
+        const response = await fetchWithTimeout(request, 7000);
         if (response?.ok) await cache.put(request, response.clone());
       } catch (_) {}
     }));
@@ -72,7 +59,7 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    // V598: update caches passively. Never unregister/navigate clients during Auth startup.
+    // Never unregister or navigate open tabs during Auth startup.
     const keys = await caches.keys();
     await Promise.all(keys.filter((key) => (
       (key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
@@ -105,11 +92,14 @@ self.addEventListener('fetch', (event) => {
       const helper = url.pathname.endsWith('/donor-helper.html') || url.pathname.endsWith('donor-helper.html');
       const fallback = helper ? './donor-helper.html' : './index.html';
       try {
-        const response = await fetch(new Request(request, { cache: 'no-store' }));
+        const networkRequest = new Request(request, { cache: 'no-store' });
+        const response = await fetchWithTimeout(networkRequest, 4500);
         if (response?.ok) await cache.put(fallback, response.clone());
         return response;
       } catch (_) {
-        return (await cache.match(request)) || (await cache.match(fallback)) || Response.error();
+        const cached = (await cache.match(request)) || (await cache.match(fallback));
+        if (cached) return cached;
+        return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Staff Planner</title><style>body{font-family:system-ui,sans-serif;background:#f5f8fa;color:#17324d;display:grid;place-items:center;min-height:100vh;margin:0}.box{max-width:360px;padding:24px;background:#fff;border:1px solid #dfe8ee;border-radius:18px;text-align:center}button{border:0;border-radius:12px;background:#70b9e3;padding:12px 18px;font-weight:700}</style><div class="box"><h2>Staff Planner</h2><p>เชื่อมต่อระบบไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่</p><button onclick="location.reload()">ลองใหม่</button></div>`, { headers:{'Content-Type':'text/html; charset=utf-8'}, status:200 });
       }
     })());
     return;
@@ -120,12 +110,10 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    // HTML navigations stay network-first above. Static files have versioned
-    // URLs, so an exact cache hit avoids a network round trip on every launch.
     const cached = await cache.match(request);
     if (cached) return cached;
     try {
-      const response = await fetch(request);
+      const response = await fetchWithTimeout(request, 7000);
       if (response?.ok && response.type === 'basic') await cache.put(request, response.clone());
       return response;
     } catch (_) {

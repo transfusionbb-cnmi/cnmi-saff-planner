@@ -942,7 +942,7 @@ try {
   async function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
     try {
-      const workerUrl = new URL('sw.js?v=598', scriptBaseUrl);
+      const workerUrl = new URL('sw.js?v=599', scriptBaseUrl);
       const registration = await navigator.serviceWorker.register(workerUrl.href, {
         scope: scriptBaseUrl.pathname,
         updateViaCache: 'none'
