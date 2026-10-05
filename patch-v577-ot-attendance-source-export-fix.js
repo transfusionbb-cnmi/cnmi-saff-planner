@@ -8,7 +8,7 @@
  */
 (function(){
   'use strict';
-  const VERSION='V577_OT_ATTENDANCE_SOURCE_EXPORT_FIX';
+  const VERSION='V603_OT_EXPORT_LIVE_BUTTON_REPLAY_FIX';
   if(window.__CNMI_V577_OT_ATTENDANCE_SOURCE_EXPORT_FIX__) return;
   window.__CNMI_V577_OT_ATTENDANCE_SOURCE_EXPORT_FIX__=true;
 
@@ -104,10 +104,22 @@
     try{
       await preloadOtReferenceData(routeMonth(),{force:true});
       // Refresh calculations before the legacy exporter builds Staff_Total / HR_OT / copy.
+      // IMPORTANT: renderPage() replaces the Export button node. Clicking the old detached
+      // node does not bubble to the document-level V318 exporter, which made the page appear
+      // to jump back without downloading anything. Re-acquire the live button after render.
+      const selector = btn.matches?.('[data-export-hr-v318]') ? '[data-export-hr-v318]'
+        : btn.matches?.('[data-export-hr-v241]') ? '[data-export-hr-v241]'
+        : btn.matches?.('[data-export-hr-v238]') ? '[data-export-hr-v238]'
+        : '[data-export-hr-v234]';
+      const scrollX = window.scrollX, scrollY = window.scrollY;
       rerender();
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const liveBtn=document.querySelector(selector) || document.querySelector('[data-export-hr-v318],[data-export-hr-v241],[data-export-hr-v238],[data-export-hr-v234]');
+      if(!liveBtn) throw new Error('ไม่พบปุ่ม Export หลังรีเฟรชหน้า กรุณารีเฟรชหน้าเว็บแล้วลองใหม่');
       replayingExport=true;
-      btn.disabled=false; btn.textContent=oldText;
-      btn.click();
+      liveBtn.disabled=false; liveBtn.textContent=oldText;
+      try{ window.scrollTo(scrollX,scrollY); }catch(_){ }
+      liveBtn.click();
       setTimeout(()=>{replayingExport=false;},0);
     }catch(err){
       console.error(`[${VERSION}] export preload`,err);
@@ -127,8 +139,8 @@
   function markVersion(){
     document.querySelectorAll('.v531-version-chip,.v532-version-chip,.v542-version-chip,.v520-version-chip,[class*="version-chip"]').forEach(x=>{
       if(!x||!/^v\d+/i.test(String(x.textContent||'').trim()))return;
-      x.textContent='v577';
-      x.title='OT Attendance Source + Export Consistency Fix';
+      x.textContent='v603';
+      x.title='HR Export Live Button Replay Fix';
     });
   }
   setTimeout(markVersion,500);
