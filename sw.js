@@ -1,18 +1,18 @@
 /* CNMI Staff Planner PWA service worker — V591 OT rate override core persistence */
 const WORKER_VERSION = '556';
 const CACHE_PREFIX = 'cnmi-staff-planner-pwa-';
-const CACHE_NAME = `${CACHE_PREFIX}v603`;
+const CACHE_NAME = `${CACHE_PREFIX}v604`;
 const EXTERNAL_CACHE_PREFIX = 'cnmi-external-deps-v';
 
 const CORE_SHELL = [
   './', './index.html', './site.webmanifest',
   './app-styles-v569.css?v=570',
   './bootstrap-v545-dependency-failover.js?v=545',
-  './app-bundle-v569-pre.js?v=569', './app-v545.js?v=591', './app-bundle-v569-01.js?v=591',
+  './app-bundle-v569-pre.js?v=569', './app-v545.js?v=591', './app-bundle-v569-01.js?v=591', './app-bundle-v569-05.js?v=604',
   './patch-v570-admin-temp-password-edge.js?v=570',
   './patch-v572-leave-overlap-guard.js?v=572',
   './patch-v574-multi-trade-hr-normalization.js?v=587',
-  './patch-v577-ot-attendance-source-export-fix.js?v=585',
+  './patch-v577-ot-attendance-source-export-fix.js?v=604',
   './patch-v578-long-weekend-noduty-quota.js?v=578',
   './patch-v584-approved-tracking-source-of-truth.js?v=587',
   './patch-v585-ot-detail-performance.js?v=585',

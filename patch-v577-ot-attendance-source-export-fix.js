@@ -8,7 +8,7 @@
  */
 (function(){
   'use strict';
-  const VERSION='V603_OT_EXPORT_LIVE_BUTTON_REPLAY_FIX';
+  const VERSION='V604_LOCKED_HR_DATES_AND_EXPORT_REPLAY_FIX';
   if(window.__CNMI_V577_OT_ATTENDANCE_SOURCE_EXPORT_FIX__) return;
   window.__CNMI_V577_OT_ATTENDANCE_SOURCE_EXPORT_FIX__=true;
 
@@ -139,8 +139,8 @@
   function markVersion(){
     document.querySelectorAll('.v531-version-chip,.v532-version-chip,.v542-version-chip,.v520-version-chip,[class*="version-chip"]').forEach(x=>{
       if(!x||!/^v\d+/i.test(String(x.textContent||'').trim()))return;
-      x.textContent='v603';
-      x.title='HR Export Live Button Replay Fix';
+      x.textContent='v604';
+      x.title='ล็อกวันที่ให้ทุกคนมีชื่อ + HR Export Live Button Replay Fix';
     });
   }
   setTimeout(markVersion,500);
