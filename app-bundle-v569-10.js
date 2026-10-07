@@ -1242,7 +1242,7 @@ try {
     table.querySelectorAll('tbody tr').forEach(tr=>{
       const inp=tr.querySelector('[data-v533-pdf-amount]'); if(!inp) return;
       const expectedCell=tr.children?.[1];
-      if(expectedCell){expectedCell.dataset.v534Expected=String(expectedFromRow(tr));expectedCell.setAttribute('data-v534-expected','1');}
+      if(expectedCell){const expectedValue=String(expectedFromRow(tr));expectedCell.dataset.v534Expected=expectedValue;expectedCell.setAttribute('data-v534-expected',expectedValue);}
       if(!tr.querySelector('[data-v534-row-status]')){
         const td=document.createElement('td');td.dataset.v534RowStatus='1';td.innerHTML='<button type="button" class="tiny-btn v534-match-btn" data-v534-mark-match>ตรง</button><span class="v534-row-result" data-v534-row-result>ยังไม่ตรวจ</span>';tr.appendChild(td);
       }
