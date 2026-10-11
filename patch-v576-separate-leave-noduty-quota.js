@@ -239,7 +239,7 @@
   function adminReviewHtml(){
     if(!isAdminSafe()) return '';
     const flags=excessRecords(S().leaves||[]);
-    if(!flags.length) return `<div class="v576-review-card v576-review-ok"><b>✓ ตรวจโควตาแล้ว</b><span>ยังไม่พบรายการวันลา/ไม่รับเวรที่เกินเกณฑ์ในข้อมูลที่โหลดอยู่</span></div>`;
+    if(!flags.length) return `<div class="v576-review-card v576-review-ok" data-v576-review-card><b>✓ ตรวจโควตาแล้ว</b><span>ยังไม่พบรายการวันลา/ไม่รับเวรที่เกินเกณฑ์ในข้อมูลที่โหลดอยู่</span></div>`;
     return `<div class="v576-review-card" data-v576-review-card>
       <div class="v576-review-head"><div><b>⚠ รายการเดิมเกินโควตา — รอ Admin พิจารณา</b><span>พบ ${flags.length} รายการ ระบบไม่ลบอัตโนมัติ ให้ Admin ตรวจแล้วลบรายการที่ไม่อนุมัติ</span></div></div>
       <div class="v576-review-list">${flags.map(f=>{
