@@ -24,7 +24,11 @@ function schedule(){const a=api();if(!a)return '<div class="card">ไม่พ�
 function markup(){return `<div class="v607-roster"><div class="card v607-toolbar"><div><h3>ตารางเวรแพทย์ประจำเดือน</h3><p class="muted">Staff ทุกคนดูได้ · ข้อมูลจากตารางแพทย์ Consult · อ่านอย่างเดียว</p></div><div class="v607-filters"><label>เลือกเดือน <input id="v607-month" type="month" value="${esc(month)}"></label><label>แสดง <select id="v607-mode"><option value="all" ${mode==='all'?'selected':''}>ทั้งหมด</option><option value="day" ${mode==='day'?'selected':''}>ในเวลา</option><option value="off" ${mode==='off'?'selected':''}>นอกเวลา</option></select></label><button type="button" class="ghost-btn" id="v607-refresh">รีเฟรช</button></div></div><div id="v607-table">${schedule()}</div></div>`;}
 function paint(){if(stateSafe().page!==PAGE)return;const slot=document.getElementById('v607-table');if(slot)slot.innerHTML=schedule();}
 function render(){if(stateSafe().page!==PAGE)return false;document.getElementById('pageTitle').textContent='ตารางเวรแพทย์';document.getElementById('pageSubtitle').textContent='ดูเวรแพทย์ในเวลาและนอกเวลา';document.getElementById('pageContent').innerHTML=markup();return true;}
-try{if(typeof NAV_ITEMS!=='undefined'&&!NAV_ITEMS.some(x=>x.id===PAGE)){const i=NAV_ITEMS.findIndex(x=>x.id==='calendar');NAV_ITEMS.splice(i>=0?i+1:1,0,{id:PAGE,icon:'🩺',title:'ตารางเวรแพทย์',subtitle:'ในเวลา / นอกเวลา',group:'staff'});}}catch(e){console.warn('[V607] menu',e);}
+// V610: Standalone staff physician tab is retired; the roster is embedded in the monthly staff roster.
+// Keep PAGE render compatibility for bookmarked links, but never create a sidebar item.
+try{if(typeof NAV_ITEMS!=='undefined'){
+  for(let i=NAV_ITEMS.length-1;i>=0;i--){if(NAV_ITEMS[i]?.id===PAGE)NAV_ITEMS.splice(i,1);}
+}}catch(e){console.warn('[V610] menu cleanup',e);}
 const original=window.renderPage||(typeof renderPage==='function'?renderPage:null);if(typeof original==='function'){const wrapped=function(){if(render())return;return original.apply(this,arguments);};try{window.renderPage=renderPage=wrapped;}catch(_){window.renderPage=wrapped;}}
 document.addEventListener('change',e=>{if(stateSafe().page!==PAGE)return;if(e.target?.id==='v607-month'){if(/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)){month=e.target.value;paint();}}if(e.target?.id==='v607-mode'){mode=e.target.value;paint();}});
 document.addEventListener('click',e=>{if(e.target?.id!=='v607-refresh'||stateSafe().page!==PAGE)return;e.preventDefault();const a=api();if(!a)return;a.cache.loaded=false;paint();});
