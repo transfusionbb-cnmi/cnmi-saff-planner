@@ -17,3 +17,7 @@
  .v625-rowhead b{font-size:11px}.v625-rowhead small{font-size:9px}
 }
 @media(min-width:900px) and (max-width:1250px){.v625-matrix .v625-rowhead{width:83px!important;min-width:83px!important;max-width:83px!important}.v625-matrix thead th small{font-size:7px}.v625-duty-cell span{font-size:7px!important}}
+
+/* v627: shared holiday and physician leave cues, sidebar deep links */
+.v627-menu-link{display:block;text-decoration:none;color:#476781;font-size:12px;font-weight:650;padding:8px 10px 8px 24px;border-radius:9px;margin:2px 4px}.v627-menu-link:hover,.v627-menu-link.active{background:#fff;color:#2272a6}.v627-menu-link.active{font-weight:850}
+.v627-leave{display:block!important;background:#fff0cf;color:#924f00;font-weight:800!important;font-size:8px!important;line-height:1.15;padding:2px!important;border-radius:3px;white-space:normal!important;letter-spacing:-.3px}.v625-duty-cell.v627-absent{box-shadow:inset 0 0 0 2px #f6b951}.v627-holiday{font-size:8px!important;background:#fff0d4!important;color:#88510b!important;border-radius:3px;padding:1px}.v627-holiday-day{background:#fffaf0!important}.v625-day .v627-leave{font-size:8px!important}
