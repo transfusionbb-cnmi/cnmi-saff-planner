@@ -110,10 +110,11 @@
       },
       {
         id:'roster', anchor:'schedule', members:['schedule','tradeRequests'], label:'ตารางเวร', emoji:'📋',
-        active:()=>['schedule','tradeRequests'].includes(page()),
+        active:()=>['schedule','tradeRequests','doctorRosterStaff'].includes(page()),
         children:[
           {key:'roster-view',label:'ตารางเวรประจำเดือน',kind:'calendar',page:'schedule',requiresNav:'schedule'},
-          {key:'roster-trade',label:'คำขอขายเวร',kind:'trade',page:'tradeRequests',requiresNav:'tradeRequests'}
+          {key:'roster-trade',label:'คำขอขายเวร (เจ้าหน้าที่)',kind:'trade',page:'tradeRequests',requiresNav:'tradeRequests'},
+          {key:'roster-doctor',label:'ตารางเวร(แพทย์)ประจำเดือน',kind:'calendar',page:'doctorRosterStaff'}
         ]
       },
       {
