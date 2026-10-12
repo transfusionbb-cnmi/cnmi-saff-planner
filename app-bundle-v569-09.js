@@ -4654,11 +4654,12 @@ try {
         ]
       },
       {
-        id:'roster', anchor:'schedule', members:['schedule','tradeRequests'], label:'ตารางเวร', emoji:'📋',
-        active:()=>['schedule','tradeRequests'].includes(page()),
+        id:'roster', anchor:'schedule', members:['schedule','tradeRequests','doctorRosterStaff'], label:'ตารางเวร', emoji:'📋',
+        active:()=>['schedule','tradeRequests','doctorRosterStaff'].includes(page()),
         children:[
           {key:'roster-view',label:'ตารางเวรประจำเดือน',kind:'calendar',page:'schedule',requiresNav:'schedule'},
-          {key:'roster-trade',label:'คำขอขายเวร',kind:'trade',page:'tradeRequests',requiresNav:'tradeRequests'}
+          {key:'roster-trade',label:'คำขอขายเวร (เจ้าหน้าที่)',kind:'trade',page:'tradeRequests',requiresNav:'tradeRequests'},
+          {key:'roster-doctor',label:'ตารางเวร(แพทย์)ประจำเดือน',kind:'calendar',page:'doctorRosterStaff'}
         ]
       },
       {
@@ -4963,9 +4964,9 @@ try {
       try{if(typeof renderPage==='function')renderPage();else window.renderPage?.();}catch(_){window.renderPage?.();}
       return;
     }
-    try{
-      if(window.cnmiV515?.navigate){window.cnmiV515.navigate(child.page);return;}
-    }catch(_){ }
+    if(child.page!=='doctorRosterStaff'){
+      try{if(window.cnmiV515?.navigate){window.cnmiV515.navigate(child.page);return;}}catch(_){ }
+    }
     S().page=child.page;
     try{if(typeof renderPage==='function')renderPage();else window.renderPage?.();}catch(_){window.renderPage?.();}
   }

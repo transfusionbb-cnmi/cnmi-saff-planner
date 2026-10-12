@@ -9,6 +9,7 @@ const todayMonth=()=>{const p=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Ba
 let month=/^\d{4}-(0[1-9]|1[0-2])$/.test(S().monthKey||'')?S().monthKey:todayMonth(), loading=false;
 const actualAdmin=()=>{try{return !!window.isActualAdminV167?.();}catch(_){return false;}};
 let doctorMode=false;try{doctorMode=sessionStorage.getItem(KEY)==='1';}catch(_){ }
+if(!doctorMode){try{sessionStorage.removeItem(KEY);}catch(_){}}
 function dateRows(key){const [y,m]=key.split('-').map(Number);return Array.from({length:new Date(y,m,0).getDate()},(_,i)=>`${key}-${pad(i+1)}`);}
 function person(id){const p=(S().staff||[]).find(x=>String(x.id)===String(id||''));return p?(p.nickname||p.full_name||p.name||'แพทย์'):'ยังไม่กำหนด';}
 function pill(id,type){return id?`<span class="v612-pill ${type}" title="${esc(person(id))}">${esc(person(id))}</span>`:'<span class="v612-unset">—</span>';}
@@ -29,10 +30,10 @@ function render(){if(S().page!==PAGE)return false;const title=document.getElemen
 const prev=window.renderPage||(typeof renderPage==='function'?renderPage:null);
 if(typeof prev==='function'){const fn=function(){if(render())return;return prev.apply(this,arguments);};try{window.renderPage=renderPage=fn;}catch(_){window.renderPage=fn;}}
 function refreshDoctorMode(){if(!actualAdmin())doctorMode=false;const menu=document.querySelector('[data-view-as-menu]');if(menu){menu.querySelectorAll('[data-v609-physician-preview]').forEach(x=>x.remove());if(actualAdmin()&&!menu.querySelector('[data-v612-physician]'))menu.insertAdjacentHTML('beforeend',`<button type="button" class="view-as-option" data-v612-physician><b>🩺 โหมดแพทย์</b><small>ใช้หน้าจัดการแพทย์ Consult ด้วยสิทธิ์ Admin จริง</small></button>`);}
- const badge=document.querySelector('.view-as-badge');if(badge&&doctorMode&&actualAdmin())badge.textContent='Physician mode';
+ const badge=document.querySelector('.view-as-badge');if(badge)badge.textContent=(doctorMode&&actualAdmin())?'แพทย์ (Admin)':(window.getViewAsModeV167?.()==='admin'?'Admin mode':'Staff mode');
 }
 const previousNav=window.renderNav||(typeof renderNav==='function'?renderNav:null);if(typeof previousNav==='function'){const fn=function(){const r=previousNav.apply(this,arguments);refreshDoctorMode();return r;};try{window.renderNav=renderNav=fn;}catch(_){window.renderNav=fn;}}
-document.addEventListener('click',async e=>{const mode=e.target.closest?.('[data-v612-physician]');if(mode){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(!actualAdmin())return;doctorMode=true;try{sessionStorage.setItem(KEY,'1');}catch(_){};try{await window.setViewAsModeV167?.('admin');}catch(_){};S().page='physicianConsult';document.querySelector('[data-view-as-menu]')?.classList.add('hidden');window.renderPage?.();return;}
+document.addEventListener('click',async e=>{const mode=e.target.closest?.('[data-v612-physician]');if(mode){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(!actualAdmin())return;doctorMode=true;try{sessionStorage.setItem(KEY,'1');}catch(_){};try{await window.setViewAsModeV167?.('admin');}catch(_){};S().page='physicianConsult';refreshDoctorMode();document.querySelector('[data-view-as-menu]')?.classList.add('hidden');window.renderPage?.();return;}
  const other=e.target.closest?.('[data-view-as-mode]');if(other&&doctorMode){doctorMode=false;try{sessionStorage.removeItem(KEY);}catch(_){};}
  const rf=e.target.closest?.('#v612-refresh');if(rf){e.preventDefault();const a=api();if(a){a.cache.loaded=false;paint();}return;}
 },true);
