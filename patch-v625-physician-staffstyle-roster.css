@@ -42,3 +42,39 @@
 .v625-gridscroll{scrollbar-width:auto;scrollbar-color:#91b9cf #edf5f9}
 .v625-day span{font-size:clamp(10px, .85vw, 13px);white-space:normal;overflow-wrap:anywhere;line-height:1.3}
 .v625-doctor-list span,.v625-doctor-list b{font-size:12px}
+
+/* v629: staff-inspired doctor rows, mobile calendar inspired by central calendar */
+.v629-staff-scroll{overflow-x:auto!important;max-width:100%;scrollbar-width:auto;}
+.v629-staff-matrix{table-layout:fixed!important;width:max-content!important;min-width:0!important;}
+.v629-staff-matrix th:not(.v625-rowhead),.v629-staff-matrix td{width:76px!important;min-width:76px!important;max-width:76px!important;height:52px!important;}
+.v629-staff-matrix .v625-rowhead{width:145px!important;min-width:145px!important;max-width:145px!important;position:sticky!important;left:0;z-index:4!important;}
+.v629-staff-day{padding:3px!important;vertical-align:middle;}
+.v629-duty-tag{display:block;width:100%;border:0;border-radius:7px;margin:2px 0;padding:4px 2px;font-size:11px;font-weight:800;cursor:pointer;color:#17394f;}
+.v629-duty-tag.v629-donor{background:#dff0ff}.v629-duty-tag.v629-bb{background:#def5e9}.v629-duty-tag.v629-call{background:#eee0ff}
+.v629-duty-tag:focus-visible{outline:2px solid #236c9a}.v629-off{color:#9da9b5;font-size:10px}.v629-holiday{background:#fffaf1}
+.v629-calendar-compact{display:none}.v629-calendar-hint{display:none}
+@media(max-width:760px){
+ .v625-page,.v625-toolbar,.v625-board,.v625-calendar-card,.v625-doctors{box-sizing:border-box!important;min-width:0!important;max-width:100%!important;width:100%!important}
+ .v625-toolbar-top,.v625-controls,.v625-board-head{min-width:0!important;max-width:100%!important}
+ .v625-toolbar p{font-size:12px!important;line-height:1.4}
+ .v625-actions-top{display:grid!important;grid-template-columns:1fr 1fr;gap:6px;width:100%}
+ .v625-actions-top button{font-size:12px!important;padding:8px 4px!important;white-space:normal!important}
+ .v625-tabs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+ .v625-tabs button{min-width:0!important;font-size:11px!important;white-space:normal!important}
+ .v625-monthnav{display:flex!important;flex-wrap:wrap;justify-content:center!important;gap:6px}
+ .v625-monthnav strong{min-width:100px!important;font-size:12px}.v625-monthnav input{max-width:140px!important}
+ .v629-staff-matrix .v625-rowhead{width:94px!important;min-width:94px!important;max-width:94px!important;padding:5px!important;}
+ .v629-staff-matrix th:not(.v625-rowhead),.v629-staff-matrix td{width:70px!important;min-width:70px!important;max-width:70px!important;height:52px!important}
+ .v629-staff-matrix .v625-rowhead b{font-size:12px!important;overflow-wrap:anywhere}
+ .v629-staff-matrix .v629-duty-tag{font-size:11px!important;padding:4px 1px}
+ .v629-calendar-card{padding:8px!important}
+ .v629-calendar-card .v625-week,.v629-calendar-card .v625-calendar{gap:3px!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;}
+ .v629-calendar-card .v625-day{min-width:0!important;min-height:64px!important;padding:3px!important;gap:3px!important;overflow:hidden;align-items:flex-start;}
+ .v629-calendar-card .v625-day strong{font-size:12px!important}
+ .v629-calendar-full{display:none!important}.v629-calendar-compact{display:flex!important;flex-wrap:wrap;gap:3px;margin-top:4px}
+ .v629-calendar-compact i{display:block;width:8px;height:8px;border-radius:50%;padding:0!important}
+ .v629-calendar-compact .donor{background:#62b5ed}.v629-calendar-compact .bb{background:#5ec5a0}.v629-calendar-compact .call{background:#b58bdf}.v629-calendar-compact .v629-leave-dot{background:#e99e36}
+ .v629-calendar-card .v629-holiday-name{font-size:8px!important;line-height:1.1!important;max-width:100%;overflow:hidden;text-overflow:ellipsis;display:block;max-height:22px;padding:2px!important;}
+ .v629-calendar-hint{display:block!important;font-size:12px!important;color:#617b90;margin:10px 0 0!important}
+ .v625-overlay{padding:6px!important}.v625-dialog{max-height:94vh!important;width:100%!important}
+}
