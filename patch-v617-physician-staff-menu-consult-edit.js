@@ -28,6 +28,28 @@ function apply(){
    const hide=(phys&&/^(ot|otRequests|otSignup|otExtra)$/i.test(page)) ||(p&&!STAFF_PAGES.has(page));
    item.classList.toggle('v614-nav-hidden',hide);
   }
+  // V619: In Physician mode, hide EVERY Admin entry except Physician Consult.
+  // Unlike V617, apply this to both actual physician accounts and Admin's physician preview.
+  // Target only Admin sections so Staff menus remain exactly as they were.
+  for(const section of nav.querySelectorAll('.nav-section')){
+   const title=section.querySelector('.nav-section-title');
+   const adminSection=!!section.querySelector('[data-v524-tree="physician"]') ||
+     /เมนู\s*Admin|เมนูผู้ดูแล|Admin\s*menu/i.test(title?.textContent||'');
+   if(!adminSection)continue;
+   for(const child of section.querySelectorAll('.nav-btn[data-page],.v524-nav-tree')){
+    if(child.closest('.v524-nav-tree')!==null && !child.classList.contains('v524-nav-tree'))continue;
+    const consult=child.matches('[data-v524-tree="physician"]');
+    child.classList.toggle('v619-admin-hidden',phys&&!consult);
+    if(phys){child.classList.toggle('v614-nav-hidden',!consult);}
+    else child.classList.remove('v619-admin-hidden');
+   }
+   if(title){
+    const label=title.querySelector('span');
+    if(label){if(!label.dataset.v619OldTitle)label.dataset.v619OldTitle=label.textContent;
+      label.textContent=phys?'เมนูแพทย์':label.dataset.v619OldTitle;
+    }
+   }
+  }
   // Unlike v616, do NOT hide trade request child. Only the OT sign-up/request menu is omitted.
   for(const sub of nav.querySelectorAll('.v524-subitem'))sub.classList.remove('v616-nav-hidden','v617-nav-hidden');
   for(const section of nav.querySelectorAll('.nav-section')){
@@ -45,6 +67,7 @@ function apply(){
  document.querySelector('[data-v612-physician]')?.classList.toggle('active',p);
  for(const opt of document.querySelectorAll('[data-view-as-mode]'))opt.classList.toggle('active',!p&&opt.dataset.viewAsMode===window.getViewAsModeV167?.());
 }
+const style619=document.createElement('style');style619.textContent='.v619-admin-hidden{display:none!important}';document.head.append(style619);
 const priorMode=window.setViewAsModeV167;
 if(typeof priorMode==='function'){
  const modeFn=async function(next){if(!(next==='admin'&&preview()))clear();const result=await priorMode.apply(this,arguments);window.renderNav?.();apply();requestAnimationFrame(apply);return result;};
