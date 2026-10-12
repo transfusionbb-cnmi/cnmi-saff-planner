@@ -10,7 +10,8 @@ const pad=n=>String(n).padStart(2,'0');
 const bkkToday=()=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}`;};
 const q=()=>new URLSearchParams((location.hash.split('?')[1]||''));
 let month=/^\d{4}-\d{2}$/.test(q().get('month')||'')?q().get('month'):bkkToday().slice(0,7);
-let view=['month','calendar','doctor'].includes(q().get('view'))?q().get('view'):'month', chosen='', focusDuty='', loading=false, advanced=false, swapMode=false, swapFirst=null, busy=false;
+let view=['month','calendar','doctor'].includes(q().get('view'))?q().get('view'):'calendar', chosen='', focusDuty='', loading=false, advanced=false, swapMode=false, swapFirst=null, busy=false;
+const holidayLoaded=new Set(),holidayPending=new Set();
 const toastSafe=m=>{try{if(typeof toast==='function')return toast(m);}catch(_){}try{if(typeof showToast==='function')return showToast(m);}catch(_){}console.info('[v625]',m);};
 const actor=()=>{try{return typeof currentStaffId==='function'?currentStaffId():S()?.profile?.id||null;}catch(_){return S()?.profile?.id||null;}};
 function isPhysician(p){if(!p||p.is_active===false||p.active===false)return false;try{if(window.cnmiPersonTypeV516?.isPhysician)return !!window.cnmiPersonTypeV516.isPhysician(p);}catch(_){}return [p.staff_type,p.position,p.role].some(v=>/^(แพทย์|หมอ|physician|doctor)/i.test(String(v||'').trim()));}
@@ -29,7 +30,22 @@ const effective=(model,t)=>t==='donor'?model.donor:t==='bb'?model.bb:model.combi
 function setHashMonth(){try{const p=q();p.set('month',month);p.set('view',view);history.replaceState(null,'',location.hash.split('?')[0]+'?'+p.toString());}catch(_){} }
 function doctorOptions(value=''){return `<option value="">ไม่เปลี่ยน</option>${physicians().map(p=>`<option value="${esc(p.id)}" ${String(value||'')===String(p.id)?'selected':''}>${esc(p.full_name||p.nickname||p.name||p.email||'แพทย์')}</option>`).join('')}`;}
 function ensure(){const a=api();if(!a)return false;if(a.cache?.loaded)return true;if(!loading){loading=true;Promise.resolve(a.ensureLoaded?.()).catch(()=>{}).finally(()=>{loading=false;if(S().page===PAGE)render();});}return false;}
-function toolbar(){return `<section class="card v625-toolbar"><div class="v625-toolbar-top"><div><h3>ตารางเวรแพทย์</h3><p>จัดเวรแบบตารางเดียว คลิกช่องวันที่เพื่อแก้ไข หรือใช้ “สลับเวร” เพื่อแลกวันกัน</p></div><div class="v625-actions-top"><button type="button" class="v625-swap-toggle ${swapMode?'active':''}" data-v625-swap>${swapMode?'ยกเลิกสลับเวร':'⇄ สลับเวร'}</button><button type="button" data-v625-advanced>⚙ ตั้งค่าแบบช่วง/ทั้งเดือน</button></div></div><div class="v625-controls"><div class="v625-tabs" role="tablist"><button type="button" data-v625-view="month" class="${view==='month'?'active':''}">ตารางทั้งเดือน</button><button type="button" data-v625-view="calendar" class="${view==='calendar'?'active':''}">ปฏิทิน</button><button type="button" data-v625-view="doctor" class="${view==='doctor'?'active':''}">ดูตามแพทย์</button></div><div class="v625-monthnav"><button type="button" data-v625-shift="-1">‹</button><strong>${esc(monthThai())}</strong><button type="button" data-v625-shift="1">›</button><input type="month" id="v625-month" value="${esc(month)}" aria-label="เลือกเดือน"></div></div>${swapMode?`<div class="v625-swap-help">${swapFirst?`เลือกช่องที่ 2 ของ <b>${esc(dutyLabel(swapFirst.duty))}</b> เพื่อสลับกับ ${esc(dateThai(swapFirst.date))}`:'ขั้นที่ 1: คลิกเวรที่ต้องการแลก จากนั้นคลิกอีกวันที่ในแถวเดียวกัน'}</div>`:''}</section>`;}
+function loadMonthHolidays(){
+ const key=month;
+ if(holidayLoaded.has(key)||holidayPending.has(key))return;
+ const c=client();if(!c)return;
+ holidayPending.add(key);
+ const [y,m]=key.split('-').map(Number),end=`${key}-${pad(new Date(y,m,0).getDate())}`;
+ Promise.resolve(c.from('public_holidays').select('*').gte('holiday_date',`${key}-01`).lte('holiday_date',end)).then(({data,error})=>{
+  if(error)throw error;
+  const st=S();if(!Array.isArray(st.holidays))st.holidays=[];
+  const existing=st.holidays.filter(row=>!String(row?.holiday_date||row?.date||'').startsWith(key));
+  st.holidays=[...existing,...(data||[])];
+  holidayLoaded.add(key);
+  if(st.page===PAGE&&month===key)render();
+ }).catch(err=>{console.warn('[v628] โหลดวันหยุดเดือน',key,err);toastSafe('โหลดวันหยุดจากปฏิทินกลางไม่สำเร็จ กรุณากดรีเฟรช');}).finally(()=>holidayPending.delete(key));
+}
+function toolbar(){return `<section class="card v625-toolbar"><div class="v625-toolbar-top"><div><h3>ตารางเวรแพทย์</h3><p>จัดเวรแบบตารางเดียว คลิกช่องวันที่เพื่อแก้ไข หรือใช้ “สลับเวร” เพื่อแลกวันกัน</p></div><div class="v625-actions-top"><button type="button" class="v625-swap-toggle ${swapMode?'active':''}" data-v625-swap>${swapMode?'ยกเลิกสลับเวร':'⇄ สลับเวร'}</button><button type="button" data-v625-advanced>⚙ ตั้งค่าแบบช่วง/ทั้งเดือน</button></div></div><div class="v625-controls"><div class="v625-tabs" role="tablist"><button type="button" data-v625-view="calendar" class="${view==='calendar'?'active':''}">ปฏิทิน</button><button type="button" data-v625-view="doctor" class="${view==='doctor'?'active':''}">ดูตามแพทย์</button><button type="button" data-v625-view="month" class="${view==='month'?'active':''}">ตารางทั้งเดือน</button></div><div class="v625-monthnav"><button type="button" data-v625-shift="-1">‹</button><strong>${esc(monthThai())}</strong><button type="button" data-v625-shift="1">›</button><input type="month" id="v625-month" value="${esc(month)}" aria-label="เลือกเดือน"></div></div>${swapMode?`<div class="v625-swap-help">${swapFirst?`เลือกช่องที่ 2 ของ <b>${esc(dutyLabel(swapFirst.duty))}</b> เพื่อสลับกับ ${esc(dateThai(swapFirst.date))}`:'ขั้นที่ 1: คลิกเวรที่ต้องการแลก จากนั้นคลิกอีกวันที่ในแถวเดียวกัน'}</div>`:''}</section>`;}
 function leaveOn(id,d){
  if(!id)return null;
  try{if(typeof activeLeaveRecordOn==='function')return activeLeaveRecordOn(id,d);}catch(_){}
@@ -43,9 +59,10 @@ function decoratePhysicianSubmenu(){
  if(!saved)return;
  const container=saved.closest('li')||saved.parentElement;
  if(!container||!container.parentElement)return;
+ container.style.setProperty('display','none','important');
  // One navigation element per mode, with actual bookmarkable hash URLs.
  container.parentElement.querySelectorAll('[data-v627-menu-item]').forEach(el=>el.remove());
- const menus=[['month','ตารางทั้งเดือน'],['calendar','ปฏิทิน'],['doctor','ดูตามแพทย์']];
+ const menus=[['calendar','ปฏิทิน'],['doctor','ดูตามแพทย์'],['month','ตารางทั้งเดือน']];
  menus.forEach(([mode,label])=>{
   const holder=document.createElement(container.tagName==='LI'?'li':'div');
   holder.setAttribute('data-v627-menu-item',mode);
@@ -74,7 +91,7 @@ function hideLegacyPhysicianForms(){
  });
 }
 
-function render(){if(S().page!==PAGE)return false;const root=document.getElementById('pageContent');if(!root)return false;const title=document.getElementById('pageTitle'),sub=document.getElementById('pageSubtitle');if(title)title.textContent='ตารางเวรแพทย์';if(sub)sub.textContent='จัดเวรและสลับเวรแบบตารางเดียว';const a=api();if(!a){root.innerHTML='<div class="card">ไม่พบระบบตารางแพทย์</div>';return true;}if(a.cache?.unavailable){root.innerHTML=a.renderAdminPage();return true;}if(!ensure()){root.innerHTML='<div class="card">กำลังโหลดตารางเวรแพทย์…</div>';return true;}root.innerHTML=`<div class="v625-page">${toolbar()}${advancedArea()}${view==='calendar'?calendar():view==='doctor'?doctorView():monthMatrix()}${editor()}</div>`;removeTodayCard();hideLegacyPhysicianForms();decoratePhysicianSubmenu();return true;}
+function render(){if(S().page!==PAGE)return false;const root=document.getElementById('pageContent');if(!root)return false;const title=document.getElementById('pageTitle'),sub=document.getElementById('pageSubtitle');if(title)title.textContent='ตารางเวรแพทย์';if(sub)sub.textContent='จัดเวรและสลับเวรแบบตารางเดียว';const a=api();if(!a){root.innerHTML='<div class="card">ไม่พบระบบตารางแพทย์</div>';return true;}if(a.cache?.unavailable){root.innerHTML=a.renderAdminPage();return true;}if(!ensure()){root.innerHTML='<div class="card">กำลังโหลดตารางเวรแพทย์…</div>';return true;}loadMonthHolidays();if(!q().get('view'))setHashMonth();root.innerHTML=`<div class="v625-page">${toolbar()}${advancedArea()}${view==='calendar'?calendar():view==='doctor'?doctorView():monthMatrix()}${editor()}</div>`;removeTodayCard();hideLegacyPhysicianForms();decoratePhysicianSubmenu();return true;}
 async function confirmSafe(msg,title='ยืนยันสลับเวร'){try{if(typeof confirmDialog==='function')return !!(await confirmDialog(msg,title));}catch(_){}return window.confirm(msg);}
 async function saveOverrideField(date,duty,newId,note){const a=api(),c=client();if(!a||!c)throw new Error('ยังไม่เชื่อมต่อฐานข้อมูล');const m=a.baseForDate(date),o=m.override||null,field=dutyField(duty);const payload={schedule_type:'daily_override',start_date:date,end_date:date,is_active:true,donor_staff_id:o?.donor_staff_id||null,bb_staff_id:o?.bb_staff_id||null,combined_staff_id:o?.combined_staff_id||null,note:[o?.note,note].filter(Boolean).join(' · ')||null,version_label:o?.version_label||null,updated_by_staff_id:actor()||null};payload[field]=newId||null;let result;if(o?.id)result=await c.from(TABLE).update(payload).eq('id',o.id).select().single();else{payload.created_by_staff_id=actor()||null;result=await c.from(TABLE).insert(payload).select().single();}if(result.error)throw result.error;}
 async function doSwap(second){if(busy)return;const first=swapFirst;if(!first||first.duty!==second.duty||first.date===second.date)return;const a=api(),m1=a.baseForDate(first.date),m2=a.baseForDate(second.date),id1=effective(m1,first.duty),id2=effective(m2,second.duty);if(!id1||!id2){toastSafe('สลับไม่ได้ เพราะมีอย่างน้อย 1 วันที่ยังไม่ได้กำหนดแพทย์');swapFirst=null;render();return;}const ok=await confirmSafe(`สลับ ${dutyLabel(first.duty)}\n${dateThai(first.date)}: ${name(id1)}\n↔\n${dateThai(second.date)}: ${name(id2)}`);if(!ok){swapFirst=null;render();return;}busy=true;try{await saveOverrideField(first.date,first.duty,id2,`สลับเวรกับ ${dateThai(second.date)}`);await saveOverrideField(second.date,second.duty,id1,`สลับเวรกับ ${dateThai(first.date)}`);await a.ensureLoaded(true);toastSafe('สลับเวรเรียบร้อยแล้ว');swapFirst=null;render();}catch(err){console.error('[v625] swap',err);toastSafe(`สลับเวรไม่สำเร็จ: ${err?.message||err}`);}finally{busy=false;}}
@@ -83,6 +100,6 @@ document.addEventListener('click',async e=>{removeTodayCard();if(S().page!==PAGE
 document.addEventListener('change',e=>{if(S().page===PAGE&&e.target?.id==='v625-month'&&/^\d{4}-\d{2}$/.test(e.target.value)){month=e.target.value;swapFirst=null;chosen='';setHashMonth();render();}},true);
 // Guarantee that the old redundant "เวรแพทย์วันนี้" card never returns on the read-only physician roster page.
 const observer=new MutationObserver(()=>{removeTodayCard();hideLegacyPhysicianForms();});observer.observe(document.documentElement,{subtree:true,childList:true});removeTodayCard();hideLegacyPhysicianForms();
-window.addEventListener('hashchange',()=>{if(S().page!==PAGE)return;const next=q().get('view');view=['month','calendar','doctor'].includes(next)?next:'month';const mo=q().get('month');if(/^\d{4}-\d{2}$/.test(mo||''))month=mo;chosen='';swapFirst=null;render();});
+window.addEventListener('hashchange',()=>{if(S().page!==PAGE)return;const next=q().get('view');view=['month','calendar','doctor'].includes(next)?next:'calendar';const mo=q().get('month');if(/^\d{4}-\d{2}$/.test(mo||''))month=mo;chosen='';swapFirst=null;render();});
 window.cnmiPhysicianRosterV625={render};
 })();
