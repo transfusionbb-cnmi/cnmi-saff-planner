@@ -34,15 +34,15 @@ function apply(){
   // Target only Admin sections so Staff menus remain exactly as they were.
   for(const section of nav.querySelectorAll('.nav-section')){
    const title=section.querySelector('.nav-section-title');
-   const adminSection=!!section.querySelector('[data-v524-tree="physician"]') ||
-     /เมนู\s*Admin|เมนูผู้ดูแล|Admin\s*menu/i.test(title?.textContent||'');
-   if(!adminSection)continue;
+   const adminSection=/เมนู\s*Admin|เมนูผู้ดูแล|Admin\s*menu/i.test(title?.textContent||'') || section.dataset.v621AdminSection==='1';
+   if(adminSection)section.dataset.v621AdminSection='1';
+   if(!adminSection){section.classList.remove('v619-admin-hidden','v614-nav-hidden');continue;}
    for(const child of section.querySelectorAll('.nav-btn[data-page],.v524-nav-tree')){
     if(child.closest('.v524-nav-tree')!==null && !child.classList.contains('v524-nav-tree'))continue;
     const consult=child.matches('[data-v524-tree="physician"]');
     child.classList.toggle('v619-admin-hidden',phys&&!consult);
     if(phys){child.classList.toggle('v614-nav-hidden',!consult);}
-    else child.classList.remove('v619-admin-hidden');
+    else {child.classList.remove('v619-admin-hidden');child.classList.remove('v614-nav-hidden');}
    }
    if(title){
     const label=title.querySelector('span');
@@ -60,7 +60,7 @@ function apply(){
     head.classList.remove('v614-nav-hidden');
    }
    const items=[...section.querySelectorAll('.nav-btn[data-page],.v524-nav-tree')].filter(x=>!x.closest('.v524-nav-tree'));
-   section.classList.toggle('v614-nav-hidden',p&&!items.some(x=>!x.classList.contains('v614-nav-hidden')));
+   section.classList.toggle('v614-nav-hidden',phys&&!items.some(x=>!x.classList.contains('v614-nav-hidden')&&!x.classList.contains('v619-admin-hidden')));
   }
  }
  const badge=document.querySelector('.view-as-badge');
