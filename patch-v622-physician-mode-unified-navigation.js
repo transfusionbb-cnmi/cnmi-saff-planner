@@ -25,6 +25,7 @@ function apply(){
    const trees=[...section.querySelectorAll('.v524-nav-tree')];
    const isAdminSection=trees.some(t=>['physician','hr','positions-admin','users'].includes(t.dataset.v524Tree)) || /เมนู\s*Admin|เมนูผู้ดูแล/i.test(title?.textContent||'') || section.dataset.v622Admin==='1';
    if(isAdminSection)section.dataset.v622Admin='1';
+   section.classList.remove('v622-hide');
    if(title){let label=title.querySelector('span');if(label){if(!label.dataset.v622Original)label.dataset.v622Original=label.textContent;label.textContent=phys&&isAdminSection?'เมนูแพทย์':label.dataset.v622Original;}}
    if(!phys)continue;
    if(isAdminSection){
