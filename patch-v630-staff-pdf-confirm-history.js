@@ -17,5 +17,5 @@ try{
  signature=key;lastLoad=Date.now();
 }catch(e){console.warn('[v630]',e);}finally{working=false;}}
  document.addEventListener('click',async e=>{const btn=e.target.closest('[data-v630-action]');if(!btn||btn.disabled)return;const holder=btn.closest('[data-v630-batch]');if(!holder)return;const amountText=holder.querySelector('[data-v630-count]').value.trim();const amount=Number(amountText);if(!amountText||!Number.isFinite(amount)||amount<0)return notice('กรุณากรอกยอดที่นับเองก่อน');const status=btn.dataset.v630Action;const pdf=Number(holder.dataset.v630Pdf);if(status==='confirmed'&&Math.abs(amount-pdf)>0.009)return notice('ยอดที่นับไม่ตรง PDF กรุณาใช้ปุ่มแจ้งยอดไม่ตรง');btn.disabled=true;try{const {error}=await DB().rpc('confirm_my_hr_pdf_v630',{p_batch:holder.dataset.v630Batch,p_counted_money:amount,p_status:status,p_note:holder.querySelector('[data-v630-note]').value});if(error)throw error;notice('บันทึกผลตรวจยอดแล้ว');signature='';await render();}catch(err){notice('บันทึกไม่สำเร็จ: '+err.message);}finally{btn.disabled=false;}});
- setInterval(()=>{render();},16000);document.addEventListener('change',()=>{signature='';setTimeout(render,200);});
+ /* v635: stop periodic full render; refresh on route/input changes */document.addEventListener('change',()=>{signature='';setTimeout(render,200);});
 })();

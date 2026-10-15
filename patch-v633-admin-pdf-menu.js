@@ -13,5 +13,5 @@ if(!view.querySelector('#v533PdfReviewCard')){let wait=view.querySelector('.v633
 function tick(){nav();focus()}
 document.addEventListener('click',e=>{if(e.target.closest('.v633-sidebar-link')){e.preventDefault();go(true);return}if(e.target.closest('[data-v633-return]')){e.preventDefault();go(false)}});
 document.addEventListener('change',e=>{if(e.target.id==='v633Month'&&/^\d{4}-\d{2}$/.test(e.target.value))go(true,e.target.value)});
-window.addEventListener('hashchange',()=>setTimeout(tick,150));setInterval(tick,12000);setTimeout(tick,350);document.addEventListener('click',e=>{if(e.target.closest('a,button'))setTimeout(tick,300)},true);
+window.addEventListener('hashchange',()=>setTimeout(tick,150));/* v635: stop polling */setTimeout(tick,350);document.addEventListener('click',e=>{if(e.target.closest('a,button'))setTimeout(tick,300)},true);
 })();
