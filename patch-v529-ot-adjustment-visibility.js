@@ -68,6 +68,14 @@
     try{
       const menu=String(S().otMenuV369||'');
       const month=selectedMonth();
+      // v636: paint status immediately; only then fetch the adjustment list.
+      if(!admin()&&String(S().otMenuV369||'')==='staff-details'){
+        const content=document.querySelector('.v369-ot-content');
+        if(content&&!content.querySelector('#v529StaffDetailAdjustments')){
+          insertTop(content,makeCard('v529StaffDetailAdjustments','รายการปรับยอดของฉัน',
+          'ข้อมูลเดือนที่เลือก','<div class="v529-loading">กำลังดึงรายการปรับยอด…</div>','v529-staff-card'));
+        }
+      }
       const rows=await fetchRows(month);
       // Staff: own detail page.
       if(!admin()&&menu==='staff-details'){
@@ -119,7 +127,7 @@
       queue(140);if(e.target?.closest?.('[data-export-hr-v318],[data-export-hr-v241]')){setTimeout(()=>{window.cnmiV527AdjustmentLedger?.refresh?.().finally(()=>queue(50));},2500);}
     }
   },true);
-  function start(){decorateVersion();queue(50);const content=document.getElementById('pageContent');if(content)new MutationObserver(ms=>{if(ms.some(m=>m.addedNodes?.length))queue(60);}).observe(content,{childList:true,subtree:true});}
+  function start(){decorateVersion();queue(50);const content=document.getElementById('pageContent');/* v636: removed subtree observer: heavy legacy page changed repeatedly and queued needless loads. */}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
   window.cnmiV529AdjustmentVisibility={version:VERSION,refresh:()=>queue(0)};
   console.info(`[${VERSION}] loaded`);

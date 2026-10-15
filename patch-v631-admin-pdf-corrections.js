@@ -1,8 +1,8 @@
 /* v631 - Admin correction ledger on sent HR PDF batches. Never edits original PDF or snapshot. */
 (()=>{'use strict';if(window.__CNMI_V631__)return;window.__CNMI_V631__=true;
-const state=()=>window.state||{};const db=()=>window.sb;const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const state=()=>window.state||{};const db=()=>{try{return (typeof sb!=='undefined'&&sb?.rpc?sb:null)||window.sb||window.supabaseClient||null}catch(_){return window.sb||null}};const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
-const isAdmin=()=>{try{return window.isAdmin?.()===true}catch(_){return false}};
+const isAdmin=()=>{try{return (typeof isAdmin==='function'&&isAdmin())||window.isAdmin?.()===true}catch(_){return false}};
 let busy=false,last='',lastAt=0;
 function getMonth(){const u=new URLSearchParams((location.hash.split('?')[1]||''));return u.get('month')||state().otMenuMonthV369||new Date().toISOString().slice(0,7)}
 const notify=s=>{try{window.showToast(s)}catch(_){alert(s)}};
@@ -17,4 +17,5 @@ box.innerHTML=`<h3>ตรวจยอด PDF หลังส่ง HR — แก
 '<p class="muted">ส่วนต่างจะสร้างรายการปรับย้อนหลังสถานะรอดำเนินการในรอบถัดไป (Admin ต้องตรวจสอบยอดที่ไฟล์ Export รอบถัดไปอีกครั้งก่อนส่ง HR) และเจ้าหน้าที่ต้องยืนยันยอดแก้ไขใหม่</p>';
 last=m;lastAt=Date.now();}catch(e){const host2=document.querySelector('.v369-ot-content');if(host2&&!host2.querySelector('#v631AdminPdfCorrection')){const box=document.createElement('section');box.id='v631AdminPdfCorrection';box.className='card v631-panel';host2.prepend(box)}const box=host2?.querySelector('#v631AdminPdfCorrection');if(box)box.textContent='ระบบแก้ยอด PDF: กรุณาติดตั้ง SQL V631 ก่อนใช้งาน ('+String(e.message||e)+')';}finally{busy=false}}
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-v631-save]');if(!b)return;const r=b.closest('[data-v631-row]'),input=r.querySelector('[data-v631-money]'),reason=r.querySelector('[data-v631-reason]').value.trim(),amount=Number(input.value);if(!input.value.trim()||!Number.isFinite(amount)||amount<0||Math.round(amount*100)!==amount*100)return notify('กรุณาระบุยอดเงินถูกต้องเป็นทศนิยมไม่เกิน 2 ตำแหน่ง');if(reason.length<5)return notify('กรุณากรอกเหตุผลอย่างน้อย 5 ตัวอักษร');if(!confirm(`แก้ยอด PDF ของเจ้าหน้าที่เป็น ${fmt(amount)} บาท และสร้างรายการปรับในรอบถัดไป?`))return;b.disabled=true;try{const {data,error}=await db().rpc('admin_correct_hr_pdf_v631',{p_batch:r.dataset.batch,p_staff:r.dataset.staff,p_new_money:amount,p_reason:reason});if(error)throw error;const result=data?.[0];notify('บันทึกยอดแก้ไขแล้ว • ยอดปรับ '+fmt(result?.adjustment_money)+' บาท รอบ '+(result?.adjustment_month||'ถัดไป'));last='';await render(true)}catch(err){notify('บันทึกไม่สำเร็จ: '+err.message)}finally{b.disabled=false}});
-/* v635: stop polling */})();
+window.cnmiV631AdminCorrections={refresh:()=>{last='';return render(true)}};
+})();

@@ -587,6 +587,14 @@ try {
     try{
       const menu=String(S().otMenuV369||'');
       const month=selectedMonth();
+      // v636: paint status immediately; only then fetch the adjustment list.
+      if(!admin()&&String(S().otMenuV369||'')==='staff-details'){
+        const content=document.querySelector('.v369-ot-content');
+        if(content&&!content.querySelector('#v529StaffDetailAdjustments')){
+          insertTop(content,makeCard('v529StaffDetailAdjustments','รายการปรับยอดของฉัน',
+          'ข้อมูลเดือนที่เลือก','<div class="v529-loading">กำลังดึงรายการปรับยอด…</div>','v529-staff-card'));
+        }
+      }
       const rows=await fetchRows(month);
       // Staff: own detail page.
       if(!admin()&&menu==='staff-details'){
@@ -638,7 +646,7 @@ try {
       queue(140);if(e.target?.closest?.('[data-export-hr-v318],[data-export-hr-v241]')){setTimeout(()=>{window.cnmiV527AdjustmentLedger?.refresh?.().finally(()=>queue(50));},2500);}
     }
   },true);
-  function start(){decorateVersion();queue(50);const content=document.getElementById('pageContent');if(content)new MutationObserver(ms=>{if(ms.some(m=>m.addedNodes?.length))queue(60);}).observe(content,{childList:true,subtree:true});}
+  function start(){decorateVersion();queue(50);const content=document.getElementById('pageContent');/* v636: removed subtree observer: heavy legacy page changed repeatedly and queued needless loads. */}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
   window.cnmiV529AdjustmentVisibility={version:VERSION,refresh:()=>queue(0)};
   console.info(`[${VERSION}] loaded`);
@@ -997,19 +1005,19 @@ try {
   function extras(review){return Array.isArray(review?.extras)?review.extras:[];}
   function batchReviewHtml(snap,index){
     const review=snap.pdf_review||{},staff=Array.isArray(snap.snapshot?.staff)?snap.snapshot.staff:[],map=reviewStaffMap(review),extra=extras(review),expected=Number(snap.total_money||snap.snapshot?.preflight?.total_money||0),pdfTotal=review.pdf_total==null?'':Number(review.pdf_total),open=index===0?' open':'';
-    const rows=staff.map((r,i)=>{const key=String(r.staff_id||r.employee_code||i),saved=map.get(key)||{},v=saved.pdf_money==null?'':saved.pdf_money;return `<tr><td><b>${esc(r.name||'-')}</b><small>${esc(r.employee_code||'')}</small></td><td>${money(r.money||0)}</td><td><input type="number" step="0.01" data-v533-pdf-amount data-batch="${esc(snap.batch_id)}" data-staff-key="${esc(key)}" data-staff-id="${esc(r.staff_id||'')}" data-code="${esc(r.employee_code||'')}" data-name="${esc(r.name||'')}" value="${esc(v)}" placeholder="ยอดใน PDF"></td><td data-v533-diff-cell>${v===''?'-':signedMoney(round2(Number(v)-Number(r.money||0)))}</td></tr>`;}).join('');
+    const rows=staff.map((r,i)=>{const key=String(r.staff_id||r.employee_code||i),saved=map.get(key)||{},v=saved.pdf_money==null?'':saved.pdf_money;return `<tr><td><b>${esc(r.name||'-')}</b><small>${esc(r.employee_code||'')}</small></td><td>${money(r.money||0)}</td><td><input type="number" step="0.01" data-v533-pdf-amount data-batch="${esc(snap.batch_id)}" data-staff-key="${esc(key)}" data-staff-id="${esc(r.staff_id||'')}" data-code="${esc(r.employee_code||'')}" data-name="${esc(r.name||'')}" value="${esc(v)}" placeholder="ยอดที่ Admin กรอก"></td><td data-v533-diff-cell>${v===''?'-':signedMoney(round2(Number(v)-Number(r.money||0)))}</td></tr>`;}).join('');
     const extraRows=(extra.length?extra:[{name:'',amount:''}]).map(x=>`<div class="v533-extra-row"><input data-v533-extra-name placeholder="ชื่อคนนอกหน่วย / รายการพิเศษ" value="${esc(x.name||'')}"><input type="number" step="0.01" data-v533-extra-amount placeholder="จำนวนเงิน" value="${esc(x.amount==null?'':x.amount)}"><button type="button" class="tiny-btn danger" data-v533-remove-extra>ลบ</button></div>`).join('');
     const fileText=review.pdf_name?`${esc(review.pdf_name)} • ${(Number(review.pdf_size||0)/1024/1024).toFixed(2)} MB`:'ยังไม่ได้อัปโหลด PDF';
     return `<details class="card v533-pdf-batch" data-v533-batch="${esc(snap.batch_id)}"${open}><summary><span><b>Batch ${esc(snap.batch_id)}</b><small>${esc(snap.filename||'')} • Snapshot ${money(expected)} บ.</small></span>${statusBadge(review)}</summary>
       <div class="v533-pdf-body">
-        <div class="v533-file-row"><label class="v533-file-label">📄 PDF HR ที่จะส่งจริง<input type="file" accept="application/pdf,.pdf" data-v533-pdf-file></label><button type="button" class="ghost-btn" data-v533-upload-pdf>อัปโหลด PDF</button>${review.pdf_path?'<button type="button" class="ghost-btn" data-v533-open-pdf>เปิด PDF ที่เก็บไว้</button>':''}<span class="muted">${fileText}</span></div>
-        <div class="notice soft-notice compact">ระบบยังไม่อ่าน PDF อัตโนมัติ เพื่อป้องกันอ่านตารางผิด • ให้เทียบ PDF จริงแล้วกรอก/ยืนยันยอดรายคนก่อนส่ง HR</div>
+        <div class="v533-file-row" hidden><label class="v533-file-label">📄 PDF HR ที่จะส่งจริง<input type="file" accept="application/pdf,.pdf" data-v533-pdf-file></label><button type="button" class="ghost-btn" data-v533-upload-pdf>อัปโหลด PDF</button>${review.pdf_path?'<button type="button" class="ghost-btn" data-v533-open-pdf>เปิด PDF ที่เก็บไว้</button>':''}<span class="muted">${fileText}</span></div>
+        <div class="notice soft-notice compact">Admin กรอกยอดที่ส่งเบิกตามเอกสาร HR เอง ไม่ต้องอัปโหลด PDF • หากต่างจาก Snapshot ให้ใส่เหตุผลประกอบ</div>
         <div class="v533-review-actions"><button type="button" class="ghost-btn" data-v533-fill-snapshot>เติมยอด Snapshot เป็นค่าเริ่มต้น</button><span>จากนั้นตรวจ PDF และแก้เฉพาะช่องที่ไม่ตรง</span></div>
-        <div class="table-wrap"><table class="v533-pdf-table"><thead><tr><th>คน</th><th>Snapshot</th><th>ยอดใน PDF</th><th>ต่าง</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <div class="v533-extra-box"><div class="section-title"><div><h4>รายการนอกหน่วย / พิเศษใน PDF</h4><p class="hint">เช่น คนที่มัสเบิกให้ตามจริงแต่ไม่ได้อยู่ใน Staff Planner • ไม่ถือเป็นความผิดปกติของเจ้าหน้าที่ในหน่วย</p></div><button type="button" class="ghost-btn" data-v533-add-extra>+ เพิ่มรายการ</button></div><div data-v533-extra-list>${extraRows}</div></div>
+        <div class="table-wrap"><table class="v533-pdf-table"><thead><tr><th>คน</th><th>Snapshot</th><th>ยอดที่ Admin กรอก</th><th>ต่าง</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <div class="v533-extra-box"><div class="section-title"><div><h4>รายการเบิกพิเศษ / นอกหน่วย</h4><p class="hint">เช่น คนที่มัสเบิกให้ตามจริงแต่ไม่ได้อยู่ใน Staff Planner • ไม่ถือเป็นความผิดปกติของเจ้าหน้าที่ในหน่วย</p></div><button type="button" class="ghost-btn" data-v533-add-extra>+ เพิ่มรายการ</button></div><div data-v533-extra-list>${extraRows}</div></div>
         <div class="form-grid v533-review-meta"><label>ยอดรวมทั้ง PDF <input type="number" step="0.01" data-v533-pdf-total value="${esc(pdfTotal)}" placeholder="ใส่ยอดรวมหน้าสุดท้าย (ถ้ามี)"></label><label>หมายเหตุ <input data-v533-review-note value="${esc(review.notes||'')}" placeholder="เช่น ตรวจเทียบทุกหน้าแล้ว"></label></div>
         <div class="v533-reconcile-summary" data-v533-reconcile-summary></div>
-        <div class="actions"><button type="button" class="primary-btn" data-v533-save-review>บันทึกผลตรวจ PDF</button><button type="button" class="primary-btn success" data-v533-confirm-review ${review.pdf_path?'':'disabled'}>✓ ยืนยัน PDF ตรงและส่ง HR แล้ว</button></div>
+        <div class="actions"><button type="button" class="primary-btn" data-v533-save-review>บันทึกยอดส่งเบิก</button><button type="button" class="primary-btn success" data-v533-confirm-review>✓ บันทึกยอดส่ง HR และเปิดให้ Staff ยืนยัน</button></div>
       </div></details>`;
   }
 
@@ -1017,7 +1025,7 @@ try {
     if(!admin()||!container)return;let card=document.getElementById('v533PdfReviewCard');
     if(!card){card=document.createElement('div');card.id='v533PdfReviewCard';card.className='v533-pdf-review-root';container.appendChild(card);}
     card.innerHTML='<div class="card"><div class="empty">กำลังโหลด Batch สำหรับตรวจ PDF…</div></div>';
-    try{const rows=await loadSnapshots(month,false);if(!document.body.contains(card))return;card.innerHTML=`<div class="card v533-pdf-head"><div class="section-title"><div><h3>ตรวจ PDF HR ก่อนส่งจริง</h3><p class="hint">Excel Export → อัปโหลด PDF ที่จะส่ง → เทียบยอดรายคน → ยืนยันส่ง HR • Batch จะเก็บหลักฐานคู่กับ Snapshot</p></div></div></div>${rows.length?rows.map(batchReviewHtml).join(''):'<div class="card"><div class="empty">เดือนนี้ยังไม่มี Batch ที่ Export ด้วยระบบ Snapshot</div></div>'}`;rows.forEach(x=>updateReconcileUI(String(x.batch_id)));}
+    try{const rows=await loadSnapshots(month,false);if(!document.body.contains(card))return;card.innerHTML=`<div class="card v533-pdf-head"><div class="section-title"><div><h3>กรอกยอดส่งเบิกจริงให้เจ้าหน้าที่</h3><p class="hint">Excel Export → กรอกยอดที่ส่ง HR รายคน → บันทึก → เปิดให้เจ้าหน้าที่ยืนยัน (ไม่ต้องอัปโหลด PDF) • เก็บ Snapshot เดิม</p></div></div></div>${rows.length?rows.map(batchReviewHtml).join(''):'<div class="card"><div class="empty">เดือนนี้ยังไม่มี Batch ที่ Export ด้วยระบบ Snapshot</div></div>'}`;rows.forEach(x=>updateReconcileUI(String(x.batch_id)));}
     catch(err){card.innerHTML=`<div class="card"><div class="notice error-notice"><b>โหลดระบบตรวจ PDF ไม่สำเร็จ</b><br>${esc(err?.message||err)}</div></div>`;}
   }
 
@@ -1026,7 +1034,7 @@ try {
   function collectReview(batch){
     const box=document.querySelector(`[data-v533-batch="${CSS.escape(batch)}"]`);if(!box)throw new Error('ไม่พบ Batch บนหน้าจอ');
     const staff=[...box.querySelectorAll('[data-v533-pdf-amount]')].map(inp=>({staff_id:inp.dataset.staffId||'',employee_code:inp.dataset.code||'',name:inp.dataset.name||'',expected_money:expectedForInput(inp),pdf_money:inp.value===''?null:round2(inp.value)}));
-    const ex=[...box.querySelectorAll('[data-v533-extra-row]')].map(row=>({name:String(row.querySelector('[data-v533-extra-name]')?.value||'').trim(),amount:round2(row.querySelector('[data-v533-extra-amount]')?.value||0)})).filter(x=>x.name||Math.abs(x.amount)>0.001);
+    const ex=[...box.querySelectorAll('.v533-extra-row')].map(row=>({name:String(row.querySelector('[data-v533-extra-name]')?.value||'').trim(),amount:round2(row.querySelector('[data-v533-extra-amount]')?.value||0)})).filter(x=>x.name||Math.abs(x.amount)>0.001);
     const pdfTotalRaw=box.querySelector('[data-v533-pdf-total]')?.value||'',pdf_total=pdfTotalRaw===''?null:round2(pdfTotalRaw),notes=String(box.querySelector('[data-v533-review-note]')?.value||'').trim();
     const expected_total=round2(staff.reduce((s,x)=>s+Number(x.expected_money||0),0)),staff_pdf_total=round2(staff.reduce((s,x)=>s+Number(x.pdf_money||0),0)),extras_total=round2(ex.reduce((s,x)=>s+Number(x.amount||0),0)),computed_total=round2(staff_pdf_total+extras_total),diff_total=pdf_total==null?null:round2(pdf_total-computed_total);
     const incomplete=staff.some(x=>x.pdf_money==null),mismatches=staff.filter(x=>x.pdf_money!=null&&Math.abs(round2(x.pdf_money-x.expected_money))>0.01);
@@ -1046,12 +1054,12 @@ try {
   async function openPdf(box){const batch=box.dataset.v533Batch,rows=await loadSnapshots(selectedMonth(),true),review=rows.find(x=>String(x.batch_id)===String(batch))?.pdf_review;if(!review?.pdf_path)return toast('ยังไม่มี PDF ใน Batch นี้','error');busy(true,'กำลังเปิด PDF');try{const res=await DB().storage.from('staff-files').download(review.pdf_path);if(res.error)throw res.error;const url=URL.createObjectURL(res.data);window.open(url,'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(err){toast(err?.message||'เปิด PDF ไม่สำเร็จ','error');}finally{busy(false);}}
   async function saveReview(box,confirmSent=false){
     const batch=box.dataset.v533Batch,d=collectReview(batch),rows=await loadSnapshots(selectedMonth(),true),snap=rows.find(x=>String(x.batch_id)===String(batch));if(!snap)return toast('ไม่พบ Snapshot ของ Batch นี้','error');if(!snap.pdf_review){await ensureReview(batch,snap.source_month,snap.total_money);reviewCache.clear();}const review=(await loadSnapshots(selectedMonth(),true)).find(x=>String(x.batch_id)===String(batch))?.pdf_review||{};
-    if(confirmSent&&!review.pdf_path)return toast('ต้องอัปโหลด PDF HR ก่อนยืนยันส่ง','error');
-    if(confirmSent&&d.incomplete)return toast('กรุณากรอกยอดใน PDF ของเจ้าหน้าที่ทุกคนก่อน','error');
-    if(confirmSent&&d.mismatches.length)return toast(`ยังยืนยันไม่ได้: ยอด PDF ไม่ตรง Snapshot ${d.mismatches.length} คน`,'error');
+    if(confirmSent&&review.status==='sent')return toast('รอบนี้เปิดให้ยืนยันแล้ว การแก้ยอดต้องใช้ตารางแก้ไขพร้อมเหตุผล เพื่อรักษาประวัติ','error');
+    if(confirmSent&&d.incomplete)return toast('กรุณากรอกยอดส่งเบิกของเจ้าหน้าที่ทุกคนก่อน','error');
+    if(confirmSent&&d.mismatches.length&&d.notes.length<5)return toast('กรณียอดกรอกต่างจาก Snapshot ต้องระบุเหตุผลในหมายเหตุอย่างน้อย 5 ตัวอักษร','error');
     if(confirmSent&&d.pdf_total!=null&&Math.abs(Number(d.diff_total||0))>0.01)return toast('ยอดรวม PDF ไม่ตรงกับยอดรายคน + รายการพิเศษ','error');
     const status=confirmSent?'sent':(!d.incomplete&&d.mismatches.length===0&&(d.pdf_total==null||Math.abs(Number(d.diff_total||0))<=0.01)?'verified':'mismatch'),now=new Date().toISOString(),payload={staff_amounts:d.staff,extras:d.extras,pdf_total:d.pdf_total,staff_pdf_total:d.staff_pdf_total,extras_total:d.extras_total,diff_total:d.diff_total,notes:d.notes,status,reviewed_by:sid(),reviewed_at:now,updated_at:now};if(confirmSent){payload.confirmed_by=sid();payload.confirmed_at=now;}
-    busy(true,confirmSent?'กำลังยืนยันส่ง HR':'กำลังบันทึกผลตรวจ PDF');try{const {error}=await DB().from('ot_export_pdf_reviews').update(payload).eq('batch_id',batch);if(error)throw error;reviewCache.clear();toast(confirmSent?'✓ ยืนยัน PDF ตรงและบันทึกว่าส่ง HR แล้ว':'บันทึกผลตรวจ PDF แล้ว');await rerender(true);}catch(err){toast(err?.message||'บันทึกไม่สำเร็จ','error');}finally{busy(false);}
+    busy(true,confirmSent?'กำลังยืนยันส่ง HR':'กำลังบันทึกยอดส่งเบิก');try{const {error}=await DB().from('ot_export_pdf_reviews').update(payload).eq('batch_id',batch);if(error)throw error;reviewCache.clear();toast(confirmSent?'✓ บันทึกยอดที่ส่ง HR และเปิดให้เจ้าหน้าที่ยืนยันแล้ว':'บันทึกยอดที่ Admin กรอกแล้ว');await rerender(true);}catch(err){toast(err?.message||'บันทึกไม่สำเร็จ','error');}finally{busy(false);}
   }
 
   function insertOrReplace(container,el,prepend=true){const old=document.getElementById(el.id);if(old){old.replaceWith(el);return;}prepend?container.prepend(el):container.append(el);}
@@ -1183,6 +1191,7 @@ try {
     if(!window.cnmiV533?.claimPreview) return;
     const menu=String(S().otMenuV369||'');
     if(!['staff-summary','staff-details','export'].includes(menu)) return;
+    if(menu==='staff-summary'&&window.__CNMI_V632__)return; // v636: avoid obsolete monthly OT preview and heavy requests
     if(menu==='export'&&!isAdmin()) return;
     const content=document.querySelector('.v369-ot-content'); if(!content) return;
     try{
@@ -1212,10 +1221,11 @@ try {
         details=document.createElement('details');details.id='v534LegacyOtDetails';details.className='card v534-legacy-details';
         details.innerHTML='<summary>ดูรายละเอียด OT ปกติ / Carry</summary><div class="v534-legacy-body"></div>';
         const body=details.querySelector('.v534-legacy-body');
-        [...content.children].filter(x=>x.id!=='v534SimpleClaimCard'&&x.id!=='v534LegacyOtDetails').forEach(x=>body.appendChild(x));
+        [...content.children].filter(x=>x.id!=='v534SimpleClaimCard'&&x.id!=='v534LegacyOtDetails'&&!x.classList.contains('v632-summary')).forEach(x=>body.appendChild(x));
         content.appendChild(details);
       }
     }
+    if(menu==='staff-summary'){const acknowledge=content.querySelector('.v632-summary');if(acknowledge&&acknowledge.parentElement!==content)content.prepend(acknowledge);}
     if(menu==='staff-details'){
       content.classList.add('v534-staff-details');
     }
@@ -1264,7 +1274,7 @@ try {
       const inp=tr.querySelector('[data-v533-pdf-amount]'); if(!inp) return null;
       return {staff_id:inp.dataset.staffId||'',employee_code:inp.dataset.code||'',name:inp.dataset.name||'',expected_money:round2(expectedFromRow(tr)),pdf_money:inp.value===''?null:round2(inp.value)};
     }).filter(Boolean);
-    const extras=[...box.querySelectorAll('[data-v533-extra-row]')].map(row=>({name:String(row.querySelector('[data-v533-extra-name]')?.value||'').trim(),amount:round2(row.querySelector('[data-v533-extra-amount]')?.value||0)})).filter(x=>x.name||Math.abs(x.amount)>0.001);
+    const extras=[...box.querySelectorAll('.v533-extra-row')].map(row=>({name:String(row.querySelector('[data-v533-extra-name]')?.value||'').trim(),amount:round2(row.querySelector('[data-v533-extra-amount]')?.value||0)})).filter(x=>x.name||Math.abs(x.amount)>0.001);
     const incomplete=staff.filter(x=>x.pdf_money==null);
     const mismatches=staff.filter(x=>x.pdf_money!=null&&Math.abs(round2(x.pdf_money-x.expected_money))>0.01);
     const staffPdfTotal=round2(staff.reduce((s,x)=>s+Number(x.pdf_money||0),0));
@@ -1282,22 +1292,24 @@ try {
     const checked=d.staff.length-d.incomplete.length,ok=checked-d.mismatches.length;
     summary.innerHTML=`<span>ตรวจแล้ว <b>${checked}/${d.staff.length}</b></span><span class="v534-ok">ตรง <b>${ok}</b></span><span class="${d.mismatches.length?'v534-neg':''}">ไม่ตรง <b>${d.mismatches.length}</b></span><span>ยังไม่ตรวจ <b>${d.incomplete.length}</b></span>`;
     const confirm=box.querySelector('[data-v534-confirm-review]');
-    if(confirm){confirm.disabled=!!d.incomplete.length||!!d.mismatches.length;confirm.title=confirm.disabled?'ต้องตรวจยอดทุกคนและให้ตรงก่อนยืนยัน':'';}
+    if(confirm){const notes=String(box.querySelector('[data-v533-review-note]')?.value||'').trim();
+      confirm.disabled=!!d.incomplete.length||(!!d.mismatches.length&&notes.length<5);
+      confirm.title=confirm.disabled?(d.incomplete.length?'กรอกยอดให้ครบทุกคนก่อน':'กรุณาระบุเหตุผลในหมายเหตุอย่างน้อย 5 ตัวอักษร'):'';}
   }
 
   function simplifyPdfReview(){
     const root=document.getElementById('v533PdfReviewCard'); if(!root) return;
     const head=root.querySelector('.v533-pdf-head');
     if(head){
-      const h=head.querySelector('h3');if(h)h.textContent='3. ตรวจยอด PDF ด้วยมือก่อนส่ง HR';
-      const p=head.querySelector('.hint');if(p)p.textContent='เปิด PDF ที่ได้จาก Macro แล้วบวกยอดของแต่ละคน • กด “ตรง” หรือกรอกยอดจริง ระบบจะคำนวณส่วนต่างให้';
+      const h=head.querySelector('h3');if(h)h.textContent='3. กรอกยอดส่งเบิก HR รายบุคคล';
+      const p=head.querySelector('.hint');if(p)p.textContent='Admin กรอกยอดที่ส่ง HR เอง กด “ตรง” หรือกรอกยอดเงินตามที่ส่งจริง ไม่ต้องอัปโหลด PDF';
     }
     root.querySelectorAll('.v533-pdf-batch').forEach(box=>{
-      const notice=box.querySelector('.soft-notice');if(notice)notice.innerHTML='<b>ไม่ใช้ OCR / ไม่อ่าน PDF อัตโนมัติ</b> — คนตรวจเป็นผู้ดู PDF จริง ระบบทำหน้าที่บันทึกยอดและจับส่วนต่าง';
+      const notice=box.querySelector('.soft-notice');if(notice)notice.innerHTML='<b>Admin บันทึกยอดส่ง HR ด้วยตนเอง</b> — ถ้าต่างจาก Snapshot ต้องมีหมายเหตุ; เจ้าหน้าที่ยืนยันบนหน้า สรุปรายเดือน';
       const fileLabel=box.querySelector('.v533-file-label');if(fileLabel){const textNode=[...fileLabel.childNodes].find(n=>n.nodeType===Node.TEXT_NODE);if(textNode)textNode.textContent='📎 แนบ PDF เป็นหลักฐาน (ไม่บังคับ) ';}
       const reviewActions=box.querySelector('.v533-review-actions');if(reviewActions){reviewActions.innerHTML='<button type="button" class="ghost-btn" data-v533-fill-snapshot>ตั้งทุกคนเป็น “ตรง”</button><span>ใช้เมื่อเช็ก PDF แล้วตรงทั้งหมด หรือกด “ตรง” ทีละคนก็ได้</span>';}
       const table=box.querySelector('.v533-pdf-table');if(table){
-        const hs=table.querySelectorAll('thead th');if(hs[1])hs[1].textContent='ระบบควรส่ง HR';if(hs[2])hs[2].textContent='ยอดใน PDF จริง';if(hs[3])hs[3].textContent='ส่วนต่าง';
+        const hs=table.querySelectorAll('thead th');if(hs[1])hs[1].textContent='ระบบควรส่ง HR';if(hs[2])hs[2].textContent='ยอดที่ Admin ส่งเบิก';if(hs[3])hs[3].textContent='ส่วนต่าง';
       }
       const extraBox=box.querySelector('.v533-extra-box');if(extraBox&&!extraBox.closest('details')){
         const d=document.createElement('details');d.className='v534-optional-details';d.innerHTML='<summary>รายการนอกหน่วย / พิเศษ (ถ้ามี)</summary>';extraBox.replaceWith(d);d.appendChild(extraBox);
@@ -1306,7 +1318,7 @@ try {
         const d=document.createElement('details');d.className='v534-optional-details';d.innerHTML='<summary>ข้อมูลเพิ่มเติม / ยอดรวม PDF (ไม่บังคับ)</summary>';meta.replaceWith(d);d.appendChild(meta);
       }
       const oldConfirm=box.querySelector('[data-v533-confirm-review]');
-      if(oldConfirm){oldConfirm.removeAttribute('data-v533-confirm-review');oldConfirm.setAttribute('data-v534-confirm-review','');oldConfirm.textContent='✓ ยืนยันยอดตรงและส่ง HR แล้ว';oldConfirm.disabled=false;}
+      if(oldConfirm){oldConfirm.removeAttribute('data-v533-confirm-review');oldConfirm.setAttribute('data-v534-confirm-review','');oldConfirm.textContent='✓ เปิดให้ Staff ยืนยันยอดที่ Admin กรอก';oldConfirm.disabled=false;}
       const save=box.querySelector('[data-v533-save-review]');if(save)save.textContent='บันทึกที่ตรวจไว้';
       addManualRowControls(box);updateManualSummary(box);
     });
@@ -1322,22 +1334,20 @@ try {
     const batch=String(box?.dataset?.v533Batch||'');if(!batch)return;
     const d=collectManual(box);
     if(d.incomplete.length)return toast(`ยังมี ${d.incomplete.length} คนที่ยังไม่ได้ตรวจ PDF`,'error');
-    if(d.mismatches.length){
-      const names=d.mismatches.slice(0,5).map(x=>x.name||x.employee_code||'').filter(Boolean).join(', ');
-      return toast(`ยังยืนยันไม่ได้: ยอดไม่ตรง ${d.mismatches.length} คน${names?` (${names})`:''}`,'error');
-    }
+    const notes=String(box.querySelector('[data-v533-review-note]')?.value||'').trim();
+    if(d.mismatches.length&&notes.length<5) return toast('เมื่อยอดที่ Admin กรอกต่างจาก Snapshot ต้องระบุเหตุผลอย่างน้อย 5 ตัวอักษร','error');
     busy(true,'กำลังยืนยันผลตรวจ HR');
     try{
       const db=DB();
       const snapRows=await window.cnmiV533?.loadSnapshots?.(selectedMonth(),true)||[];
       const snap=snapRows.find(x=>String(x.batch_id)===batch);
       if(!snap)throw new Error('ไม่พบ Snapshot ของ Batch นี้');
+      if(snap.pdf_review?.status==='sent')throw new Error('รอบนี้เปิดให้ Staff ยืนยันแล้ว หากแก้ยอดต้องใช้หน้าแก้ยอดพร้อมเหตุผลและประวัติ');
       if(!snap.pdf_review)await ensureReview(batch,snap.source_month,snap.total_money);
-      const notes=String(box.querySelector('[data-v533-review-note]')?.value||'').trim();
       const now=new Date().toISOString();
-      const payload={staff_amounts:d.staff,extras:d.extras,staff_pdf_total:d.staffPdfTotal,extras_total:d.extrasTotal,diff_total:null,status:'sent',notes:notes||'ตรวจยอด PDF ด้วยมือ: ยอดเจ้าหน้าที่ในหน่วยตรง Snapshot',reviewed_by:currentId(),reviewed_at:now,confirmed_by:currentId(),confirmed_at:now,updated_at:now};
+      const payload={staff_amounts:d.staff,extras:d.extras,staff_pdf_total:d.staffPdfTotal,extras_total:d.extrasTotal,pdf_total:round2(d.staffPdfTotal+d.extrasTotal),diff_total:0,status:'sent',notes:notes||'Admin กรอกและรับรองยอดที่ส่ง HR เอง',reviewed_by:currentId(),reviewed_at:now,confirmed_by:currentId(),confirmed_at:now,updated_at:now};
       const {error}=await db.from('ot_export_pdf_reviews').update(payload).eq('batch_id',batch);if(error)throw error;
-      toast('✓ ยืนยันแล้ว: ยอดใน PDF ของเจ้าหน้าที่ในหน่วยตรงกับระบบ');
+      toast('บันทึกยอด HR และเปิดให้เจ้าหน้าที่ยืนยันแล้ว');
       try{await window.cnmiV533?.render?.();}catch(_){}
       schedule(true,250);
     }catch(err){toast(err?.message||'ยืนยันผลตรวจไม่สำเร็จ','error');}
@@ -1357,7 +1367,7 @@ try {
     if(e.target?.closest?.('[data-v533-fill-snapshot]'))setTimeout(()=>{const box=e.target.closest('[data-v533-batch]');if(box)updateManualSummary(box);},20);
     if(e.target?.closest?.('[data-v369-ot-menu],[data-v523-ot-item],[data-export-hr-v318],[data-export-hr-v241]'))schedule(false,180);
   },true);
-  document.addEventListener('input',e=>{if(e.target?.matches?.('[data-v533-pdf-amount]')){const tr=e.target.closest('tr');updateRowResult(tr);updateManualSummary(e.target.closest('[data-v533-batch]'));}},true);
+  document.addEventListener('input',e=>{if(e.target?.matches?.('[data-v533-pdf-amount],[data-v533-review-note]')){const tr=e.target.closest('tr');updateRowResult(tr);updateManualSummary(e.target.closest('[data-v533-batch]'));}},true);
   document.addEventListener('change',e=>{if(e.target?.id==='otMoneyMonthV241'||e.target?.id==='otSourceMonthV241')schedule(true,200);},true);
 
   const previousRenderPage=window.renderPage||(typeof renderPage==='function'?renderPage:null);

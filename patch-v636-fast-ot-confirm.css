@@ -1,0 +1,8 @@
+/* v636: legible and immediate staff acknowledgement on desktop and mobile. */
+.v632-summary{display:block!important;visibility:visible!important}
+.v632-summary .v632-actions button{cursor:pointer;font-weight:700}
+.v632-summary .v632-actions button:disabled{cursor:not-allowed;opacity:.5}
+.v632-summary .v632-actions button:first-child:not(:disabled){background:#008a42;color:#fff;border-color:#008a42}
+.v529-loading{padding:10px;background:#f1f8fc;color:#577084;border-radius:8px}
+.v533-file-row[hidden]{display:none!important}
+@media(max-width:700px){.v632-summary .v632-values{grid-template-columns:1fr 1fr}.v632-summary .v632-actions{flex-direction:column}.v632-summary .v632-actions button{min-width:100%}}

@@ -1,21 +1,27 @@
 /* V630: staff-owned post-export PDF check and permanent adjustment history (read-only). */
 (()=>{'use strict';if(window.__CNMI_V630__)return;window.__CNMI_V630__=true;
-const S=()=>window.state||{};const DB=()=>window.sb;const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const S=()=>window.state||{};const DB=()=>{try{return (typeof sb!=='undefined'&&sb?.rpc?sb:null)||window.sb||window.supabaseClient||null}catch(_){return window.sb||null}};const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=x=>Number(x||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});const month=()=>String(S().otMenuMonthV369||S().otSourceMonthV241||S().otMoneyMonthV241||S().monthKey||new Date().toISOString().slice(0,7)).slice(0,7);
 let working=false,signature='',lastLoad=0;
 const notice=(s)=>{try{showToast(s);}catch(_){alert(s);}};
-async function render(){if(working||S().page!=='ot'||String(S().otMenuV369||'')!=='staff-details')return;const host=document.querySelector('.v369-ot-content');if(!host||!DB()?.rpc)return;const key=month()+'|'+S().otMenuV369; if(signature===key&&Date.now()-lastLoad<12000)return;working=true;
-try{
- const [p,h]=await Promise.all([DB().rpc('get_my_hr_pdf_reviews_v630',{p_month:month()}),DB().rpc('get_my_ot_adjustment_history_v630')]);
- if(!host.isConnected)return;
- let card=host.querySelector('#v630StaffPdfHistory');if(!card){card=document.createElement('section');card.className='card v630-card';card.id='v630StaffPdfHistory';host.prepend(card);}
- if(p.error||h.error){card.innerHTML='<h3>ยืนยันยอด HR / ประวัติปรับย้อนหลัง</h3><p class="muted">ต้องติดตั้ง SQL V630 ก่อนใช้งาน: '+esc((p.error||h.error).message)+'</p>';return;}
- const pdf=Array.isArray(p.data)?p.data:[],hist=Array.isArray(h.data)?h.data:[];
- card.innerHTML='<h3>ตรวจสอบยอด OT หลัง Export HR</h3><p class="muted">ยอด PDF จะปรากฏหลัง Admin ตรวจ PDF และบันทึกสถานะส่ง HR แล้วเท่านั้น • ยืนยันยอดไม่ใช่ยืนยันว่าได้รับเงินแล้ว</p>'+
- (pdf.length?pdf.map(r=>`<div class="v630-review" data-v630-batch="${esc(r.batch_id)}" data-v630-pdf="${esc(r.pdf_money??'')}"><div class="v630-grid"><div><small>ยอดส่งเบิกตาม Snapshot</small><b>${fmt(r.snapshot_money)} บาท</b></div><div><small>ยอดจาก PDF ที่ Admin บันทึก</small><b>${r.pdf_money==null?'ยังไม่มีข้อมูล':fmt(r.pdf_money)+' บาท'}</b></div><div><small>สถานะของฉัน</small><b>${r.confirmation_status==='confirmed'?'ยืนยันแล้ว':r.confirmation_status==='disputed'?'แจ้งยอดไม่ตรง':r.confirmation_status==='reconfirm'?'ยอดเปลี่ยน กรุณายืนยันใหม่':'รอยืนยัน'}</b></div></div><small>Batch ${esc(r.batch_id)}</small><label>ยอดที่ฉันนับเบิกเอง (บาท)<input data-v630-count type="number" inputmode="decimal" min="0" step="0.01" value="${esc(r.confirmation_status==='reconfirm'?r.pdf_money:(r.staff_counted_money??r.pdf_money??''))}" placeholder="กรอกยอดที่นับเอง"></label><label>หมายเหตุ (กรณีไม่ตรง)<input data-v630-note value="${esc(r.confirmation_note||'')}" placeholder="อธิบายยอดหรือรายการที่ต่าง"></label><div class="v630-actions"><button type="button" data-v630-action="confirmed" ${r.pdf_money==null?'disabled':''}>ยืนยันยอดตรงตาม PDF</button><button type="button" class="ghost-btn" data-v630-action="disputed" ${r.pdf_money==null?'disabled':''}>แจ้งยอดไม่ตรง</button></div></div>`).join(''):'<p class="muted">ยังไม่มียอด PDF ที่ Admin ยืนยันส่ง HR สำหรับเดือนนี้</p>')+
- `<details class="v630-history" open><summary><b>ประวัติ OT ตกเบิก / ลดเบิกเกินทั้งหมด (${hist.length} รายการ)</b></summary><p class="muted">แสดงข้ามเดือน แม้ผ่านการ Export แล้ว • เดือนต้นทางคือเดือนที่เกิด OT ส่วนเดือนนำเบิกคือรอบ HR ที่ปรับยอด</p>${hist.length?`<div class="table-wrap"><table><thead><tr><th>รายการ</th><th>เดือนต้นทาง</th><th>เดือนนำเบิก</th><th>จำนวนเงิน</th><th>สถานะ</th></tr></thead><tbody>${hist.map(r=>`<tr><td>${r.adjustment_type==='overclaim'?'ลดเบิกเกิน':'ตกเบิกย้อนหลัง'}${r.note?'<small>'+esc(r.note)+'</small>':''}</td><td>${esc(r.source_month)}</td><td>${esc(r.apply_month)}</td><td>${Number(r.amount_delta)>0?'+':''}${fmt(r.amount_delta)} บาท</td><td>${r.status==='exported'?'ส่ง Export แล้ว':r.status==='pending'?'รอดำเนินการ':esc(r.status)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">ไม่มีประวัติรายการปรับย้อนหลัง</p>'}</details>`;
- signature=key;lastLoad=Date.now();
-}catch(e){console.warn('[v630]',e);}finally{working=false;}}
- document.addEventListener('click',async e=>{const btn=e.target.closest('[data-v630-action]');if(!btn||btn.disabled)return;const holder=btn.closest('[data-v630-batch]');if(!holder)return;const amountText=holder.querySelector('[data-v630-count]').value.trim();const amount=Number(amountText);if(!amountText||!Number.isFinite(amount)||amount<0)return notice('กรุณากรอกยอดที่นับเองก่อน');const status=btn.dataset.v630Action;const pdf=Number(holder.dataset.v630Pdf);if(status==='confirmed'&&Math.abs(amount-pdf)>0.009)return notice('ยอดที่นับไม่ตรง PDF กรุณาใช้ปุ่มแจ้งยอดไม่ตรง');btn.disabled=true;try{const {error}=await DB().rpc('confirm_my_hr_pdf_v630',{p_batch:holder.dataset.v630Batch,p_counted_money:amount,p_status:status,p_note:holder.querySelector('[data-v630-note]').value});if(error)throw error;notice('บันทึกผลตรวจยอดแล้ว');signature='';await render();}catch(err){notice('บันทึกไม่สำเร็จ: '+err.message);}finally{btn.disabled=false;}});
- /* v635: stop periodic full render; refresh on route/input changes */document.addEventListener('change',()=>{signature='';setTimeout(render,200);});
+async function render(){
+ if(working||S().page!=='ot'||String(S().otMenuV369||'')!=='staff-details')return;
+ const host=document.querySelector('.v369-ot-content');if(!host)return;
+ const key=month()+'|'+String(S().profile?.id||'');
+ let card=host.querySelector('#v630StaffPdfHistory');
+ if(!card){card=document.createElement('section');card.className='card v630-card';card.id='v630StaffPdfHistory';
+ card.innerHTML='<h3>ประวัติ OT ตกเบิก / ลดเบิกเกิน (ทุกเดือน)</h3><p class="muted">กำลังโหลดประวัติ…</p>';host.append(card)}
+ if(signature===key&&Date.now()-lastLoad<120000)return;
+ const db=DB();if(!db?.rpc){card.innerHTML='<h3>ประวัติ OT ตกเบิก / ลดเบิกเกิน (ทุกเดือน)</h3><p class="muted">ยังเชื่อมต่อฐานข้อมูลไม่ได้ กรุณารีเฟรชหรือตรวจการตั้งค่า Supabase</p>';return}
+ working=true;
+ try{
+  const {data,error}=await db.rpc('get_my_ot_adjustment_history_v630');
+  if(error)throw error;if(!card.isConnected||S().otMenuV369!=='staff-details')return;
+  const rows=Array.isArray(data)?data:[];
+  card.innerHTML='<h3>ประวัติ OT ตกเบิก / ลดเบิกเกิน (ทุกเดือน)</h3><p class="muted">แสดงเดือนต้นทาง เดือนที่นำไปเบิก และสถานะ • ยอด OT ตกเบิกแยกจากยอดเดือนปัจจุบัน</p>'+
+  (rows.length?'<div class="table-wrap"><table><thead><tr><th>รายการ</th><th>เดือนต้นทาง</th><th>นำไปเบิกเดือน</th><th>จำนวนเงิน</th><th>สถานะ</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+(r.adjustment_type==='overclaim'?'ลดเบิกเกิน':'OT ตกเบิกย้อนหลัง')+(r.note?'<small>'+esc(r.note)+'</small>':'')+'</td><td>'+esc(r.source_month)+'</td><td>'+esc(r.apply_month)+'</td><td>'+(Number(r.amount_delta)>0?'+':'')+fmt(r.amount_delta)+' บาท</td><td>'+(r.status==='exported'?'รวมใน Export แล้ว':r.status==='pending'?'รอดำเนินการ':esc(r.status))+'</td></tr>').join('')+'</tbody></table></div>':'<p class="muted">ไม่มีประวัติรายการปรับย้อนหลัง</p>');
+  signature=key;lastLoad=Date.now();
+ }catch(e){if(card.isConnected)card.innerHTML='<h3>ประวัติ OT ตกเบิก / ลดเบิกเกิน</h3><p class="muted">ไม่สามารถโหลดประวัติ: '+esc(e.message||e)+'</p>';}finally{working=false}
+}
+ window.cnmiV630History={render};
 })();
