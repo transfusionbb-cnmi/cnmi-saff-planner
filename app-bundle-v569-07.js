@@ -2834,6 +2834,8 @@ try {
   async function fetchDate(date){
     const d=norm(date);
     if(!d)throw new Error('วันที่ไม่ถูกต้อง');
+    // v639: V261's helper internally calls sb.from; never call it before the async init makes sb ready.
+    if(!DB()?.from)throw new Error('Supabase ยังไม่พร้อม');
     try{
       if(window.cnmiV261?.fetchDateFromDatabase)return await window.cnmiV261.fetchDateFromDatabase(d);
     }catch(error){
@@ -2858,6 +2860,14 @@ try {
   async function loadSelected(date,options={}){
     const d=norm(date);
     if(!d||!isDashboard())return false;
+    // v639: bounded startup wait, not a failing request or a continuous poll on non-Dashboard pages.
+    if(!DB()?.from){
+      const w=loadByDate.get(d)||{waits:0};const waits=(w.waits||0)+1;
+      loadByDate.set(d,{status:'loading',error:null,at:Date.now(),waits,promise:null});
+      if(waits<=24)setTimeout(()=>{if(isDashboard()&&selectedDate()===d)loadSelected(d,{force:true,showLoading:false});},400);
+      else {loadByDate.set(d,{status:'error',error:'การเชื่อมต่อฐานข้อมูลยังไม่พร้อม กรุณารีเฟรชหน้า',at:Date.now(),promise:null});renderIfCurrent(d);}
+      return false;
+    }
     const current=loadByDate.get(d);
     if(current?.status==='loading'&&!options.force)return current.promise||false;
 
@@ -3097,6 +3107,14 @@ try {
   }
   async function loadSelected(date,{force=false}={}){
     const d=norm(date);if(!d||!isDashboard())return false;
+    // v639: avoid startup race while async Supabase client is still null.
+    if(!DB()?.from){
+      const w=loads.get(d)||{waits:0};const waits=(w.waits||0)+1;
+      loads.set(d,{status:'loading',error:null,at:Date.now(),waits,promise:null});
+      if(waits<=24)setTimeout(()=>{if(isDashboard()&&selectedDate()===d)loadSelected(d,{force:true});},400);
+      else {loads.set(d,{status:'error',error:'การเชื่อมต่อฐานข้อมูลยังไม่พร้อม กรุณารีเฟรชหน้า',at:Date.now(),promise:null});rerenderIfCurrent(d);}
+      return false;
+    }
     const old=loads.get(d);
     if(old?.status==='loading'&&!force)return old.promise||false;
     const my=++serial;

@@ -1,6 +1,6 @@
 /* v638: deterministic Admin OT navigation: Export stays for Export; HR claims opens the versioned v637 workspace. */
 (()=>{'use strict';if(window.__CNMI_V638_ADMIN_SPLIT__)return;window.__CNMI_V638_ADMIN_SPLIT__=true;
-const S=()=>window.state||{};
+const S=()=>{try{return window.cnmiV639CoreState?.()||window.state||{}}catch(_){return window.state||{}}};
 const params=()=>new URLSearchParams((location.hash.split('?')[1]||''));
 const active=()=>params().get('hr-revision')==='1' && params().get('section')==='hr-export';
 const mm=()=>params().get('month')||String(S().otMenuMonthV369||new Date().toISOString().slice(0,7)).slice(0,7);
@@ -15,7 +15,7 @@ function syncSidebar(){const nav=document.getElementById('mainNav');if(!nav)retu
  item.classList.toggle('v638-selected',active());item.setAttribute('aria-current',active()?'page':'false');
 }
 function syncPage(){const host=document.querySelector('.v369-ot-content');if(!host||!admin())return;const isWorkspace=active();host.classList.toggle('v638-admin-workspace',isWorkspace);host.classList.toggle('v638-admin-export',!isWorkspace);
- let n=host.querySelector(':scope > #v638Entry');if(isWorkspace){n?.remove();if(!host.querySelector('#v637Admin')){window.cnmiV637?.refresh?.()}return}
+ let n=host.querySelector(':scope > #v638Entry');if(isWorkspace){n?.remove();if(!host.querySelector('#v637Admin')){let panel=document.createElement('section');panel.id='v637Admin';panel.className='card v637-panel';panel.innerHTML='<h3>จัดการยอดเบิก HR / เบิกพิเศษ</h3><p>กำลังโหลดข้อมูลรอบ Export…</p>';host.prepend(panel);window.cnmiV637?.refresh?.()}return}
  if(!n){n=document.createElement('section');n.className='v638-entry';n.id='v638Entry';n.innerHTML='<div><strong>กรอกยอด HR / เบิกพิเศษ / แก้ไขยอดที่ทักท้วง</strong><small>กรอกยอดที่ Admin ส่งเบิกและสร้างฉบับแก้ไขในเมนูแยก ไม่ต้องเลื่อนในหน้า Export</small></div><button type="button" data-v638-open>เปิดหน้าจัดการยอด</button>';host.prepend(n)}
  host.querySelector('#v533PdfReviewCard')?.setAttribute('hidden','');host.querySelector('#v631AdminPdfCorrection')?.setAttribute('hidden','')}
 function schedulePage(){clearTimeout(pageTimer);pageTimer=setTimeout(()=>{syncSidebar();syncPage()},150)}

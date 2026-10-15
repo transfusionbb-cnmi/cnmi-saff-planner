@@ -1,6 +1,6 @@
 /* V637: independently versioned HR draft/revision, staff disputes and replacement Excel. */
 (()=>{'use strict';if(window.__CNMI_V637__)return;window.__CNMI_V637__=true;
-const state=()=>window.state||{};
+const state=()=>{try{return window.cnmiV639CoreState?.()||window.state||{}}catch(_){return window.state||{}}};
 const db=()=>{try{return (typeof sb!=='undefined'&&sb?.rpc?sb:null)||window.sb||null}catch(_){return window.sb||null}};
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=x=>Number(x||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});

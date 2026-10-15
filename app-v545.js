@@ -137,6 +137,8 @@ function orderedStaff(list = state.staff) {
   return [...(list || [])].sort(compareStaffOrder);
 }
 let sb = null;
+// v639: read-only bridge for additive views; main app owns this state object.
+window.cnmiV639CoreState = () => state;
 let state = {
   session: null,
   profile: null,
