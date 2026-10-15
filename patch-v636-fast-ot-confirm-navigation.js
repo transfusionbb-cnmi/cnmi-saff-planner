@@ -10,6 +10,7 @@ function trigger(){clearTimeout(timeout);timeout=setTimeout(()=>{
   if(view==='staff-summary'||view==='staff-details')window.cnmiV632Summary?.refresh?.();
   if(view==='staff-details'){window.cnmiV529AdjustmentVisibility?.refresh?.();window.cnmiV630History?.render?.()}
   if(view==='export'){window.cnmiV633PdfMenu?.refresh?.();window.cnmiV631AdminCorrections?.refresh?.()}
+  window.cnmiV637?.refresh?.();
  }else{
   if(view==='staff-summary'&&!host.querySelector('.v632-summary'))window.cnmiV632Summary?.mount?.();
   if(view==='staff-details'&&!host.querySelector('#v630StaffPdfHistory'))window.cnmiV630History?.render?.();
