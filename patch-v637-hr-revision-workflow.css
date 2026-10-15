@@ -1,5 +1,5 @@
 .v369-ot-content.v637-admin-active > :not(#v637Admin){display:none!important}
-.v369-ot-content.v637-has-revision .v632-summary{display:none!important}
+/* v641: v632 summary renders the published revision and must remain visible. */
 #v637Admin[hidden]{display:none!important}
 .v637-panel{padding:18px;margin-bottom:14px}
 .v637-head{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}

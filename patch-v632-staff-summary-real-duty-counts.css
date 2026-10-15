@@ -1,1 +1,15 @@
 .v369-ot-content .v632-suppressed{display:none!important}.v632-summary,.v632-stats{grid-column:1/-1!important}.v632-summary h3,.v632-stats h3{margin:0 0 12px}.v632-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.v632-values>div{border:1px solid #dce7f2;border-radius:12px;padding:15px;background:#f7fafc;min-width:0}.v632-values small{display:block;color:#64748b;font-size:13px;margin-bottom:7px}.v632-values strong{font-size:clamp(21px,2vw,29px);color:#12233b;display:block}.v632-values em{font-size:12px;font-weight:400;font-style:normal}.v632-hint{color:#64748b;font-size:13px;margin:9px 0 15px}.v632-review{padding:12px 0;border-top:1px solid #dce7f2}.v632-status{margin:12px 0;font-weight:600}.v632-review label{display:block;font-size:13px;color:#475569;margin:10px 0}.v632-review input{width:100%;max-width:350px;display:block;padding:10px;border:1px solid #ccdae8;border-radius:9px;margin-top:4px}.v632-actions{display:flex;gap:10px;flex-wrap:wrap}.v632-actions button{flex:1;min-width:185px;padding:11px;border-radius:10px}.v632-actions button:first-child{background:#c9f1dc;color:#14532d}.v632-wait,.v632-error{padding:16px;background:#fff9e7;border-radius:10px}.v632-error{background:#fff0f0;color:#a11}@media(max-width:600px){.v632-values{grid-template-columns:1fr 1fr;gap:7px}.v632-values>div{padding:10px}.v632-values strong{font-size:20px}.v632-actions button{min-width:100%}}
+/* v641: live authoritative HR revision amounts, separate special claims. */
+.v641-final{border-color:#b7e4c7!important;background:#eaf8f0!important}
+.v641-breakdown{margin:14px 0;padding:12px 16px;border:1px solid #e2e8f0;border-radius:10px}
+.v641-breakdown>div{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;font-size:14px}
+.v641-breakdown>div+div{border-top:1px solid #edf2f7}
+.v641-breakdown .v641-total{border-top:1px solid #cad6e3;font-size:16px}
+.v641-breakdown .v641-positive,.v641-breakdown .v641-total strong:last-child{color:#087c45}
+.v641-details{border:1px solid #e2e8f0;border-radius:10px;padding:10px 13px;margin-bottom:10px}
+.v641-details summary{cursor:pointer;font-weight:600}
+.v641-special-line{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #edf2f7}
+.v641-special-line small{display:block;color:#64748b;margin-top:4px}
+.v641-special-line b{white-space:nowrap}
+.v641-confirmed{color:#087c45;font-weight:600}
+@media(max-width:600px){.v641-breakdown>div{align-items:flex-start}.v641-breakdown>div span{flex:1}.v641-breakdown>div b{white-space:nowrap}}
