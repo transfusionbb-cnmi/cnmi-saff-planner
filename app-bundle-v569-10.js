@@ -1070,7 +1070,7 @@ try {
         const [rows,locked]=await Promise.all([claimPreview(month,force),ownLockedSnapshot(month)]);if(!document.body.contains(content))return;insertOrReplace(content,makePreviewCard(rows,{showAll:false,locked}),true);decorateAdjustmentBadges(rows);
       }
       if(admin()&&menu==='export'){
-        const rows=await claimPreview(month,force);if(!document.body.contains(content))return;insertOrReplace(content,makePreviewCard(rows,{showAll:true}),true);decorateAdjustmentBadges(rows);await renderPdfReviewCard(content,month);
+        const rows=await claimPreview(month,force);if(!document.body.contains(content))return;insertOrReplace(content,makePreviewCard(rows,{showAll:true}),true);decorateAdjustmentBadges(rows);if(!window.__CNMI_V638_ADMIN_SPLIT__)await renderPdfReviewCard(content,month);
       }
     }catch(err){console.warn('[V533] render failed',err);}finally{rendering=false;}
   }
@@ -1774,6 +1774,8 @@ try {
     const params=new URLSearchParams(q>=0?base.slice(q+1):'');
     const section=currentSection(page);
     if(section) params.set('section',section); else params.delete('section');
+    // v638: retain the dedicated HR claims subview across canonical route updates.
+    if(page==='ot' && section==='hr-export' && new URLSearchParams((location.hash.split('?')[1]||'')).get('hr-revision')==='1') params.set('hr-revision','1'); else params.delete('hr-revision');
     if(page==='ot'){
       const month=currentOtMonth();if(month)params.set('month',month);else params.delete('month');
       if(text(st.otMenuV369)==='admin-extra'&&isAdminSafe()){

@@ -6,7 +6,7 @@ const isAdmin=()=>{try{return (typeof isAdmin==='function'&&isAdmin())||window.i
 let busy=false,last='',lastAt=0;
 function getMonth(){const u=new URLSearchParams((location.hash.split('?')[1]||''));return u.get('month')||state().otMenuMonthV369||new Date().toISOString().slice(0,7)}
 const notify=s=>{try{window.showToast(s)}catch(_){alert(s)}};
-async function render(force=false){if(busy||state().page!=='ot'||!isAdmin()||String(state().otMenuV369||'')!=='export')return;
+async function render(force=false){if(window.__CNMI_V638_ADMIN_SPLIT__)return;if(busy||state().page!=='ot'||!isAdmin()||String(state().otMenuV369||'')!=='export')return;
 const host=document.querySelector('.v369-ot-content');if(!host||!db()?.rpc)return;
 const m=getMonth();if(!force&&last===m&&Date.now()-lastAt<12000)return;busy=true;
 try{const {data,error}=await db().rpc('admin_list_hr_pdf_v631',{p_month:m});if(error)throw error;if(!host.isConnected)return;

@@ -1,0 +1,21 @@
+/* v638: One admin workspace, one menu item, full width. Previous sent-PDF forms are read-only legacy and hidden from current Export view. */
+#mainNav .v638-hr-menu{display:flex;align-items:center;width:100%;gap:9px;text-align:left;white-space:normal;line-height:1.4}
+#mainNav .v638-hr-menu .v523-branch-icon{flex:0 0 16px}
+#mainNav .v638-hr-menu.v638-selected{background:#e0f2ff;color:#075985;font-weight:700}
+.v369-ot-content.v638-admin-export #v533PdfReviewCard,
+.v369-ot-content.v638-admin-export #v631AdminPdfCorrection,
+.v369-ot-content.v638-admin-export #v633PdfFocus,
+.v369-ot-content.v638-admin-export #v637Admin{display:none!important}
+.v369-ot-content.v638-admin-workspace> :not(#v637Admin){display:none!important}
+.v369-ot-content.v638-admin-workspace #v637Admin{display:block!important;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0}
+.v638-entry{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border:1px solid #cfe2f4;background:#f1f8fe;border-radius:12px;padding:14px 16px;margin:0 0 16px}
+.v638-entry strong{display:block;color:#194469}
+.v638-entry small{display:block;color:#64748b;margin-top:4px}
+.v638-entry button{padding:10px 14px;border:1px solid #89bbdd;border-radius:9px;background:white;color:#08598c;font-weight:600;cursor:pointer}
+#v637Admin .v637-head{background:#f5faff;padding:12px 16px;border-radius:10px}
+#v637Admin .v637-table{min-width:670px}
+#v637Admin .table-wrap{max-width:100%;overflow-x:auto}
+#v637Admin .v637-special{grid-template-columns:minmax(150px,1.1fr) minmax(120px,1.5fr) minmax(100px,.7fr) minmax(160px,1.5fr) auto}
+#v637Admin [data-v637-add],#v637Admin [data-v637-back],#v637Admin [data-v637-delete],#v637Admin [data-v637-download]{cursor:pointer;border:1px solid #cbddea;background:#fff;color:#075985;border-radius:8px;padding:9px 12px}
+#v637Admin [data-v637-add]{font-weight:650}
+@media(max-width:760px){.v638-entry{align-items:stretch}.v638-entry button{width:100%}#v637Admin .v637-head{padding:10px}#v637Admin .v637-special{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}#v637Admin .v637-special [data-v637-title],#v637Admin .v637-special [data-v637-reason]{grid-column:1/-1}#v637Admin .v637-special>*{min-width:0;width:100%}}
