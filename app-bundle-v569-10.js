@@ -1661,6 +1661,7 @@ try {
     'ot:monthly-summary':'สรุป OT รายเดือน',
     'ot:staff-detail':'รายละเอียด OT เจ้าหน้าที่',
     'ot:hr-export':'Export HR',
+    'ot:hr-claims':'จัดการยอดเบิก HR / เบิกพิเศษ',
     'ot:export-history':'ประวัติ Export',
     'ot:my-duty':'ติดตามเวรของฉัน',
     'ot:my-ot':'รายการ OT ของฉัน',
@@ -1709,7 +1710,9 @@ try {
     const admin=isAdminSafe();
     const map=admin?OT_ADMIN_SECTION_TO_ID:OT_STAFF_SECTION_TO_ID;
     const fallback=admin?'admin-duty':'staff-track';
-    const id=map[section]||fallback;
+    const id=section==='hr-claims'&&admin?'export':(map[section]||fallback);
+    // v640: the claims workspace uses Export's underlying data, but owns a distinct canonical route.
+    if(section) S().hrClaimsModeV640=(section==='hr-claims'&&admin);
     S().otMenuV369=id;
     S().otGroupV522=otGroupFor(id);
     if(id==='admin-extra'&&admin){
@@ -1752,6 +1755,7 @@ try {
     if(page==='ot'){
       const id=text(st.otMenuV369)||(isAdminSafe()?'admin-duty':'staff-track');
       const map=isAdminSafe()?OT_ADMIN_ID_TO_SECTION:OT_STAFF_ID_TO_SECTION;
+      if(isAdminSafe()&&id==='export'&&st.hrClaimsModeV640)return 'hr-claims';
       return map[id]||(isAdminSafe()?'confirm-duty':'my-duty');
     }
     return '';
@@ -1979,6 +1983,7 @@ try {
     'monthly-summary':'summary',
     'staff-detail':'admin-details',
     'hr-export':'export',
+    'hr-claims':'export',
     'export-history':'history'
   };
   const STAFF_OT={
@@ -1989,7 +1994,7 @@ try {
     'claim-detail':'staff-details',
     'monthly-summary':'staff-summary'
   };
-  const ADMIN_ONLY_SECTIONS=new Set(['staff-tracking','approval','staff-detail','hr-export','export-history']);
+  const ADMIN_ONLY_SECTIONS=new Set(['staff-tracking','approval','staff-detail','hr-export','hr-claims','export-history']);
   const STAFF_ONLY_SECTIONS=new Set(['my-duty','my-ot','claim-detail']);
 
   function setOtSection(section,{month='',mode='',forceAdmin=false}={}){
@@ -2009,6 +2014,7 @@ try {
     }
 
     const id=(useAdmin?ADMIN_OT:STAFF_OT)[section] || (useAdmin?'admin-duty':'staff-track');
+    if(section)st.hrClaimsModeV640=(section==='hr-claims'&&useAdmin);
     st.otMenuV369=id;
     st.otGroupV522=(['admin-duty','tracking','staff-track','staff-confirm'].includes(id)?'duty':(['admin-extra','approve','staff-extra','staff-list'].includes(id)?'ot':'report'));
     setOpenTree('ot');
@@ -3668,7 +3674,7 @@ try {
       ? new Set(['admin-duty','admin-extra','tracking','approve','summary','admin-details','export','history'])
       : new Set(['staff-track','staff-confirm','staff-extra','staff-list','staff-details','staff-summary']);
     if(!allowed.has(id))return null;
-    const st=S();st.otMenuV369=id;st.otGroupV522=otGroup(id);st.page='ot';
+    const st=S();if(id==='export')st.hrClaimsModeV640=false;st.otMenuV369=id;st.otGroupV522=otGroup(id);st.page='ot';
     try{sessionStorage.setItem('cnmi-v523-ot-open','1');}catch(_){ }
     openTree('ot');
     return 'ot';

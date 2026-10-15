@@ -2,12 +2,12 @@
 (()=>{'use strict';if(window.__CNMI_V638_ADMIN_SPLIT__)return;window.__CNMI_V638_ADMIN_SPLIT__=true;
 const S=()=>{try{return window.cnmiV639CoreState?.()||window.state||{}}catch(_){return window.state||{}}};
 const params=()=>new URLSearchParams((location.hash.split('?')[1]||''));
-const active=()=>params().get('hr-revision')==='1' && params().get('section')==='hr-export';
+const active=()=>params().get('section')==='hr-claims';
 const mm=()=>params().get('month')||String(S().otMenuMonthV369||new Date().toISOString().slice(0,7)).slice(0,7);
 const admin=()=>{const nav=document.getElementById('mainNav');return S().page==='ot'&&S().otMenuV369==='export'&&!!(window.isAdmin?.()||nav?.textContent?.includes('เมนู Admin'));};
 let lastHost=null,sidebarTimer=0,pageTimer=0;
-function openClaims(){const month=mm();const target='#/ot?section=hr-export&month='+encodeURIComponent(month)+'&hr-revision=1';if(location.hash!==target)location.hash=target;else syncPage();setTimeout(()=>{window.cnmiV637?.refresh?.();syncPage()},130)}
-function openExport(){const url='#/ot?section=hr-export&month='+encodeURIComponent(mm());if(location.hash!==url)location.hash=url;else syncPage()}
+function openClaims(){const month=mm();S().hrClaimsModeV640=true;const target='#/ot?section=hr-claims&month='+encodeURIComponent(month);if(location.hash!==target)location.hash=target;else syncPage();setTimeout(()=>{window.cnmiV637?.refresh?.();syncPage()},130)}
+function openExport(){S().hrClaimsModeV640=false;const url='#/ot?section=hr-export&month='+encodeURIComponent(mm());if(location.hash!==url)location.hash=url;else syncPage()}
 function syncSidebar(){const nav=document.getElementById('mainNav');if(!nav)return;const exp=nav.querySelector('[data-v523-ot-item="export"]');if(!exp){document.getElementById('v638HrClaims')?.remove();return}
  let item=nav.querySelector('#v638HrClaims');if(!item){item=document.createElement('button');item.type='button';item.id='v638HrClaims';item.className='v523-subitem v638-hr-menu';item.setAttribute('data-v638-open','1');item.innerHTML='<span class="v523-branch-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 3h10l3 3v15H4V3zM8 11h8M8 15h5M8 19h5"/></svg></span><span>จัดการยอดเบิก HR / เบิกพิเศษ</span>';exp.insertAdjacentElement('afterend',item)}
  else if(item.previousElementSibling!==exp)exp.insertAdjacentElement('afterend',item);

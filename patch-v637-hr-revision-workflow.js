@@ -5,7 +5,7 @@ const db=()=>{try{return (typeof sb!=='undefined'&&sb?.rpc?sb:null)||window.sb||
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=x=>Number(x||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
 const month=()=>new URLSearchParams(location.hash.split('?')[1]||'').get('month')||state().otMenuMonthV369||new Date().toISOString().slice(0,7);
-const active=()=>new URLSearchParams(location.hash.split('?')[1]||'').get('hr-revision')==='1';
+const active=()=>{const h=location.hash||'';const q=new URLSearchParams(h.split('?')[1]||'');return h.startsWith('#/ot?')&&q.get('section')==='hr-claims';};
 const isAdmin=()=>{try{const nav=document.getElementById('mainNav');return state().page==='ot'&&!!(window.isAdmin?.()||nav?.textContent?.includes('เมนู Admin'));}catch(_){return false}};
 const note=t=>{try{window.showToast(t)}catch(_){alert(t)}};
 let workspace=null,loaded='',busy=false,staffLoaded='',staffBusy=false;
@@ -16,7 +16,7 @@ const baseRows=w=>(w?.snapshot||[]).map(r=>({staff_id:String(r.staff_id),code:St
 const makeDraft=w=>w?.draft?{staff_rows:w.draft.staff_rows||[],special_rows:w.draft.special_rows||[]}:w?.revisions?.length?{staff_rows:w.revisions[0].staff_rows||[],special_rows:w.revisions[0].special_rows||[]}:{staff_rows:baseRows(w).map(r=>({staff_id:r.staff_id,amount:r.amount})),special_rows:[]};
 let draft=null;
 function nav(){} // v638 owns a single sidebar navigation item
-function go(on){location.hash='#/ot?section=hr-export&month='+encodeURIComponent(month())+(on?'&hr-revision=1':'')}
+function go(on){const s=state();s.hrClaimsModeV640=!!on;location.hash='#/ot?section='+(on?'hr-claims':'hr-export')+'&month='+encodeURIComponent(month())}
 function adminSkeleton(){const host=getHost();if(!host)return null;host.classList.toggle('v637-admin-active',!!active());let panel=host.querySelector('#v637Admin');if(!panel){panel=document.createElement('section');panel.id='v637Admin';panel.className='card v637-panel';host.prepend(panel)}panel.hidden=!active();return panel}
 function statusText(r){return r?.status==='confirmed'?'ยืนยันแล้ว':r?.status==='disputed'?'ทักท้วง':'รอยืนยันฉบับล่าสุด'}
 function renderAdmin(){const p=adminSkeleton();if(!p||!active()||!workspace)return;const w=workspace,rows=baseRows(w),latest=w.revisions?.[0];if(w.no_batch){p.innerHTML='<h3>จัดการยอดเบิก HR / เบิกพิเศษ</h3><p>ไม่พบ Snapshot ที่ Export แล้วในเดือนนี้</p>';return}
