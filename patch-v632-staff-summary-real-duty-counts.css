@@ -13,3 +13,9 @@
 .v641-special-line b{white-space:nowrap}
 .v641-confirmed{color:#087c45;font-weight:600}
 @media(max-width:600px){.v641-breakdown>div{align-items:flex-start}.v641-breakdown>div span{flex:1}.v641-breakdown>div b{white-space:nowrap}}
+
+/* v642 saved draft preview: clearly read-only before a revision is published. */
+.v642-draft-warning{margin:12px 0;padding:14px 16px;border:1px solid #f2cc82;border-radius:10px;background:#fff8e9;color:#865400;display:grid;gap:5px}
+.v642-draft-warning span{font-size:13px}
+.v642-error-text{display:block;margin:6px 0;color:#991b1b;word-break:break-word}
+.v642-draft-preview .v641-breakdown{margin-bottom:8px}

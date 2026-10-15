@@ -14,7 +14,7 @@ function host(){return document.querySelector('.v369-ot-content')}
 function visiblePanel(panel,kind){if(!panel)return;panel.dataset.v632Screen=kind; if(kind==='staff-summary'){
   Array.from(panel.children).forEach(child=>{if(!child.classList.contains('v632-summary'))child.classList.add('v632-suppressed')});
  }else{Array.from(panel.children).forEach(child=>child.classList.remove('v632-suppressed'))}}
-function reviewMarkup(records,failed,revision,revisionError){
+function reviewMarkup(records,failed,revision,revisionError,preview,previewError){
  const r=records[0]||null;
  // Published revisions, NOT drafts, are authoritative for staff acceptance. Original Snapshot is never edited.
  if(revision&&revision.id){
@@ -46,6 +46,29 @@ function reviewMarkup(records,failed,revision,revisionError){
      ${status==='confirmed'?'<p class="v641-confirmed">บันทึกการยืนยันฉบับนี้แล้ว</p>':`<label>ยอดที่ฉันตรวจนับ (บาท)<input data-v632-amount type="number" min="0" step="0.01" inputmode="decimal" value="${esc(revision.counted_money??final)}"></label><label>หมายเหตุหากยอดไม่ตรง<input data-v632-note placeholder="บอกวันที่ OT หรือเหตุผลที่ไม่ตรง" value="${esc(revision.note||'')}"></label><div class="v632-actions"><button type="button" data-v641-submit="confirmed">✓ ยืนยันยอดถูกต้อง</button><button type="button" data-v641-submit="disputed">ยอดไม่ตรง / ให้ Admin ตรวจสอบ</button></div>`}
    </section>`;
  }
+ // A saved draft can be displayed read-only, but never confirmed until the Admin explicitly publishes it.
+ if(preview&&preview.is_draft===true){
+   const base=Number(preview.snapshot_money);
+   const amount=Number(preview.amount);
+   const specials=Array.isArray(preview.specials)?preview.specials:[];
+   const extra=Math.round(specials.reduce((a,x)=>a+Number(x.amount||0),0)*100)/100;
+   const net=amount-extra;
+   const correction=Math.round((net-base)*100)/100;
+   if(!Number.isFinite(base)||!Number.isFinite(amount)||!Number.isFinite(extra))return '<h3>ยอด OT ที่หน่วยงานส่งเบิกให้ฉัน</h3><p class="v632-error">ข้อมูลร่างไม่ถูกต้อง กรุณาแจ้ง Admin</p>';
+   const items=specials.map(x=>`<div class="v641-special-line"><span>${esc(x.title||'เบิกพิเศษ')}<small>${esc(x.reason||'')}</small></span><b>+${fmtMoney(x.amount)} บาท</b></div>`).join('');
+   return `<h3>ยอด OT ที่หน่วยงานส่งเบิกให้ฉัน</h3>
+     <p class="v642-draft-warning"><b>ร่างยอดเบิกที่ Admin บันทึกแล้ว — ยังไม่เปิดให้ยืนยัน</b><span>ตรวจดูตัวเลขได้ แต่ต้องรอ Admin กด “สร้างฉบับแก้ไขและเปิดให้ Staff ยืนยัน” ก่อน</span></p>
+     <section class="v632-review v641-review v642-draft-preview">
+       <div class="v632-values v641-values"><div><small>ยอดจากระบบ Export (ไม่รวมเบิกพิเศษ)</small><strong>${fmtMoney(base)} ฿</strong></div><div class="v641-final"><small>ยอดรวมร่างเบิก HR (รวมเบิกพิเศษ)</small><strong>${fmtMoney(amount)} ฿</strong></div></div>
+       <div class="v641-breakdown"><div><span>ยอด Export ต้นฉบับ</span><b>${fmtMoney(base)} บาท</b></div>
+       ${Math.abs(correction)>=.01?`<div><span>ปรับยอดเบิกหลัก</span><b>${correction>0?'+':''}${fmtMoney(correction)} บาท</b></div>`:''}
+       <div><span>เบิกพิเศษ (นอก Export)</span><b class="v641-positive">+${fmtMoney(extra)} บาท</b></div>
+       <div class="v641-total"><strong>ยอดรวมร่างที่ Admin บันทึก</strong><strong>${fmtMoney(amount)} บาท</strong></div></div>
+       ${items?`<details class="v641-details" open><summary>รายการเบิกพิเศษ ${specials.length} รายการ</summary>${items}</details>`:''}
+       <p class="v632-status">สถานะ: รอ Admin เปิดให้ยืนยัน (ไม่ถือว่ายืนยันยอดแล้ว)</p>
+     </section>`;
+ }
+ if(revisionError||previewError){const cause=revisionError||previewError;return `<h3>ยอด OT ที่หน่วยงานส่งเบิกให้ฉัน</h3><p class="v632-error"><b>ยังตรวจสอบยอดรวมล่าสุดไม่ได้ — ไม่เปิดให้ยืนยันยอดเดิม</b><span class="v642-error-text">${esc(cause)}</span><span>กรุณาตรวจ SQL V637/V642 และการเชื่อมต่อ Supabase ก่อน</span></p>`;}
  if(failed)return `<h3>ยอด OT ที่หน่วยงานส่งเบิกให้ฉัน</h3><p class="v632-error"><b>ยังไม่สามารถเปิดให้ยืนยันยอดได้</b> — ระบบอ่านข้อมูลยอดเบิกที่ Admin บันทึกไม่สำเร็จ: ${esc(failed)}<br>กรุณาตรวจการเชื่อมต่อ Supabase และสิทธิ์การอ่านข้อมูล</p>`;
  return `<h3>ยอด OT ที่หน่วยงานส่งเบิกให้ฉัน</h3><p class="v632-hint">ยอดจาก Export ต้นฉบับ • รายการเบิกพิเศษในหน้าจัดการยอด HR จะแสดงให้เจ้าหน้าที่หลัง Admin สร้างฉบับแก้ไขเท่านั้น</p>`+
  (!records.length?'<div class="v632-wait">ยังไม่มียอดเบิกที่ Admin บันทึกและเปิดให้ยืนยัน สำหรับเดือนนี้</div>':records.map(row=>`<section class="v632-review" data-v632-batch="${esc(row.batch_id)}" data-v632-pdf="${esc(row.pdf_money??'')}"><div class="v632-values"><div><small>ยอดจากระบบ Export (ไม่รวมเบิกพิเศษ)</small><strong>${fmtMoney(row.snapshot_money)} ฿</strong></div><div><small>ยอดที่ Admin บันทึกตามเอกสารเดิม</small><strong>${row.pdf_money==null?'ยังไม่บันทึก':fmtMoney(row.pdf_money)+' ฿'}</strong></div></div><p class="v632-status">${row.confirmation_status==='confirmed'?'ยืนยันยอดแล้ว':row.confirmation_status==='disputed'?'แจ้งยอดไม่ตรง — รอ Admin ตรวจสอบ':row.confirmation_status==='reconfirm'?'ยอดถูกแก้ไขแล้ว — โปรดยืนยันใหม่':'รอตรวจสอบและยืนยันยอด'}</p><label>ยอดที่ฉันตรวจนับ (บาท)<input data-v632-amount type="number" min="0" step="0.01" inputmode="decimal" value="${esc(row.confirmation_status==='reconfirm'?(row.pdf_money??''):(row.staff_counted_money??row.pdf_money??''))}"></label><label>หมายเหตุหากยอดไม่ตรง<input data-v632-note placeholder="บอกวันที่ OT หรือเหตุผลที่ไม่ตรง" value="${esc(row.confirmation_note||'')}"></label><div class="v632-actions"><button type="button" data-v632-submit="confirmed" ${row.pdf_money==null?'disabled':''}>✓ ยืนยันยอดถูกต้อง</button><button type="button" data-v632-submit="disputed" ${row.pdf_money==null?'disabled':''}>ยอดไม่ตรง / ให้ Admin ตรวจสอบ</button></div></section>`).join(''));
@@ -53,10 +76,11 @@ function reviewMarkup(records,failed,revision,revisionError){
 async function renderSummary(panel,month,force){let card=panel.querySelector('.v632-summary');if(!card){card=document.createElement('section');card.className='card v632-summary';panel.prepend(card)}if(card.parentElement!==panel)panel.prepend(card);visiblePanel(panel,'staff-summary');if(!card.dataset.v636Ready){card.innerHTML='<h3>ยอด OT ที่หน่วยงานส่งเบิกให้ฉัน</h3><p class="v632-hint">กำลังตรวจยอดที่ Admin บันทึกสำหรับเดือนนี้…</p>';card.dataset.v636Ready='1';}
  const db=DB();if(!db?.rpc){card.innerHTML=reviewMarkup([],'ระบบยังไม่พร้อมเชื่อมต่อ Supabase');return}
  const token=++seq;
- // Query original snapshot and separately published revision in parallel; never expose Admin drafts to staff.
- const [base,latest]=await Promise.allSettled([
+ // Published revision wins; draft preview is read-only and cannot be confirmed.
+ const [base,latest,previewResult]=await Promise.allSettled([
    db.rpc('get_my_hr_pdf_reviews_v630',{p_month:month}),
-   db.rpc('my_hr_revision_v637',{p_month:month})
+   db.rpc('my_hr_revision_v637',{p_month:month}),
+   db.rpc('my_hr_draft_preview_v642',{p_month:month})
  ]);
  if(token!==seq||!card.isConnected||screen()!=='staff-summary'||nowMonth()!==month)return;
  const baseResult=base.status==='fulfilled'?base.value:null;
@@ -64,8 +88,11 @@ async function renderSummary(panel,month,force){let card=panel.querySelector('.v
  const baseError=base.status==='rejected'?base.reason?.message:baseResult?.error?.message;
  const revisionError=latest.status==='rejected'?latest.reason?.message:latestResult?.error?.message;
  const revision=revisionError?null:latestResult?.data;
- // Missing v637 SQL isn't proof the legacy amount is wrong: leave V630 functional and show a clear hint.
- card.innerHTML=reviewMarkup(Array.isArray(baseResult?.data)?baseResult.data:[],baseError,revision,revisionError);
+ const previewReply=previewResult.status==='fulfilled'?previewResult.value:null;
+ const previewError=previewResult.status==='rejected'?previewResult.reason?.message:previewReply?.error?.message;
+ const preview=previewError?null:previewReply?.data;
+ // Never silently confirm a legacy value if the revision/preview state cannot be checked.
+ card.innerHTML=reviewMarkup(Array.isArray(baseResult?.data)?baseResult.data:[],baseError,revision,revisionError,preview,previewError);
  visiblePanel(panel,'staff-summary');
 }
 function normdate(x){return String(x||'').slice(0,10)}

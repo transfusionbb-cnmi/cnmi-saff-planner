@@ -20,3 +20,10 @@
 .v637-error{color:#b91c1c}
 #v637Sidebar.v637-current{background:#dbeeff;color:#075985}
 @media(max-width:700px){.v637-special{grid-template-columns:1fr 1fr}.v637-special input[data-v637-reason]{grid-column:1/-1}.v637-panel{padding:10px}}
+
+/* v642: make Publish and Save immediately visible above the long staff table. */
+#v637Admin .v642-publish-box{border:1px solid #c4dfee;background:#f7fbff;padding:12px 16px;margin:16px 0;border-radius:12px}
+#v637Admin .v642-publish-box h3{margin:0 0 8px}
+#v637Admin .v642-publish-status{font-weight:600;color:#075985;margin:8px 0}
+#v637Admin .v642-publish-box label input{min-width:min(480px,100%)}
+@media(max-width:600px){#v637Admin .v642-publish-box .v637-actions button{width:100%}}
