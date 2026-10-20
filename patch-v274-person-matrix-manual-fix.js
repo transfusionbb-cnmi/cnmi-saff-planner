@@ -6,6 +6,22 @@
 */
 (function(){
   'use strict';
+
+/* v651: invoke ONLY after the roster-month publication write succeeded. */
+async function v651PublishCurrentPlan(key){
+  const api=window.cnmiV648PublishedPlan;
+  if(!api?.takeSnapshot)throw new Error('ไม่พบระบบเก็บตารางตามหัวหน้าประกาศ (v651)');
+  const ok=await api.takeSnapshot(key,{replace:true});
+  if(!ok)throw new Error('ระบบไม่สามารถยืนยันข้อมูลประกาศฉบับล่าสุดได้');
+  const diff=api.lastPublication;
+  if(diff?.month===key && diff.holidayChangedCount!==null){
+    const count=diff.holidayChangedCount;
+    const note=count ? `วันหยุดตามหัวหน้าเปลี่ยน ${count} คน` : 'จำนวนวันหยุดตามหัวหน้ายังเท่าเดิม (ตรวจวันเสาร์/อาทิตย์/นักขัตและเวรของแต่ละคน)';
+    try{window.showToast?.(note);}catch(_){}
+  }
+  return true;
+}
+
   const VERSION = 'V274_PERSON_MATRIX_MANUAL_FIX';
   if (window.__CNMI_V274_PERSON_MATRIX_MANUAL_FIX__) return;
   window.__CNMI_V274_PERSON_MATRIX_MANUAL_FIX__ = true;
@@ -22,6 +38,14 @@
     { code:'ช9-MT', label:'ช9 MT' }
   ];
   const rosterTimers = new Map();
+  let rosterPendingWrites = 0;
+  let rosterWriteError = '';
+  let rosterPublishing = false;
+  async function waitRosterSaved(){
+    for(let i=0;i<120&&(rosterTimers.size||rosterPendingWrites);i++)await new Promise(resolve=>setTimeout(resolve,100));
+    if(rosterTimers.size||rosterPendingWrites)throw new Error('ยังบันทึกเวรไม่เสร็จ กรุณาประกาศใหม่');
+    if(rosterWriteError)throw new Error('มีเวรบันทึกไม่สำเร็จ: '+rosterWriteError);
+  }
   const positionTimers = new Map();
   const mentorTimers = new Map();
   const fiscalCache = new Map();
@@ -448,6 +472,7 @@
   async function saveDutyCell(cell,code){
     const date=normDate(cell?.dataset?.date),staffId=normId(cell?.dataset?.staffId),select=cell?.querySelector('[data-v274-duty-select]');
     if (!date||!staffId||!DB()) return;
+    rosterPendingWrites++;
     statusText(select,'กำลังบันทึก…','saving');
     try {
       const month=await ensureRosterMonth(date.slice(0,7));
@@ -466,12 +491,32 @@
         }
       }
       statusText(select,'บันทึกแล้ว','saved'); rerender(snapshot('.v274-roster-wrap'));
-    }catch(error){statusText(select,`บันทึกไม่สำเร็จ: ${friendly(error)}`,'error');}
+    }catch(error){rosterWriteError=friendly(error);statusText(select,`บันทึกไม่สำเร็จ: ${friendly(error)}`,'error');}
+    finally{rosterPendingWrites--;}
   }
-  function queueDuty(cell,code){ const key=`${cell?.dataset?.staffId}|${cell?.dataset?.date}`;clearTimeout(rosterTimers.get(key));rosterTimers.set(key,setTimeout(()=>saveDutyCell(cell,code),220)); }
+  function queueDuty(cell,code){
+    const key=`${cell?.dataset?.staffId}|${cell?.dataset?.date}`;
+    rosterWriteError='';clearTimeout(rosterTimers.get(key));
+    rosterTimers.set(key,setTimeout(()=>{rosterTimers.delete(key);saveDutyCell(cell,code);},220));
+  }
   async function updateRosterStatus(status){
-    try { const key=S()?.monthKey||new Date().toISOString().slice(0,7);const month=await ensureRosterMonth(key);const res=await DB().from('roster_months').update({status,updated_by:currentStaff()}).eq('id',month.id);if(res.error)throw res.error;toast(status==='published'?'บันทึกและประกาศตารางแล้ว':'บันทึกตารางแล้ว'); }
-    catch(error){toast(friendly(error),'error');}
+    if(rosterPublishing)return;
+    rosterPublishing=true;let statusCommitted=false;
+    try{
+      const key=S()?.monthKey||new Date().toISOString().slice(0,7);
+      await waitRosterSaved();
+      const month=await ensureRosterMonth(key);
+      const res=await DB().from('roster_months').update({status,updated_by:currentStaff()}).eq('id',month.id).select('*').single();
+      if(res.error)throw res.error;
+      statusCommitted=true;
+      if(S())S().rosterMonths=(S().rosterMonths||[]).filter(r=>r.id!==month.id).concat(res.data||{...month,status});
+      if(status==='published'){
+        await v651PublishCurrentPlan(key);
+        toast('บันทึกและประกาศฉบับล่าสุดแล้ว • ยอดสะสมอัปเดตแล้ว');
+      }else toast('บันทึกตารางแล้ว • ไม่เปลี่ยนยอดตามประกาศ');
+      try{window.renderPage?.();}catch(_){}
+    }catch(error){toast((statusCommitted&&status==='published'?'ตารางประกาศแล้ว แต่ยอดตามแผนยังไม่อัปเดต: ':'บันทึกไม่สำเร็จ: ')+friendly(error),'error');}
+    finally{rosterPublishing=false;}
   }
   function holidayPanel(key){
     const rows=(S()?.holidays||[]).filter(h=>String(h?.holiday_date||'').startsWith(key)).sort((a,b)=>String(a.holiday_date).localeCompare(String(b.holiday_date)));

@@ -4,6 +4,22 @@
 */
 (function(){
   'use strict';
+
+/* v651: invoke ONLY after the roster-month publication write succeeded. */
+async function v651PublishCurrentPlan(key){
+  const api=window.cnmiV648PublishedPlan;
+  if(!api?.takeSnapshot)throw new Error('ไม่พบระบบเก็บตารางตามหัวหน้าประกาศ (v651)');
+  const ok=await api.takeSnapshot(key,{replace:true});
+  if(!ok)throw new Error('ระบบไม่สามารถยืนยันข้อมูลประกาศฉบับล่าสุดได้');
+  const diff=api.lastPublication;
+  if(diff?.month===key && diff.holidayChangedCount!==null){
+    const count=diff.holidayChangedCount;
+    const note=count ? `วันหยุดตามหัวหน้าเปลี่ยน ${count} คน` : 'จำนวนวันหยุดตามหัวหน้ายังเท่าเดิม (ตรวจวันเสาร์/อาทิตย์/นักขัตและเวรของแต่ละคน)';
+    try{window.showToast?.(note);}catch(_){}
+  }
+  return true;
+}
+
   const VERSION = 'V273_MANUAL_MANAGEMENT_TOOL';
   if (window.__CNMI_V273_MANUAL_MANAGEMENT_TOOL__) return;
   window.__CNMI_V273_MANUAL_MANAGEMENT_TOOL__ = true;
@@ -334,7 +350,11 @@
         st().rosterDraft = {monthKey:key,assignments:up.data || rows};
         st().rosterMonths = (st().rosterMonths || []).filter(row => row.id !== month.id).concat(monthUpdate.data || month);
       }
-      toast(status === 'published' ? 'บันทึกและประกาศตารางแล้ว' : 'บันทึกตารางทั้งเดือนแล้ว');
+      if(status==='published') {
+        try { await v651PublishCurrentPlan(key); }
+        catch(error) { toast('ตารางประกาศแล้ว แต่ฐานยอดตามแผนยังไม่อัปเดต: '+friendly(error),'error'); return; }
+      }
+      toast(status === 'published' ? 'บันทึกและประกาศฉบับล่าสุดแล้ว • ยอดสะสมอัปเดตแล้ว' : 'บันทึกตารางทั้งเดือนแล้ว • ไม่เปลี่ยนยอดตามประกาศ');
       safeRender(scrollSnapshot('.v273-roster-sheet-wrap'));
     } catch (error) { toast(`บันทึกไม่สำเร็จ: ${friendly(error)}`,'error'); }
   }

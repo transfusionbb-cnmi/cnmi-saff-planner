@@ -17,6 +17,12 @@
   const month = v => norm(v).slice(0, 7);
   const numeric = v => Number.isFinite(+v) ? +v : 0;
   const whole = n => { const v = numeric(n); return Math.sign(v) * Math.floor(Math.abs(v) + 0.500000001) || 0; };
+  // Median of the published-plan figures, not an arithmetic mean of the group.
+  const median = values => {
+    const sorted = values.map(numeric).sort((a,b) => a-b);
+    const mid = Math.floor(sorted.length/2);
+    return !sorted.length ? 0 : sorted.length % 2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2;
+  };
   const groupOf = p => norm(p?.staff_type).trim() === 'เคิก' ? 'เคิก' : 'MT';
   const validMonth = key => /^\d{4}-(0[1-9]|1[0-2])$/.test(key);
   const stateOf = () => { try { return state || window.state || {}; } catch (_) { return window.state || {}; } };
@@ -65,8 +71,10 @@
     catch (_) { return {}; }
   }
   function offDays(id, key, rows) {
-    try { return numeric(calculateDaysOff(id,key,rows)); }
-    catch (_) { return 0; }
+    try {
+      const stored=publishedApi()?.publishedDaysOff?.(id,key,rows);
+      return stored == null ? numeric(calculateDaysOff(id,key,rows)) : numeric(stored);
+    } catch (_) { return 0; }
   }
   // Pure ledger builder: every month is computed from that month's published
   // baseline. Unpublished months contribute zero, while carrying forward
@@ -101,10 +109,10 @@
         // not to the month currently viewed or who buys/sells a shift.
         const team = active ? people.filter(p => groupOf(p) === label &&
           !isExcluded(p) && first.has(norm(p.id)) && first.get(norm(p.id)) <= cursor) : [];
-        const totalDuty = team.reduce((s,p) => s + numeric(stats[norm(p.id)]?.units),0);
-        const totalDays = team.reduce((s,p) => s + dayFn(p.id,cursor,rows),0);
-        perGroup.set(label,{units:team.length ? totalDuty/team.length : 0,
-          days:team.length ? totalDays/team.length : 0, team: new Set(team.map(p => norm(p.id)))});
+        const dutyValues = team.map(p => numeric(stats[norm(p.id)]?.units));
+        const holidayValues = team.map(p => dayFn(p.id,cursor,rows));
+        perGroup.set(label,{units:median(dutyValues),days:median(holidayValues),
+          team: new Set(team.map(p => norm(p.id)))});
       }
       const perPerson = new Map();
       for (const p of people) {
@@ -147,15 +155,15 @@
     const result = ledger(people,all,h.trades || [],key).get(key);
     if (!result) return original;
     return {...original, groups:original.groups.map(group => ({
-      ...group,
+      ...group, average:result.averages.get(group.label)?.units ?? group.average,
       rows:group.rows.map(row => {
         const values = result.people.get(norm(row.person?.id));
         if (!values) return row;
         const resetDuty = firstDate(row.person,'balance_reset_at');
         const status = isExcluded(row.person) ? 'ลาระยะยาว / ไม่คิดหนี้เวร'
           : resetDuty === key && values.cumulative === 0 ? 'เริ่มนับเวรใหม่เดือนนี้'
-          : values.cumulative > 0 ? 'เวรสะสมมากกว่าเฉลี่ย'
-          : values.cumulative < 0 ? 'เวรสะสมน้อยกว่าเฉลี่ย' : 'สมดุลสะสม';
+          : values.cumulative > 0 ? 'เวรสะสมมากกว่าค่ากลาง'
+          : values.cumulative < 0 ? 'เวรสะสมน้อยกว่าค่ากลาง' : 'สมดุลสะสม';
         const tone = isExcluded(row.person) ? 'black' : values.cumulative > 0 ? 'orange'
           : values.cumulative < 0 ? 'blue' : 'green';
         return {...row, fixed:{...row.fixed,...values,status,tone}};
@@ -165,7 +173,7 @@
   mod.buildBalanceData = corrected;
   window.cnmiV649PublishedLedger = {
     version:'v649', HOLIDAY_START, isCreditedMonth, ledger,
-    _test:{whole,ledger,rosterHistoryFor,isCreditedMonth}
+    _test:{whole,median,ledger,rosterHistoryFor,isCreditedMonth}
   };
   // Explain the reset and legacy provenance without ever writing or re-publishing
   // a historical roster. In contrast with the per-person DB resets, this is
