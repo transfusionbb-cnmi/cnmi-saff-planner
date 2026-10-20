@@ -6796,8 +6796,9 @@ try {
     data.groups.forEach(group=>group.rows.forEach(row=>{
       const id=normId(row.person?.id),f=row.fixed||(row.fixed={});
       const fallbackUnits=Number(group.average||0)+Number(f.gap||0);
-      f.baselineUnits=row.excluded?0:Number(stats[id]?.units??fallbackUnits??0);
-      f.baselineDays=row.excluded?0:baselineDays(id,safe,rows);
+      const unpublished=window.cnmiV648PublishedPlan?.isFairnessMonth?.(safe) === false;
+      f.baselineUnits=row.excluded||unpublished?0:Number(stats[id]?.units??fallbackUnits??0);
+      f.baselineDays=row.excluded||unpublished?0:baselineDays(id,safe,rows);
     }));
     return data;
   }

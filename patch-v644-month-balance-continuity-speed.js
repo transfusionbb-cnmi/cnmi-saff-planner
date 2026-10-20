@@ -93,7 +93,8 @@
       for (const month of sortedMonths) {
         if (month > key) break;
         const d=detail.get(month),avg=d.average[label] || {units:0,days:0};
-        const eligibleMonth = month >= first && !isLong(person);
+        const validPublishedMonth = window.cnmiV648PublishedPlan?.isFairnessMonth?.(month) !== false;
+        const eligibleMonth = validPublishedMonth && month >= first && !isLong(person);
         const dutyDelta = eligibleMonth ? fmtNum(d.stat[id]?.units)-avg.units : 0;
         const holidayDelta = eligibleMonth ? fmtNum(d.days.get(id))-avg.days : 0;
         if (month === dutyStart) dutyBalance = 0; // explicit Admin reset
