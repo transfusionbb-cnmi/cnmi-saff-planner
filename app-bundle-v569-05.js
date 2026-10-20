@@ -6757,7 +6757,7 @@ try {
   function staffPillHtml(person){try{return staffPill(person);}catch(_){return `<b>${esc(person?.nickname||person?.full_name||'-')}</b>`;}}
   function staffColorSafe(person){try{return staffColor(person);}catch(_){return person?.staff_color||person?.color||'#e2e8f0';}}
   function textColorSafe(color){try{return textColorFor(color);}catch(_){return '#0f172a';}}
-  function fmt(n){const x=Number(n||0);return Math.abs(x)<0.05?'0.0':x.toFixed(1);}
+  function fmt(n){const x=Number(n||0);return String(Number.isFinite(x)?Math.trunc(x):0);}
   function signedClass(v){const n=Number(v||0);return n>0.5?'v278-positive':n<-0.5?'v278-negative':'';}
   function mergeUnique(rows,keyFn){const map=new Map();(rows||[]).forEach(row=>{const key=keyFn(row);if(key)map.set(key,row);});return [...map.values()];}
 
