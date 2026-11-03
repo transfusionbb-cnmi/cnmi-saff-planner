@@ -1065,7 +1065,19 @@ async function init() {
   if (state.session?.user) await enterApp();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// V654: A failed Supabase/auth startup must not become a silent, unusable screen.
+// Keep the login UI visible; show a retry option without changing any staff data.
+document.addEventListener('DOMContentLoaded', () => {
+  void init().catch((error) => {
+    console.error('[V654] Startup failed:', error);
+    try { setBusy(false); } catch (_) {}
+    const warning = document.getElementById('setupWarning');
+    if (warning) {
+      warning.classList.remove('hidden');
+      warning.innerHTML = '<b>เริ่มระบบไม่สำเร็จ</b><br>โหลดข้อมูลเข้าสู่ระบบไม่สำเร็จ กรุณาลองเปิดหน้าเว็บใหม่ ถ้ายังเป็นอีก ให้ส่งภาพหน้าจอให้ผู้ดูแลระบบ<div style="margin-top:10px"><button class="primary-btn" type="button" onclick="location.reload()">ลองเปิดใหม่</button></div>';
+    }
+  });
+});
 
 function bindGlobalEvents() {
   $('modalClose').addEventListener('click', closeModal);
