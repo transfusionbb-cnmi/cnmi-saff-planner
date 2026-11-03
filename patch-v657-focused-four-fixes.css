@@ -1,0 +1,38 @@
+/* CNMI v657: activity panels must fill the selected single view. */
+#pageContent .v397-activities-layout.v524-single-view-layout,
+#pageContent .v524-activity-layout.v524-single-view-layout {
+  display:grid!important;grid-template-columns:minmax(0,1fr)!important;
+  width:100%!important;max-width:100%!important;min-width:0!important;gap:12px!important;
+}
+#pageContent .v397-activities-layout.v524-single-view-layout > .card,
+#pageContent .v524-activity-layout .v524-activity-create-panel,
+#pageContent .v524-activity-layout .v524-activity-search-panel {
+  grid-column:1/-1!important;min-width:0!important;max-width:none!important;width:100%!important;
+  overflow:visible!important;box-sizing:border-box;
+}
+#pageContent .v524-activity-layout .v524-panel-hidden {display:none!important;}
+#pageContent .v524-activity-layout .activity-filter-grid {min-width:0!important;max-width:none!important;}
+#pageContent .v524-activity-layout input,#pageContent .v524-activity-layout select {max-width:100%;box-sizing:border-box;}
+#pageContent .v524-activity-layout .card, #pageContent .v524-activity-layout .toolbar {min-width:0;}
+#pageContent .v657-donor-results {margin-top:16px;border-top:1px solid #e1eaf1;padding-top:12px;min-width:0;}
+#pageContent .v657-donor-title {display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;margin-bottom:8px;}
+#pageContent .v657-donor-title small {color:#64748b;}
+#pageContent .v657-donor-item {display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #e1eaf1;border-radius:10px;padding:10px;margin:7px 0;min-width:0;}
+#pageContent .v657-donor-main {display:flex;flex:1;flex-wrap:wrap;align-items:baseline;gap:5px 10px;min-width:0;overflow-wrap:anywhere;}
+#pageContent .v657-donor-main small {flex-basis:100%;color:#65758a;}
+#pageContent .v657-type {font-size:11px;padding:2px 7px;border-radius:6px;background:#e9f4ff;color:#24608b;}
+#pageContent #leaveForm .v657-leave-help {border:1px solid #d3e5ef;border-radius:10px;padding:8px 11px;background:#f7fbff;min-width:0;}
+#pageContent #leaveForm .v657-leave-help summary {font-weight:600;cursor:pointer;color:#235d80;}
+#pageContent #leaveForm .v657-leave-help [data-v481-leave-form-note] {margin-top:9px;}
+#pageContent #leaveForm .v657-short-note {font-size:12px;line-height:1.4;padding:8px 10px;}
+#pageContent #leaveForm select[name="type"]:invalid {color:#64748b;}
+#pageContent .v657-slot-check {margin:10px 0;padding:10px 12px;border:1px solid #c9dfed;background:#f5faff;border-radius:10px;color:#27536c;font-size:13px;}
+#pageContent .v657-slot-check b,#pageContent .v657-slot-check strong {display:block;line-height:1.5;}
+#pageContent .v657-slot-check small {display:block;margin-top:3px;line-height:1.5;color:#597189;}
+#pageContent .v657-slot-warning {border-color:#efc783;background:#fff8e9;color:#78531b;}
+#pageContent .v657-slot-warning small {color:#82652e;}
+@media(max-width:680px){
+  #pageContent .v524-activity-layout.v524-single-view-layout {display:block!important;}
+  #pageContent .v657-donor-item {align-items:flex-start;flex-direction:column;}
+  #pageContent .v657-donor-title {flex-direction:column;gap:3px;}
+}
