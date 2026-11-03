@@ -4322,41 +4322,93 @@ try {
     return exact[0];
   }
 
+  // V658: The configured Slot set for the selected date is the only authoritative
+  // source of daytime-position descriptions. The separate legacy master catalogue
+  // can contain different text for the very same position code.
+  function configuredSlotContext(date){
+    const d=normDate(date);
+    let cfg=null;
+    try{cfg=window.cnmiV224?.currentConfigs?.()||null;}catch(_){ }
+    if(!cfg)return {configured:false,rows:[],date:d,target:0,outing:false};
+    const planned=(S()?.positions||[]).filter(r=>normDate(r?.work_date)===d&&codeOf(r));
+    let outing=false;
+    try{outing=typeof hasOutingSafe==='function'&&!!hasOutingSafe(d);}catch(_){ }
+    if(!outing)outing=planned.some(r=>r?.is_outing===true||/^OUTING:/i.test(txt(r?.eligibility_code))||txt(r?.zone)==='ออกหน่วย');
+    let target=0;
+    try{target=Number(window.cnmiV379?.targetForDate?.(d))||0;}catch(_){ }
+    if(!target){
+      const set=(S()?.manualDaySlotSettingsV273||[]).find(x=>normDate(x?.work_date)===d);
+      target=Number(set?.target_slots)||0;
+    }
+    const codes=new Set(planned.map(codeOf).map(key).filter(Boolean));
+    if(outing){
+      if(!target)target=codes.size||14;
+      const bucket=target<=12?12:(target<=13?13:14);
+      const rows=cfg?.outing_by_count?.[bucket]||cfg?.outing_by_count?.[String(bucket)]||cfg?.outing||[];
+      return {configured:true,rows:Array.isArray(rows)?rows:[],date:d,target:bucket,outing:true};
+    }
+    if(!target){
+      // Dashboard may open before monthly slot settings have loaded. Use the
+      // saved positions to identify the configured set instead of a legacy master.
+      const candidates=Object.entries(cfg.day||{}).map(([n,rows])=>({n:Number(n),rows})).filter(x=>Number.isInteger(x.n)&&Array.isArray(x.rows)&&x.rows.length);
+      const exact=candidates.find(x=>x.n===codes.size);
+      if(exact)target=exact.n;
+      else if(codes.size){
+        const ranked=candidates.map(x=>({n:x.n,score:x.rows.reduce((sum,r)=>sum+(codes.has(key(codeOf(r)))?1:0),0)*100-Math.abs(x.n-codes.size)}));
+        ranked.sort((a,b)=>b.score-a.score);
+        target=ranked[0]?.n||0;
+      }
+    }
+    const rows=target?(cfg?.day?.[target]||cfg?.day?.[String(target)]||[]):[];
+    return {configured:true,rows:Array.isArray(rows)?rows:[],date:d,target,outing:false};
+  }
+  function configuredSlotFor(code,date){
+    const ctx=configuredSlotContext(date);
+    const wanted=key(code);
+    const slot=(ctx.rows||[]).find(r=>key(codeOf(r))===wanted&&r?.is_active!==false)||null;
+    return {slot,ctx};
+  }
   function authoritativeMeta(row,date){
-    const c=codeOf(row);
+    const c=codeOf(row),lookup=configuredSlotFor(c,date),src=lookup.slot,ctx=lookup.ctx;
+    if(src){
+      return {
+        code:c,
+        zone:txt(src.zone)||'-',
+        break_time:txt(src.break_time)||'-',
+        main_rule:txt(src.main_rule||src.required_role)||'-',
+        job_desc:txt(src.job_desc||src.description||src.detail)||'-',
+        sourceV483:'configured-slot',
+        sourceLabel:`อ้างอิงชุด Slot ${ctx.outing?'ออกหน่วย':'วันทำงานปกติ'} ${ctx.target||ctx.rows.length} คน`
+      };
+    }
+    // No match in the selected set: do not silently display a stale, similarly
+    // named legacy master as though it were the current Slot definition.
+    if(ctx.configured){
+      return {code:c,zone:txt(row?.zone)||'-',break_time:'-',main_rule:'-',job_desc:'ไม่พบรายละเอียดตำแหน่งนี้ในชุด Slot ของวันที่เลือก กรุณาตรวจสอบจำนวนคนและการตั้งค่าชุด Slot',sourceV483:'slot-not-found',sourceLabel:'ไม่พบตำแหน่งนี้ในชุด Slot ของวันที่เลือก'};
+    }
+    // Offline/bootstrap fallback is explicitly identified to avoid confusion.
     const master=masterFor(c)||{};
-    let fallback={};
-    try{fallback=window.cnmiV381?.__v483PreviousMetadata?.(row,date)||{};}catch(_){fallback={};}
     return {
       code:c,
-      zone:useful(master?.zone)?txt(master.zone):(useful(row?.zone)?txt(row.zone):(useful(fallback?.zone)?txt(fallback.zone):'-')),
-      break_time:useful(master?.break_time)?txt(master.break_time):(useful(row?.break_time)?txt(row.break_time):(useful(fallback?.break_time)?txt(fallback.break_time):'-')),
-      main_rule:useful(master?.main_rule||master?.required_role)?txt(master.main_rule||master.required_role):(useful(row?.main_rule||row?.required_role)?txt(row.main_rule||row.required_role):(useful(fallback?.main_rule)?txt(fallback.main_rule):'-')),
-      job_desc:useful(master?.job_desc||master?.description||master?.detail)?txt(master.job_desc||master.description||master.detail):(useful(row?.job_desc||row?.description)?txt(row.job_desc||row.description):(useful(fallback?.job_desc)?txt(fallback.job_desc):`ปฏิบัติงานตามหน้าที่ของตำแหน่ง ${c||'ที่ได้รับมอบหมาย'}`)),
-      sourceV483:Object.keys(master).length?'daily_position_masters':'daily_positions'
+      zone:txt(master.zone||row?.zone)||'-',
+      break_time:txt(master.break_time||row?.break_time)||'-',
+      main_rule:txt(master.main_rule||master.required_role||row?.main_rule)||'-',
+      job_desc:txt(master.job_desc||master.description||row?.job_desc)||'-',
+      sourceV483:'legacy-fallback',sourceLabel:'ข้อมูลสำรอง — ยังโหลดชุด Slot ปัจจุบันไม่ได้'
     };
   }
 
-  // Override V381 metadata: latest saved master first. V479 previously preferred Slot Master,
-  // which could be stale after the Admin edited the master catalog.
+  // V381 also feeds the daily position page. Use the same current Slot source;
+  // keep its previous behavior only when the relevant Slot set is unavailable.
   function patchMetadataApi(){
-    const api=window.cnmiV381;if(!api||api.__v483MasterPatched)return;
+    const api=window.cnmiV381;if(!api||api.__v658SlotPatched)return;
     const previous=typeof api.metadataFor==='function'?api.metadataFor.bind(api):null;
-    api.__v483PreviousMetadata=previous;
     api.metadataFor=function(row,date){
-      const c=codeOf(row),master=masterFor(c)||{};
-      let old={};try{old=previous?previous(row,date)||{}:{};}catch(_){old={};}
-      return {
-        ...old,
-        code:c||old.code,
-        zone:useful(master?.zone)?txt(master.zone):(useful(row?.zone)?txt(row.zone):old.zone),
-        break_time:useful(master?.break_time)?txt(master.break_time):(useful(row?.break_time)?txt(row.break_time):old.break_time),
-        main_rule:useful(master?.main_rule||master?.required_role)?txt(master.main_rule||master.required_role):(useful(row?.main_rule||row?.required_role)?txt(row.main_rule||row.required_role):old.main_rule),
-        job_desc:useful(master?.job_desc||master?.description||master?.detail)?txt(master.job_desc||master.description||master.detail):(useful(row?.job_desc||row?.description)?txt(row.job_desc||row.description):old.job_desc),
-        sourceV483:Object.keys(master).length?'daily_position_masters':(old.sourceV479||old.sourceV381||'fallback')
-      };
+      let old={};try{old=previous?previous(row,date)||{}:{};}catch(_){ }
+      const meta=authoritativeMeta(row,date);
+      return meta.sourceV483==='configured-slot'?{...old,...meta}:old;
     };
-    api.__v483MasterPatched=true;
+    api.__v658SlotPatched=true;
   }
   patchMetadataApi();
   setTimeout(patchMetadataApi,250);
@@ -4445,13 +4497,34 @@ try {
   function popupRow(code,date){const k=key(code);return rowsForDate(date).find(r=>key(codeOf(r))===k||key(labelOf(r))===k)||{position_code:code,work_date:date};}
   function displayGroup(code){return groupInfo(roomGroup(code));}
   function breakLabel(v){const s=txt(v)||'-';return /^\d{1,2}:\d{2}$/.test(s)?`${s} น.`:s;}
+  let slotRefreshPromise=null,slotRefreshedAt=0;
+  function refreshDashboardSlot(code,date){
+    if(slotRefreshPromise || Date.now()-slotRefreshedAt<20000)return;
+    const load=window.cnmiV224?.loadDbConfigs;
+    if(typeof load!=='function')return;
+    slotRefreshedAt=Date.now();
+    slotRefreshPromise=Promise.allSettled([
+      Promise.resolve().then(()=>load(true)),
+      typeof window.cnmiV273?.loadSlotSettings==='function'
+        ?Promise.resolve().then(()=>window.cnmiV273.loadSlotSettings(normDate(date).slice(0,7),true))
+        :Promise.resolve()
+    ]).then(()=>{
+      const visible=document.querySelector('.v483-position-modal');
+      if(!visible||txt(visible.dataset.v483Code)!==txt(code)||txt(visible.dataset.v483Date)!==txt(date))return;
+      if(document.getElementById('modal')?.classList?.contains('hidden'))return;
+      if(visible.classList.contains('v435-position-full-modal'))showFull(code,date);
+      else showSummary(code,date);
+    }).catch(err=>console.warn('[V658] Slot refresh:',err))
+      .finally(()=>{slotRefreshPromise=null;});
+  }
   function showSummary(code,date){
     const row=popupRow(code,date),meta=authoritativeMeta(row,date),g=displayGroup(code),duties=splitDuties(meta.job_desc);
-    showModal(`<div class="v435-position-summary-modal v483-position-modal" data-v483-code="${esc(code)}" data-v483-date="${esc(date)}"><div class="v435-modal-heading"><div><h2>${esc(labelOf(row)||code)}</h2><span class="v435-zone-badge" data-v471-group="${esc(g.id)}">${esc(g.label)}</span></div></div><section class="v435-main-duty-box"><h3>หน้าที่หลัก</h3><ul>${duties.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><div class="v435-break-row"><span>เวลาพัก</span><b>${esc(breakLabel(meta.break_time))}</b></div></section><button type="button" class="soft-btn v435-full-detail-btn" data-v483-full-detail>ดูคำอธิบายตำแหน่งฉบับเต็ม</button></div>`,{small:true});
+    showModal(`<div class="v435-position-summary-modal v483-position-modal" data-v483-code="${esc(code)}" data-v483-date="${esc(date)}"><div class="v435-modal-heading"><div><h2>${esc(labelOf(row)||code)}</h2><span class="v435-zone-badge" data-v471-group="${esc(g.id)}">${esc(g.label)}</span></div></div><section class="v435-main-duty-box"><h3>หน้าที่หลัก</h3><ul>${duties.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><div class="v435-break-row"><span>เวลาพัก</span><b>${esc(breakLabel(meta.break_time))}</b></div><small class="hint" data-v658-source="${esc(meta.sourceV483)}">${esc(meta.sourceLabel||'')}</small></section><button type="button" class="soft-btn v435-full-detail-btn" data-v483-full-detail>ดูคำอธิบายตำแหน่งฉบับเต็ม</button></div>`,{small:true});
+    refreshDashboardSlot(code,date);
   }
   function showFull(code,date){
     const row=popupRow(code,date),meta=authoritativeMeta(row,date),g=displayGroup(code);
-    showModal(`<div class="v435-position-full-modal v483-position-modal" data-v483-code="${esc(code)}" data-v483-date="${esc(date)}"><div class="v435-modal-heading"><div><h2>${esc(labelOf(row)||code)}</h2><span class="v435-zone-badge" data-v471-group="${esc(g.id)}">${esc(g.label)}</span></div></div><div class="v435-full-meta-grid"><div><small>เวลาพัก</small><b>${esc(breakLabel(meta.break_time))}</b></div><div><small>ผู้ปฏิบัติหลัก / เงื่อนไข</small><b>${esc(meta.main_rule||'-')}</b></div></div><section class="v435-full-duty-box"><h3>รายละเอียดหน้าที่ที่ต้องทำ</h3><p>${esc(meta.job_desc||'-')}</p></section><button type="button" class="soft-btn v435-back-summary-btn" data-v483-back-summary>กลับหน้าที่หลัก</button></div>`,{small:true});
+    showModal(`<div class="v435-position-full-modal v483-position-modal" data-v483-code="${esc(code)}" data-v483-date="${esc(date)}"><div class="v435-modal-heading"><div><h2>${esc(labelOf(row)||code)}</h2><span class="v435-zone-badge" data-v471-group="${esc(g.id)}">${esc(g.label)}</span></div></div><div class="v435-full-meta-grid"><div><small>เวลาพัก</small><b>${esc(breakLabel(meta.break_time))}</b></div><div><small>ผู้ปฏิบัติหลัก / เงื่อนไข</small><b>${esc(meta.main_rule||'-')}</b></div></div><section class="v435-full-duty-box"><h3>รายละเอียดหน้าที่ที่ต้องทำ</h3><p>${esc(meta.job_desc||'-')}</p><small class="hint" data-v658-source="${esc(meta.sourceV483)}">${esc(meta.sourceLabel||'')}</small></section><button type="button" class="soft-btn v435-back-summary-btn" data-v483-back-summary>กลับหน้าที่หลัก</button></div>`,{small:true});
   }
 
   // Window capture runs before the older document-level V435 listener.
@@ -4509,7 +4582,7 @@ try {
     @media(max-width:820px){.nav-btn[data-page="positions"],.nav-btn[data-page="positionMonthView"],.nav-btn[data-page="positionMonth"]{touch-action:manipulation;pointer-events:auto!important}}
   `;document.head.appendChild(style);
 
-  window.cnmiV483={version:VERSION,refreshMasters,masterFor,authoritativeMeta,roomGroup,fixDashboard,navigatePosition};
+  window.cnmiV483={version:VERSION,refreshMasters,masterFor,authoritativeMeta,configuredSlotContext,configuredSlotFor,roomGroup,fixDashboard,navigatePosition};
   console.info(`[${VERSION}] loaded`);
 })();
 
