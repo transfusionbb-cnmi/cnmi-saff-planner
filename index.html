@@ -10,83 +10,151 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Staff Planner" />
-  <link rel="manifest" href="site.webmanifest?v=654" />
+  <link rel="manifest" href="site.webmanifest?v=655" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=303" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=303" />
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=303" />
   <link rel="shortcut icon" href="favicon.ico?v=303" />
   <link rel="stylesheet" href="app-styles-v569.css?v=573" />
-  <link rel="stylesheet" href="patch-v653-donor-leave-activity-position-sync.css?v=654" />
+  <link rel="stylesheet" href="patch-v653-donor-leave-activity-position-sync.css?v=655" />
   <script>
-  /* V556 one-time mobile PWA recovery.
-     If an older worker still controls this page, remove only CNMI Staff Planner
-     workers/caches and reload once. Never hide the document while waiting. */
+  /* v655 — bounded PWA recovery + startup watchdog.
+     Recovery never deletes sign-in credentials, app data, or remote records. */
   (() => {
     'use strict';
-    const VERSION = '654';
-    const RECOVERY_KEY = 'cnmi-pwa-recovery-v654';
+    const VERSION = '655';
+    const RECOVERY_KEY = 'cnmi-pwa-once-v655';
+    const CACHE_PREFIXES = ['cnmi-staff-planner-pwa-', 'cnmi-external-deps-v'];
     const result = { reloading: false, fromVersion: '' };
-
-    if (!('serviceWorker' in navigator)) {
-      window.CNMI_V545_PWA_RECOVERY = Promise.resolve(result);
-      return;
-    }
-
-    const controllerVersion = () => {
+    const limit = (promise, ms) => Promise.race([
+      Promise.resolve(promise).catch(() => null),
+      new Promise(resolve => setTimeout(() => resolve(null), ms))
+    ]);
+    const version = () => {
       try {
-        const controller = navigator.serviceWorker.controller;
-        if (!controller) return '';
-        return new URL(controller.scriptURL).searchParams.get('v') || '';
+        const controller = navigator.serviceWorker?.controller;
+        return controller ? new URL(controller.scriptURL).searchParams.get('v') || 'unknown' : '';
       } catch (_) { return ''; }
     };
-
+    const isPlannerWorker = registration => {
+      const scripts = [registration.active?.scriptURL, registration.waiting?.scriptURL,
+        registration.installing?.scriptURL].filter(Boolean);
+      return scripts.some(src => {
+        try {
+          const url = new URL(src);
+          return url.origin === location.origin && /\/(?:sw|service-worker)\.js$/.test(url.pathname);
+        } catch (_) { return false; }
+      });
+    };
+    const clearOwnCaches = async (includeExternal) => {
+      if (!('caches' in window)) return;
+      const keys = await limit(caches.keys(), 2500);
+      if (!Array.isArray(keys)) return;
+      await limit(Promise.allSettled(keys.filter(key => key.startsWith(CACHE_PREFIXES[0]) ||
+        (includeExternal && key.startsWith(CACHE_PREFIXES[1]))).map(key => caches.delete(key))), 3500);
+    };
+    const unregisterOwnWorkers = async () => {
+      if (!('serviceWorker' in navigator)) return;
+      const registrations = await limit(navigator.serviceWorker.getRegistrations(), 2500);
+      if (!Array.isArray(registrations)) return;
+      await limit(Promise.allSettled(registrations.filter(isPlannerWorker).map(r => r.unregister())), 3500);
+    };
+    const networkReload = () => {
+      const next = new URL(location.href);
+      next.searchParams.set('v', VERSION);
+      next.searchParams.set('pwa_recover', VERSION);
+      location.replace(next.href);
+    };
+    // May be called only from the recovery button, never when app data is being edited.
+    window.CNMI_V655_REPAIR = async () => {
+      const button = document.querySelector('#cnmi-v655-repair');
+      if (button) { button.disabled = true; button.textContent = 'กำลังซ่อมแคช…'; }
+      try { await limit(unregisterOwnWorkers(), 3800); } catch (_) {}
+      try { await limit(clearOwnCaches(true), 4500); } catch (_) {}
+      try { sessionStorage.setItem(RECOVERY_KEY, '1'); } catch (_) {}
+      networkReload();
+    };
     window.CNMI_V545_PWA_RECOVERY = (async () => {
-      const current = controllerVersion();
+      if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return result;
+      const current = version();
       result.fromVersion = current;
-
-      if (!navigator.serviceWorker.controller || current === VERSION) {
+      if (current === VERSION) {
         try { sessionStorage.removeItem(RECOVERY_KEY); } catch (_) {}
         return result;
       }
-
       try {
         if (sessionStorage.getItem(RECOVERY_KEY) === '1') return result;
         sessionStorage.setItem(RECOVERY_KEY, '1');
       } catch (_) {}
-
+      try { await limit(unregisterOwnWorkers(), 3800); } catch (_) {}
+      try { await limit(clearOwnCaches(false), 3500); } catch (_) {}
+      // Only stop app initialization when actually scheduling one reload.
       result.reloading = true;
-      try {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(registrations.map((registration) => {
-          const urls = [
-            registration.active?.scriptURL,
-            registration.waiting?.scriptURL,
-            registration.installing?.scriptURL
-          ].filter(Boolean);
-          const isCnmiWorker = urls.some((url) => {
-            try {
-              const parsed = new URL(url);
-              return parsed.origin === location.origin && /\/sw\.js$/.test(parsed.pathname);
-            } catch (_) { return false; }
-          });
-          return isCnmiWorker ? registration.unregister().catch(() => false) : Promise.resolve(false);
-        }));
-      } catch (error) {
-        console.warn('[PWA V556] old worker unregister failed:', error);
-      }
-
-      try {
-        const keys = await caches.keys();
-        await Promise.all(keys
-          .filter((key) => key.startsWith('cnmi-staff-planner-pwa-'))
-          .map((key) => caches.delete(key)));
-      } catch (error) {
-        console.warn('[PWA V556] old cache cleanup failed:', error);
-      }
-
-      setTimeout(() => location.reload(), 0);
+      setTimeout(networkReload, 0);
       return result;
     })();
+    let loginSubmitted = false;
+    let diagShown = false;
+    function showDiagnostic(reason) {
+      if (diagShown || !document.body) return;
+      diagShown = true;
+      const panel = document.createElement('aside');
+      panel.id = 'cnmi-v655-startup-help';
+      panel.setAttribute('role', 'alert');
+      panel.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;max-width:460px;'+
+        'margin:auto;z-index:2147483000;background:#fff;color:#17364b;border:2px solid #8bbdde;'+
+        'box-shadow:0 8px 32px rgba(15,41,59,.20);border-radius:14px;padding:14px;'+
+        'font:14px/1.5 system-ui,sans-serif;box-sizing:border-box';
+      const h = document.createElement('strong');
+      h.textContent = 'Staff Planner เปิดไม่สมบูรณ์';
+      const p = document.createElement('p');
+      p.style.cssText = 'margin:7px 0 10px';
+      p.textContent = reason + ' สามารถซ่อมไฟล์แคชของเว็บได้ โดยไม่ลบข้อมูลตารางเวรในระบบ';
+      const buttons = document.createElement('div');
+      buttons.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
+      const repair = document.createElement('button');
+      repair.type = 'button'; repair.id = 'cnmi-v655-repair';
+      repair.textContent = 'ซ่อมแคชและเปิดใหม่';
+      repair.style.cssText = 'border:0;border-radius:9px;padding:10px 12px;background:#176b9a;color:white;font-weight:700;cursor:pointer';
+      repair.addEventListener('click', () => window.CNMI_V655_REPAIR());
+      const dismiss = document.createElement('button');
+      dismiss.type = 'button'; dismiss.textContent = 'ปิด';
+      dismiss.style.cssText = 'border:1px solid #b5cbd8;border-radius:9px;padding:10px 12px;background:#fff;color:#17364b;cursor:pointer';
+      dismiss.addEventListener('click', () => { panel.remove(); diagShown = false; });
+      buttons.append(repair, dismiss); panel.append(h, p, buttons);
+      document.body.appendChild(panel);
+    }
+    function checkStartup() {
+      if (!document.body) return;
+      const auth = document.getElementById('authView');
+      const app = document.getElementById('appView');
+      const page = document.getElementById('pageContent');
+      const warning = document.getElementById('setupWarning');
+      const authVisible = auth && !auth.classList.contains('hidden');
+      const appVisible = app && !app.classList.contains('hidden');
+      if (!auth || !app) return showDiagnostic('หน้าเว็บโหลดไฟล์ HTML ไม่ครบ');
+      if (warning && !warning.classList.contains('hidden')) return; // app already shows an error
+      if (document.readyState === 'loading') return showDiagnostic('ไฟล์เริ่มระบบบางไฟล์ยังโหลดไม่เสร็จ');
+      if (appVisible && !String(page?.textContent || '').trim())
+        return showDiagnostic('ระบบเข้าสู่หน้าแอปแล้ว แต่ข้อมูลหน้าหลักไม่ปรากฏ');
+      if (authVisible && !window.supabase?.createClient)
+        return showDiagnostic('ไลบรารีสำหรับเข้าสู่ระบบยังโหลดไม่สำเร็จ');
+      if (loginSubmitted && authVisible) {
+        let stillBusy = false;
+        try { stillBusy = typeof state !== 'undefined' && !!state.busy; } catch (_) {}
+        if (stillBusy) return showDiagnostic('การเข้าสู่ระบบยังไม่เสร็จ กรุณาตรวจการเชื่อมต่อ');
+      }
+      const resetForm = document.getElementById('resetPasswordForm');
+      if (authVisible && resetForm?.classList.contains('active')) return;
+      if (authVisible && window.CNMI_V655_INIT_STAGE !== 'ready')
+        return showDiagnostic('ขั้นตอนเริ่มระบบหรือกู้คืนบัญชีใช้เวลานานผิดปกติ');
+    }
+    window.setTimeout(checkStartup, 14000);
+    document.addEventListener('submit', event => {
+      if (event.target?.id !== 'loginForm') return;
+      loginSubmitted = true;
+      window.setTimeout(() => { if (loginSubmitted) checkStartup(); }, 16000);
+    }, true);
   })();
   </script>
   <link rel="stylesheet" href="patch-v607-staff-physician-roster.css?v=607">
@@ -205,12 +273,12 @@
   <script defer src="bootstrap-v545-dependency-failover.js?v=545"></script>
   <script defer src="config.js?v=422"></script>
   <script defer src="app-bundle-v569-pre.js?v=569"></script>
-  <script defer src="app-v545.js?v=654"></script>
+  <script defer src="app-v545.js?v=655"></script>
   <script defer src="app-bundle-v569-01.js?v=591"></script>
   <script defer src="app-bundle-v569-02.js?v=569"></script>
   <script defer src="app-bundle-v569-03.js?v=569"></script>
   <script defer src="app-bundle-v569-04.js?v=652"></script>
-  <script defer src="app-bundle-v569-05.js?v=654"></script>
+  <script defer src="app-bundle-v569-05.js?v=655"></script>
   <script defer src="app-bundle-v569-06.js?v=585"></script>
   <script defer src="app-bundle-v569-07.js?v=639"></script>
   <script defer src="app-bundle-v569-08.js?v=569"></script>
@@ -257,6 +325,6 @@
 <script defer src="patch-v648-published-plan-snapshots.js?v=652"></script>
 <script defer src="patch-v649-published-ledger-continuity-oct-holiday-reset.js?v=652"></script>
 <script defer src="patch-v650-published-median-trade-ledger.js?v=651"></script>
-<script defer src="patch-v653-donor-leave-activity-position-sync.js?v=654"></script>
+<script defer src="patch-v653-donor-leave-activity-position-sync.js?v=655"></script>
 </body>
 </html>

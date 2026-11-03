@@ -921,6 +921,7 @@ function isPasswordRecoveryUrl() {
 }
 
 async function init() {
+  window.CNMI_V655_INIT_STAGE = 'starting';
   // V545: wait for one-time cleanup/reload if an older PWA worker controls the page.
   if (window.CNMI_V545_PWA_RECOVERY) {
     try {
@@ -931,6 +932,7 @@ async function init() {
     }
   }
 
+  window.CNMI_V655_INIT_STAGE = 'events-bound';
   bindGlobalEvents();
   installIdleTimeoutV200();
   ensureForceLogoutButtonV200();
@@ -943,6 +945,7 @@ async function init() {
   // V545: Supabase is the only external dependency required for login.
   // Use cached bundle -> jsDelivr -> unpkg fallback so mobile startup never
   // waits forever on one CDN. Optional export libraries load later.
+  window.CNMI_V655_INIT_STAGE = 'dependency';
   if (!window.supabase?.createClient && window.CNMI_DEPENDENCY_READY?.supabase) {
     const loginSubmitV545 = $('loginForm')?.querySelector('button[type="submit"],input[type="submit"]');
     if (loginSubmitV545) loginSubmitV545.disabled = true;
@@ -989,6 +992,7 @@ async function init() {
     }
   });
 
+  window.CNMI_V655_INIT_STAGE = 'auth-redirect';
   const continueInit = await handleInitialAuthRedirectOnce();
   if (!continueInit) { setBusy(false); return; }
 
@@ -1051,6 +1055,7 @@ async function init() {
     return;
   }
 
+  window.CNMI_V655_INIT_STAGE = 'session';
   let sessionRes = await sb.auth.getSession();
   data = sessionRes.data;
   if (!data?.session) {
@@ -1063,6 +1068,7 @@ async function init() {
   state.session = data.session;
 
   if (state.session?.user) await enterApp();
+  window.CNMI_V655_INIT_STAGE = 'ready';
 }
 
 // V654: A failed Supabase/auth startup must not become a silent, unusable screen.
