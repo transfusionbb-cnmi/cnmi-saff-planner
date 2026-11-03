@@ -921,7 +921,6 @@ function isPasswordRecoveryUrl() {
 }
 
 async function init() {
-  window.CNMI_V655_INIT_STAGE = 'starting';
   // V545: wait for one-time cleanup/reload if an older PWA worker controls the page.
   if (window.CNMI_V545_PWA_RECOVERY) {
     try {
@@ -932,7 +931,6 @@ async function init() {
     }
   }
 
-  window.CNMI_V655_INIT_STAGE = 'events-bound';
   bindGlobalEvents();
   installIdleTimeoutV200();
   ensureForceLogoutButtonV200();
@@ -945,7 +943,6 @@ async function init() {
   // V545: Supabase is the only external dependency required for login.
   // Use cached bundle -> jsDelivr -> unpkg fallback so mobile startup never
   // waits forever on one CDN. Optional export libraries load later.
-  window.CNMI_V655_INIT_STAGE = 'dependency';
   if (!window.supabase?.createClient && window.CNMI_DEPENDENCY_READY?.supabase) {
     const loginSubmitV545 = $('loginForm')?.querySelector('button[type="submit"],input[type="submit"]');
     if (loginSubmitV545) loginSubmitV545.disabled = true;
@@ -992,7 +989,6 @@ async function init() {
     }
   });
 
-  window.CNMI_V655_INIT_STAGE = 'auth-redirect';
   const continueInit = await handleInitialAuthRedirectOnce();
   if (!continueInit) { setBusy(false); return; }
 
@@ -1055,7 +1051,6 @@ async function init() {
     return;
   }
 
-  window.CNMI_V655_INIT_STAGE = 'session';
   let sessionRes = await sb.auth.getSession();
   data = sessionRes.data;
   if (!data?.session) {
@@ -1068,22 +1063,9 @@ async function init() {
   state.session = data.session;
 
   if (state.session?.user) await enterApp();
-  window.CNMI_V655_INIT_STAGE = 'ready';
 }
 
-// V654: A failed Supabase/auth startup must not become a silent, unusable screen.
-// Keep the login UI visible; show a retry option without changing any staff data.
-document.addEventListener('DOMContentLoaded', () => {
-  void init().catch((error) => {
-    console.error('[V654] Startup failed:', error);
-    try { setBusy(false); } catch (_) {}
-    const warning = document.getElementById('setupWarning');
-    if (warning) {
-      warning.classList.remove('hidden');
-      warning.innerHTML = '<b>เริ่มระบบไม่สำเร็จ</b><br>โหลดข้อมูลเข้าสู่ระบบไม่สำเร็จ กรุณาลองเปิดหน้าเว็บใหม่ ถ้ายังเป็นอีก ให้ส่งภาพหน้าจอให้ผู้ดูแลระบบ<div style="margin-top:10px"><button class="primary-btn" type="button" onclick="location.reload()">ลองเปิดใหม่</button></div>';
-    }
-  });
-});
+document.addEventListener('DOMContentLoaded', init);
 
 function bindGlobalEvents() {
   $('modalClose').addEventListener('click', closeModal);
