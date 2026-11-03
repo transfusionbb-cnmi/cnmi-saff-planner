@@ -1,0 +1,35 @@
+/* Staff Planner v653: keep separate activity screens genuinely single-column. */
+body[data-cnmi-page="activities"] .v397-activities-layout.v524-single-view-layout,
+body[data-cnmi-route="activities"] .v397-activities-layout.v524-single-view-layout,
+#pageContent .v397-activities-layout.v524-single-view-layout{
+  display:grid!important;grid-template-columns:minmax(0,1fr)!important;
+  width:100%!important;max-width:100%!important;min-width:0!important;gap:0!important;
+}
+#pageContent .v397-activities-layout.v524-single-view-layout > .card:not(.v524-panel-hidden),
+#pageContent .v397-activities-layout.v524-single-view-layout .activity-list-card{
+  grid-column:1/-1!important;width:100%!important;max-width:none!important;min-width:0!important;
+}
+#pageContent .v397-activities-layout.v524-single-view-layout .v524-panel-hidden{display:none!important}
+#pageContent .v524-activity-search-panel,#pageContent .activity-list-card{
+  overflow:visible!important;max-height:none!important;
+}
+#pageContent .v653-donor-card{margin-top:18px;padding:15px;background:#fff;border-radius:14px}
+#pageContent .v653-donor-card .donor-sync-head{flex-wrap:wrap}
+#pageContent .v653-donor-card .donor-sync-meta{font-size:12px;line-height:1.4}
+#pageContent .v653-donor-card .donor-sync-item{padding:10px 12px}
+#pageContent .activity-filter-grid{max-width:none!important}
+/* Keep core leave warnings and quotas visible; disclose long how-to paragraphs on demand. */
+#pageContent .v653-leave-compact .hint{line-height:1.35}
+#pageContent #leaveForm .v653-leave-more{border:1px solid #cfe0ef;border-radius:12px;padding:10px 12px;background:#f7fbff}
+#pageContent #leaveForm .v653-leave-more summary{font-weight:650;color:#245c7b;cursor:pointer}
+#pageContent #leaveForm .v653-leave-more .notice{margin:8px 0;font-size:.89rem}
+#pageContent #leaveForm .v653-leave-more [data-v481-leave-form-note]{padding:10px 12px!important}
+#pageContent #leaveForm select[name="type"]:invalid{color:#687b8a}
+#pageContent #leaveForm select[name="type"] option{color:#17324b}
+.v653-position-source{margin:10px 0;padding:9px 12px;border-radius:11px;border:1px solid #cfe2ef;background:#f5faff;color:#23547a;font-size:.85rem}
+.v653-position-source small{display:block;font-size:.78rem;line-height:1.5;margin-top:3px;color:#58718a}
+.v653-position-source.v653-position-has-old{border-color:#f1cf8b;background:#fff9ec;color:#80581b}
+@media(max-width:820px){#pageContent .v653-donor-card{padding:11px}#pageContent .v397-activities-layout.v524-single-view-layout{display:block!important}}
+#pageContent .v653-leave-quota{padding:9px 12px;border:1px solid #d4e4ef;border-radius:12px;background:#f5faff;margin:8px 0}
+#pageContent .v653-leave-quota summary{color:#245c7b;font-weight:650;cursor:pointer}
+#pageContent .v653-leave-quota [data-v576-quota-notice]{margin:8px 0 0;padding:9px 10px;font-size:.88rem}
