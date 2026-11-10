@@ -2882,7 +2882,7 @@ try {
     const key=monthKey(month),cycle=cycleRange(key),plan=hrDatePlan(key),dates=plan.dates;
     const tags=dates.length?dates.map(d=>`<span class="badge blue" style="display:inline-flex;align-items:center;gap:6px;margin:2px 4px 2px 0">${esc(fmtDate(d))}<button type="button" class="tiny-btn" style="padding:1px 6px" data-v604-remove-lock-date="${esc(d)}" title="เอาวันนี้ออก">×</button></span>`).join(''):'<span class="muted">ยังไม่ได้เลือกวันพิเศษ — ใช้การเฉลี่ยตามปกติ</span>';
     const p=st().hrDatePreviewV664,preview=p&&p.month===key&&p.signature===JSON.stringify(plan)?p:null;
-    const previewHtml=preview?`<div class="notice compact" style="margin-top:12px"><b>ตัวอย่างก่อน Export</b> • ${esc(preview.summary)}${preview.warnings?.length?`<div style="color:#b45309;margin-top:6px">${preview.warnings.map(esc).join('<br>')}</div>`:''}<details style="margin-top:8px"><summary>ดูรายชื่อและจำนวนในแต่ละวัน</summary><div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>วันที่ HR dummy</th><th>รายชื่อ</th><th>จำนวน</th></tr></thead><tbody>${(preview.days||[]).map(r=>`<tr><td>${esc(fmtDate(r.date))}</td><td>${esc(r.names.join(', ')||'-')}</td><td>${r.names.length}</td></tr>`).join('')}</tbody></table></div></details><details style="margin-top:8px"><summary>ดูจำนวนวันต่อเจ้าหน้าที่แต่ละคน</summary><div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>เจ้าหน้าที่</th><th>จำนวนวันที่มีชื่อ</th></tr></thead><tbody>${(preview.staffCounts||[]).map(r=>`<tr><td>${esc(r.name)}</td><td>${r.count}</td></tr>`).join('')}</tbody></table></div></details></div>`:'';
+    const previewHtml=preview?`<div class="notice compact" style="margin-top:12px"><b>ตัวอย่างก่อน Export</b> • ${esc(preview.summary)}${preview.warnings?.length?`<div style="color:#b45309;margin-top:6px">${preview.warnings.map(esc).join('<br>')}</div>`:''}<details style="margin-top:8px" open><summary>ตรวจยอดทบและชั่วโมงเบิก HR ก่อน Export (${(preview.carries||[]).length} คน)</summary><div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>เจ้าหน้าที่</th><th>ทบจากเดือน</th><th>ยอดทบ (ชม.)</th><th>OT เดือนนี้ (ชม.)</th><th>เบิก HR (ชม.)</th><th>ยอดเงิน (บาท)</th></tr></thead><tbody>${(preview.carries||[]).map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.sourceMonth||'-')}</td><td><b>${esc(hours(r.opening))}</b></td><td>${esc(hours(r.current))}</td><td>${esc(hours(r.claimed))}</td><td>${esc(money(r.money))}</td></tr>`).join('')}</tbody></table></div><p class="hint">แหล่งยอดทบ: บัญชี OT ต่อเนื่องเดียวกับหน้าเว็บ (V368) • อ่านข้อมูลสดก่อน Export</p></details><details style="margin-top:8px"><summary>ดูรายชื่อและจำนวนในแต่ละวัน</summary><div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>วันที่ HR dummy</th><th>รายชื่อ</th><th>จำนวน</th></tr></thead><tbody>${(preview.days||[]).map(r=>`<tr><td>${esc(fmtDate(r.date))}</td><td>${esc(r.names.join(', ')||'-')}</td><td>${r.names.length}</td></tr>`).join('')}</tbody></table></div></details><details style="margin-top:8px"><summary>ดูจำนวนวันต่อเจ้าหน้าที่แต่ละคน</summary><div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>เจ้าหน้าที่</th><th>จำนวนวันที่มีชื่อ</th></tr></thead><tbody>${(preview.staffCounts||[]).map(r=>`<tr><td>${esc(r.name)}</td><td>${r.count}</td></tr>`).join('')}</tbody></table></div></details></div>`:'';
     return `<div class="card" data-v604-lock-panel data-v664-distribution-panel style="margin-bottom:12px"><div class="section-title"><div><h3>กระจายชื่อช่วงวันพิเศษใน HR dummy</h3><p class="hint">เลือกวันในรอบ ${esc(cycle.start)} ถึง ${esc(cycle.end)} • ใช้หน่วย OT 8 ชม. ที่มีอยู่เท่านั้น ไม่เพิ่มชั่วโมงหรือยอดเงินเบิกจริง</p></div></div>
       <div class="toolbar compact-filter" style="align-items:end;gap:10px;flex-wrap:wrap">
        <label>จากวันที่ <input type="date" id="hrDateFromV664" min="${esc(cycle.start)}" max="${esc(cycle.end)}" value="${esc(dates[0]||cycle.start)}"></label>
@@ -3086,6 +3086,26 @@ try {
     summaryCarryCache.set(key,{map:out,expires:Date.now()+CARRY_TTL});
     return out;
   }
+  /* v666: Excel Export and the special-date preview must use the same live,
+     cumulative June-2026 ledger as the Staff/Admin on-screen carry-in.
+     The legacy lexical queryCarryIn() above is deliberately NOT called here:
+     later v368 replaces the public API, not that closed-over function. */
+  async function queryCarryInForHrExport(month){
+    const read=window.cnmiV318?.queryCarryInSummary;
+    if(typeof read!=='function'||read.__v368!==true){
+      throw new Error('ยังอ่านยอดทบที่ตรงกับหน้าเว็บไม่ได้ (V368) กรุณารีเฟรชและตรวจยอดทบก่อน Export — ระบบไม่ใช้สูตรยอดทบเก่าแทน');
+    }
+    const carry=await read(month,true); // force fresh Supabase data; no stale in-memory carry
+    if(!(carry instanceof Map))throw new Error('ยอดทบจากระบบหลักไม่อยู่ในรูปแบบที่ถูกต้อง จึงหยุด Export เพื่อป้องกันยอดเงินคลาดเคลื่อน');
+    for(const [staffId,info] of carry){
+      const n=Number(info?.amount);
+      if(!String(staffId||'')||!Number.isFinite(n)||n< -0.001||n>=8.001){
+        throw new Error('ตรวจพบยอดทบผิดรูปแบบสำหรับเจ้าหน้าที่บางราย กรุณาตรวจรายงาน OT ก่อน Export');
+      }
+    }
+    return carry;
+  }
+
   async function queryExportData(month){
     const client=db();if(!client)throw new Error('ไม่พบการเชื่อมต่อ Supabase');
     const source=monthRange(month),cycle=cycleRange(month),holidayStart=source.start<cycle.start?source.start:cycle.start,holidayEnd=source.end>cycle.end?source.end:cycle.end;
@@ -3487,7 +3507,7 @@ try {
     if(error)return toast(error,'error');
     busy(true,'กำลังคำนวณตัวอย่างการกระจายชื่อ (ไม่ Export)');
     try{
-      const data=await queryExportData(month),carry=await queryCarryIn(month);
+      const data=await queryExportData(month),carry=await queryCarryInForHrExport(month);
       const totals=applyAdjustmentUnits(applyCarryIn(buildTotals(data.rows),carry),data.adjustments||[]);
       if(!totals.length)throw new Error('ไม่พบเจ้าหน้าที่ที่มีหน่วย HR พร้อมเบิก');
       const allocation=allocate(totals,data.cycle,data.leaves,data.holidays,plan);
@@ -3497,7 +3517,8 @@ try {
       const staffCounts=totals.map(t=>({name:staffNickSafe(t.staff_id),count:allocation.rows.filter(x=>String(x.staff_id)===String(t.staff_id)&&plan.dates.includes(x.date)).length}));
       const warnings=[...errors.slice(0,5).map(x=>`${staffNickSafe(x.staff_id)}: ${x.message}`),...extra.slice(0,3).map(x=>`${staffNickSafe(x.staff_id)} มี ${x.unallocatedUnits} หน่วยที่จัดต่อไม่ได้`)];
       const summary=`${totals.length} คนที่มี OT พร้อมเบิก • ${plan.dates.length} วันที่เลือก • ${allocation.rows.filter(x=>plan.dates.includes(x.date)).length} รายชื่อ • ${plan.mode==='all'?'ทุกคนทุกวันที่ไม่ลา':`คนละ ${plan.quota} วัน`} • ${warnings.length?'ยังจัดไม่ครบ ห้าม Export':'จัดครบ'}`;
-      st().hrDatePreviewV664={month,signature:JSON.stringify(plan),summary,days,staffCounts,warnings};
+      const carries=totals.map(t=>({name:staffNickSafe(t.staff_id),sourceMonth:t.carrySourceMonth||'',opening:round2(t.carryIn),current:round2(t.currentTotal),claimed:round2(t.claimed),money:round2(t.money)})).sort((a,b)=>a.name.localeCompare(b.name,'th'));
+      st().hrDatePreviewV664={month,signature:JSON.stringify(plan),summary,days,staffCounts,carries,warnings};
       try{renderPage();}catch(_){ }
       toast(warnings.length?'ตัวอย่างยังจัดไม่ครบ ตรวจคำเตือนก่อน Export':'ตัวอย่างจัดชื่อครบแล้ว ตรวจตารางด้านล่างได้',warnings.length?'error':undefined);
     }catch(e){st().hrDatePreviewV664=null;toast(`ดูตัวอย่างไม่สำเร็จ: ${e?.message||e}`,'error');}
@@ -3511,7 +3532,7 @@ try {
     busy(true,'กำลังอ่านยอดทบเดือนก่อนและจัด HR dummy แบบไฟล์ Manual');
     try{
       const data=await queryExportData(month);if(!data.rows.length&&!(data.adjustments||[]).some(x=>Number(x.hr_unit_delta||0)!==0))throw new Error('ยังไม่มีรายการ OT หรือรายการปรับยอดที่ใช้ Export ในเดือนนี้');
-      const carryInMap=await queryCarryIn(data.source.month);
+      const carryInMap=await queryCarryInForHrExport(data.source.month);
       const regularTotals=applyCarryIn(buildTotals(data.rows),carryInMap);
       const totals=applyAdjustmentUnits(regularTotals,data.adjustments||[]);if(!totals.length)throw new Error('ไม่พบชั่วโมง OT ที่ใช้คำนวณได้');
       const missing=totals.filter(t=>!t.employeeCode).map(t=>staffNickSafe(t.staff_id));if(missing.length)throw new Error(`ยังไม่มีรหัสพนักงานของ: ${missing.join(', ')} กรุณาใส่ในข้อมูลเจ้าหน้าที่ก่อน Export`);
@@ -3658,7 +3679,7 @@ try {
     }
   },true);
 
-  window.cnmiV318={version:VERSION,exportHr:exportV318,loadHistory,queryCarryIn,queryCarryInSummary,getLockedDates:(month)=>hrDatePlan(month).dates,setLockedDates:(month,dates)=>saveHrDatePlan(month,{dates,mode:'all',quota:1}),getDatePlan:hrDatePlan,setDatePlan:saveHrDatePlan,previewDatePlan:previewHrDatePlanV664,clearHistoryCache(){historyCache.clear();},clearCarryCache(){carryCache.clear();summaryCarryCache.clear();},_test:{encodeCarryMarker,parseCarryMarker,applyCarryIn,selectedHistoryMonth,allocate,hrDatePlan,saveHrDatePlan,cleanPlanDates}};
+  window.cnmiV318={version:VERSION,exportHr:exportV318,loadHistory,queryCarryIn,queryCarryInSummary,getLockedDates:(month)=>hrDatePlan(month).dates,setLockedDates:(month,dates)=>saveHrDatePlan(month,{dates,mode:'all',quota:1}),getDatePlan:hrDatePlan,setDatePlan:saveHrDatePlan,previewDatePlan:previewHrDatePlanV664,clearHistoryCache(){historyCache.clear();},clearCarryCache(){carryCache.clear();summaryCarryCache.clear();},_test:{encodeCarryMarker,parseCarryMarker,applyCarryIn,selectedHistoryMonth,allocate,hrDatePlan,saveHrDatePlan,cleanPlanDates,queryCarryInForHrExport}};
   console.info(`[${VERSION}] loaded`);
 })();
 

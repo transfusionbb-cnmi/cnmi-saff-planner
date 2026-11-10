@@ -1,13 +1,14 @@
 {
-  "version": "665",
-  "base_version": "664",
-  "title": "Fix OT detail money formula to match HR 8-hour base-rate and highlight snapshot-vs-live differences",
+  "version": "666",
+  "base_version": "665",
+  "title": "HR Export uses the identical authoritative continuous carry-in as Staff/Admin OT detail",
   "changes": [
-    "Fix detail and monthly on-screen money: use claimed HR-equivalent hours x staff HR base rate (90 or 130), as Staff_Total and HR_OT do; prevent double-applying source segment rates",
-    "Add explicit read-only warning on Staff claim-detail whenever locked Export snapshot differs from current calculated claim; retain both figures instead of overwriting either",
-    "Keep previous v664 special-day quota, v663 OT event correction, v662 reopening, and all roster/physician features",
-    "Does not recalculate, delete or modify Supabase OT records, prior HR snapshots or carry-in history",
-    "The 8-hour discrepancies that arise from changed carry-in are not auto-resolved: admin must reconcile opening carry and source OT against the Export snapshot"
+    "Fix: V318 Excel Export previously called a private legacy carry-in function; the live UI uses public V368 cumulative carry-in. Both Excel Export and dummy-date preview now call the same V368 public carry-in formula.",
+    "Fetch current authoritative carry-in with force refresh just before preview/export, and stop export if ledger is missing or invalid (no silent legacy fallback).",
+    "Show per-staff live opening carry, source month, current HR-equivalent OT, claimed hours and money in the special-day preview before committing Export.",
+    "Preserve current OT hour calculations, 8-hour claim blocks, base rate rules, staff allocations, HR snapshots, adjustment history and database contents.",
+    "Re-export of October 2026 requires the safe reopen and reconciliation workflow; an uploaded patch will not change old Excel or old exported snapshot."
   ],
-  "requires_new_sql": false
+  "requires_new_sql": false,
+  "review_note": "Live Supabase verification required before payroll use; mismatches caused by differing eligible OT source rows may remain until reconciled."
 }
