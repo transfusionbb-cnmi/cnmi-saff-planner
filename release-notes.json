@@ -1,14 +1,14 @@
 {
-  "version": "666",
-  "base_version": "665",
-  "title": "HR Export uses the identical authoritative continuous carry-in as Staff/Admin OT detail",
+  "version": "667",
+  "base_version": "666",
+  "title": "Respect staff termination/end date in new activity, leave and admin OT selection forms; preserve historic records",
   "changes": [
-    "Fix: V318 Excel Export previously called a private legacy carry-in function; the live UI uses public V368 cumulative carry-in. Both Excel Export and dummy-date preview now call the same V368 public carry-in formula.",
-    "Fetch current authoritative carry-in with force refresh just before preview/export, and stop export if ledger is missing or invalid (no silent legacy fallback).",
-    "Show per-staff live opening carry, source month, current HR-equivalent OT, claimed hours and money in the special-day preview before committing Export.",
-    "Preserve current OT hour calculations, 8-hour claim blocks, base rate rules, staff allocations, HR snapshots, adjustment history and database contents.",
-    "Re-export of October 2026 requires the safe reopen and reconciliation workflow; an uploaded patch will not change old Excel or old exported snapshot."
+    "New activity/training participants: hide staff whose employment ended before the activity date; adjust immediately when date changes.",
+    "Admin leave and OT confirm-duty/extra-OT selection: filter by employment date and Active flag; do not remove saved historic OT rows.",
+    "Group activity OT participant list: remove unavailable staff from current selections and prevent submission of expired participants.",
+    "Add warning on Users page if employment end date has passed while Active remains true.",
+    "Historical exports, existing activities/leave records, roster archives and Supabase data are untouched."
   ],
   "requires_new_sql": false,
-  "review_note": "Live Supabase verification required before payroll use; mismatches caused by differing eligible OT source rows may remain until reconciled."
+  "notes": "When marking a staff member as departed, set employment_end_date and Active=false (and roster disabled if appropriate), then Save. App update filters new input forms even if Active accidentally stays true."
 }
