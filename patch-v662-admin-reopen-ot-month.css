@@ -1,0 +1,29 @@
+#v637Admin #v662ReopenPanel.v662-reopen{border:1px solid #b8d7ef;border-radius:12px;background:#f7fbff;margin:0 0 18px;overflow:hidden}
+#v662ReopenPanel>summary{padding:14px 16px;color:#17466c;font-weight:700;cursor:pointer;list-style:revert}
+#v662ReopenPanel[open]>summary{border-bottom:1px solid #d9e8f3}
+#v662ReopenPanel .v662-body{padding:12px 16px 16px}
+#v662ReopenPanel p{line-height:1.5;color:#426176;margin:8px 0}
+#v662ReopenPanel button{border:1px solid #94b8cf;background:#fff;color:#14527b;border-radius:9px;padding:10px 13px;cursor:pointer;font-weight:650}
+#v662ReopenPanel button:disabled{cursor:wait;opacity:.6}
+#v662ReopenPanel #v662Reopen{border-color:#b91c1c;background:#b91c1c;color:#fff;margin:10px 0}
+#v662ReopenPanel .v662-counts{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+#v662ReopenPanel .v662-counts span{display:block;border:1px solid #d6e5ef;background:white;border-radius:9px;padding:9px 12px}
+#v662ReopenPanel .v662-counts strong{font-size:20px;margin-right:6px}
+#v662ReopenPanel .v662-scroll{overflow:auto;width:100%;max-height:200px}
+#v662ReopenPanel table{border-collapse:collapse;width:100%;min-width:550px;background:#fff}
+#v662ReopenPanel td,#v662ReopenPanel th{border-bottom:1px solid #e2e8f0;padding:7px;text-align:left;font-size:12px}
+#v662ReopenPanel .v662-state{border:1px solid #b9d2e2;border-radius:9px;padding:10px 12px;margin:12px 0;background:#fff;line-height:1.5}
+#v662ReopenPanel .v662-state.v662-allowed{background:#eefbf3;border-color:#9bd6ae;color:#166534}
+#v662ReopenPanel .v662-state.v662-blocked{background:#fff1f1;border-color:#f7adad;color:#9f1239}
+#v662ReopenPanel #v662Controls{max-width:690px}
+#v662ReopenPanel #v662Controls[hidden]{display:none}
+#v662ReopenPanel label{display:block;color:#24425c;font-size:14px;font-weight:600}
+#v662ReopenPanel textarea,#v662ReopenPanel input:not([type=checkbox]){display:block;width:100%;box-sizing:border-box;border:1px solid #cad9e8;border-radius:8px;padding:10px;margin-top:5px;font-size:14px}
+#v662ReopenPanel .v662-check{display:flex;align-items:flex-start;gap:9px;font-weight:500;margin:12px 0}
+#v662ReopenPanel .v662-check input{flex:0 0 auto;margin-top:4px}
+#v662ReopenPanel .v662-status{font-size:13px;margin:12px 0;padding:9px 12px;background:#eaf3fc;border-radius:9px;color:#28557a;white-space:pre-wrap}
+#v662ReopenPanel .v662-status.error{background:#fff0f0;color:#991b1b}
+#v662ReopenPanel .v662-status.ok{background:#eaf8ed;color:#166534}
+#v662ReopenPanel .v662-status.warning{background:#fff7e7;color:#92400e}
+#v662ReopenPanel p.v662-foot{font-size:12px;color:#687d94}
+@media(max-width:700px){#v662ReopenPanel .v662-body{padding:10px}#v662ReopenPanel #v662Reopen,#v662ReopenPanel #v662Check{width:100%}}
