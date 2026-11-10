@@ -1,0 +1,14 @@
+/* Staff Planner v668: presentation only; never removes OT row details, carry-in, export status or confirmation actions. */
+.v369-ot-content[data-v632-screen="staff-details"] .v347-my-claim-card,
+.v369-ot-content[data-v632-screen="staff-details"] .v632-stats,
+.v369-ot-content[data-v632-screen="staff-details"] #v643HrTotal{max-width:100%;min-width:0;box-sizing:border-box}
+.v369-ot-content[data-v632-screen="staff-details"] .v347-detail-table{width:100%;min-width:620px}
+.v369-ot-content[data-v632-screen="staff-details"] .table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.v369-ot-content[data-v632-screen="staff-details"] .v347-my-claim-card{overflow-x:auto}
+.v369-ot-content .v632-summary .v632-actions button,
+.v369-ot-content #v643HrTotal button{touch-action:manipulation}
+@media(max-width:640px){
+ .v369-ot-content[data-v632-screen="staff-details"] .v347-my-claim-card{padding-inline:10px}
+ .v369-ot-content[data-v632-screen="staff-details"] .v347-claim-equation{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .v369-ot-content[data-v632-screen="staff-details"] .v347-claim-equation .money{grid-column:1/-1}
+}

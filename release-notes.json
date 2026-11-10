@@ -1,14 +1,15 @@
 {
-  "version": "667",
-  "base_version": "666",
-  "title": "Respect staff termination/end date in new activity, leave and admin OT selection forms; preserve historic records",
+  "version": "668",
+  "base_version": "667",
+  "title": "OT Staff/Admin review clarity, locked snapshot fallback, preserve staff detail tables",
   "changes": [
-    "New activity/training participants: hide staff whose employment ended before the activity date; adjust immediately when date changes.",
-    "Admin leave and OT confirm-duty/extra-OT selection: filter by employment date and Active flag; do not remove saved historic OT rows.",
-    "Group activity OT participant list: remove unavailable staff from current selections and prevent submission of expired participants.",
-    "Add warning on Users page if employment end date has passed while Active remains true.",
-    "Historical exports, existing activities/leave records, roster archives and Supabase data are untouched."
+    "Recover original HR export amount from get_my_ot_export_snapshot_v533 only if the PDF-review source lacks Snapshot.",
+    "Label locked system Snapshot versus Admin manual proposed amount; show per-staff difference in Admin review.",
+    "Repair route-only visibility to prevent Staff summary and other OT pages overlapping, without hiding Staff detail records.",
+    "Keep daily OT details, real/HR hours, carry-in and confirmation/dispute actions unchanged.",
+    "Reduce transient discrepancy-warning flicker without intervals or observers."
   ],
   "requires_new_sql": false,
-  "notes": "When marking a staff member as departed, set employment_end_date and Active=false (and roster disabled if appropriate), then Save. App update filters new input forms even if Active accidentally stays true."
+  "notes": "When marking a staff member as departed, set employment_end_date and Active=false (and roster disabled if appropriate), then Save. App update filters new input forms even if Active accidentally stays true.",
+  "summary": "OT Staff/Admin review clarity and locked export snapshot fallback; preserve detailed Staff daily OT and verification controls"
 }

@@ -19,3 +19,9 @@
 .v642-draft-warning span{font-size:13px}
 .v642-error-text{display:block;margin:6px 0;color:#991b1b;word-break:break-word}
 .v642-draft-preview .v641-breakdown{margin-bottom:8px}
+
+/* v668: Route-scoped visibility; never hide Staff detailed OT table. */
+.v369-ot-content[data-v632-screen="staff-summary"] > :not(.v632-summary){display:none!important}
+.v369-ot-content .v632-summary[hidden]{display:none!important}
+.v369-ot-content[data-v632-screen="staff-details"] > .v632-summary{display:none!important}
+.v632-summary .v668-explainer{color:#526d82;font-size:13px;line-height:1.6;margin:8px 0 12px}

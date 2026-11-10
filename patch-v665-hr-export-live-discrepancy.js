@@ -14,19 +14,26 @@ function check(){
   const card=p?.querySelector('#v643HrTotal');
   const detail=p?.querySelector('.v347-my-claim-card');
   const existing=card?.querySelector('#v665-hr-discrepancy');
-  if(!card||!detail){existing?.remove();return;}
+  const section=new URLSearchParams(location.hash.split('?')[1]||'').get('section');
+  if(section!=='claim-detail'){existing?.remove();return;}
+  if(!card){return;}
+  // Partial rendering can temporarily remove the detail card: do not flicker the warning.
+  // A new month always triggers a new comparison instead of carrying over the old one.
+  const m=new URLSearchParams(location.hash.split('?')[1]||'').get('month')||'';
+  if(existing&&existing.dataset.month!==m){existing.remove();}
+  if(!detail)return;
   const snapshotNode=card.querySelector('.v643-original b');
   const currentNode=detail.querySelector('.v347-claim-equation .money b');
   const snapshot=snapshotNode?number(snapshotNode.textContent):null;
   const current=currentNode?number(currentNode.textContent):null;
-  if(snapshot===null||current===null){existing?.remove();return;}
+  if(snapshot===null||current===null)return;
   const diff=Math.round((current-snapshot)*100)/100;
   if(Math.abs(diff)<0.01){existing?.remove();return;}
   const marker=String(snapshot)+'|'+String(current);
-  if(existing?.dataset?.signature===marker)return;
+  if(existing?.isConnected&&existing?.dataset?.signature===marker)return;
   const box=existing||document.createElement('div');
   box.id='v665-hr-discrepancy';box.className='v665-hr-discrepancy';
-  box.dataset.signature=marker;
+  box.dataset.signature=marker;box.dataset.month=m;
   box.innerHTML='';
   const bold=document.createElement('strong');bold.textContent='ยอดจากรายการ OT ปัจจุบันยังไม่ตรงกับยอด Export';
   const line=document.createElement('div');line.textContent='Export ที่ล็อกไว้ '+baht(snapshot)+' • คำนวณสด '+baht(current)+' • ผลต่าง '+baht(Math.abs(diff));
