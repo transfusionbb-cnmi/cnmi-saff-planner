@@ -146,40 +146,21 @@
     return out;
   }
   function claimedMoneyBreakdown(staffId, rows, carryIn, claimedHours){
-    const claimed = round2(Math.max(0, claimedHours || 0));
-    const segments = [];
-    const carry = round2(Math.max(0, carryIn || 0));
-    if (carry > 0) segments.push({ hours:carry, rate:staffRate(staffId), type:staffRateType(staffId), duty:'ยอดทบจากรอบก่อน', carry:true });
-    (rows || []).slice().sort((a,b) => normDate(a?.work_date).localeCompare(normDate(b?.work_date)) || String(a?.created_at || '').localeCompare(String(b?.created_at || ''))).forEach(row => {
-      rateSegmentsForRow(row).forEach(seg => segments.push(seg));
-    });
-    let remaining = claimed;
-    const buckets = new Map();
-    segments.forEach(seg => {
-      if (remaining <= 0) return;
-      const used = round2(Math.min(Math.max(0, seg.hours || 0), remaining));
-      if (used <= 0) return;
-      remaining = round2(Math.max(0, remaining - used));
-      const tangCh4 = isTang(staffId) && seg.type === 'MT' && /ช4/.test(seg.duty || '');
-      const label = tangCh4 ? 'MT (เฉพาะ ช4)' : seg.type;
-      const key = `${label}|${seg.rate}`;
-      const current = buckets.get(key) || { label, rate:seg.rate, hours:0, amount:0 };
-      current.hours = round2(current.hours + used);
-      current.amount = round2(current.amount + used * seg.rate);
-      buckets.set(key, current);
-    });
-    if (remaining > 0) {
-      const rate = staffRate(staffId), label = staffRateType(staffId), key = `${label}|${rate}`;
-      const current = buckets.get(key) || { label, rate, hours:0, amount:0 };
-      current.hours = round2(current.hours + remaining);
-      current.amount = round2(current.amount + remaining * rate);
-      buckets.set(key, current);
-      remaining = 0;
-    }
-    const items = Array.from(buckets.values());
-    const amount = round2(items.reduce((sum,item) => sum + item.amount, 0));
-    const formula = items.length ? items.map(item => `${item.label} ${hours(item.rate, 0)} บ./ชม. × ${hours(item.hours, 2)} ชม.`).join(' + ') : '-';
-    return { amount, items, formula, claimed };
+    /* V665: HR dummy converts each real-work segment to an HR-equivalent hour
+       using V190/V318 before claiming whole eight-hour units. The payable
+       amount must therefore use the person's HR BASE rate for ALL claimed
+       equivalent hours, just like Staff_Total/HR_OT. Applying each raw source
+       segment's different rate a second time double-counts a rate conversion
+       (and can produce false satang amounts for a whole-eight-hour claim). */
+    const claimed = Math.max(0, Math.round(Number(claimedHours || 0) * 100) / 100);
+    const rate = staffRate(staffId);
+    const label = staffRateType(staffId);
+    const amount = round2(claimed * rate);
+    return {
+      amount, claimed,
+      items: claimed ? [{ label, rate, hours:claimed, amount }] : [],
+      formula: `${label} ${hours(rate, 0)} บ./ชม. × ${hours(claimed, 2)} ชม. (ฐาน HR หลังแปลงชั่วโมง)`
+    };
   }
   function summaryHtml(staffId, rows, carryInfo){
     const current = sumCurrentHr(rows);
@@ -231,6 +212,7 @@
     if (token !== detailHydrationToken || !document.body.contains(card)) return;
     const slot = card.querySelector('.v347-summary-slot');
     if (slot) slot.innerHTML = `${summaryHtml(sid, rows, carry)}${carry.unavailable ? '<div class="notice error-notice compact">ยังอ่านยอดทบจากรอบก่อนไม่สำเร็จ กรุณารีเฟรชอีกครั้ง</div>' : ''}`;
+    document.dispatchEvent(new CustomEvent('cnmi:v665-detail-ready'));
   }
   async function showAdminDetail(staffId){
     if (!isAdminSafe()) return;

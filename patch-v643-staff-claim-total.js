@@ -87,6 +87,7 @@ async function refresh(panel,month){
   draw(card,{base,total,extras:r?.specials||[],kind,revision:r?.revision_no,
     ledger:okResult(history)?history.value.data:null,core:liveCore(panel),
     issue:!okResult(history)?'ยังไม่สามารถตรวจประวัติการปรับยอดย้อนหลังได้':''});
+  document.dispatchEvent(new CustomEvent('cnmi:v665-snapshot-ready'));
  }catch(err){if(card.isConnected)card.innerHTML='<h3>ยอด OT ที่หน่วยงานเตรียมส่งเบิกให้ฉัน</h3><p>เกิดข้อผิดพลาดในการโหลดข้อมูล กรุณาตรวจยอดในหน้าสรุปรายเดือน</p>'}
 }
 window.cnmiV643Detail={refresh};

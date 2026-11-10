@@ -369,7 +369,7 @@ try {
       const api=window.cnmiV318;
       Promise.resolve(api?.queryCarryInSummary?.(month)).then(map=>{
         const carry=map instanceof Map?(map.get(String(sid))||{amount:0,sourceMonth:''}):{amount:0,sourceMonth:''};
-        if(document.body.contains(root))slot.innerHTML=window.cnmiV347.summaryHtml(sid,rows,carry);
+        if(document.body.contains(root)){slot.innerHTML=window.cnmiV347.summaryHtml(sid,rows,carry);document.dispatchEvent(new CustomEvent('cnmi:v665-detail-ready'));}
       }).catch(()=>{});
     }
   }

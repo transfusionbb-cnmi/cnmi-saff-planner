@@ -2841,11 +2841,68 @@ try {
     try{localStorage.setItem(HR_LOCK_STORAGE_PREFIX+key,JSON.stringify(clean));}catch(_){ }
     return clean;
   }
-  function hrLockedDatePanel(month){
-    const key=monthKey(month),cycle=cycleRange(key),dates=hrLockedDates(key);
-    const tags=dates.length?dates.map(d=>`<span class="badge blue" style="display:inline-flex;align-items:center;gap:6px;margin:2px 4px 2px 0">${esc(fmtDate(d))}<button type="button" class="tiny-btn" style="padding:1px 6px" data-v604-remove-lock-date="${esc(d)}" title="เอาวันนี้ออก">×</button></span>`).join(''):'<span class="muted">ยังไม่ได้ล็อกวันที่ — ระบบจะเฉลี่ยวันตามปกติ</span>';
-    return `<div class="card" data-v604-lock-panel style="margin-bottom:12px"><div class="section-title"><div><h3>ล็อกวันที่ให้ทุกคนมีชื่อ</h3><p class="hint">เลือกวันในรอบ HR ${esc(cycle.start)} ถึง ${esc(cycle.end)} • ระบบจะย้ายเวร 8 ชม. เดิมมาไว้วันที่ล็อก โดยไม่เพิ่มยอด OT รวม • วันลามีสิทธิ์เหนือกฎนี้</p></div></div><div class="toolbar compact-filter" style="align-items:end"><label>วันที่พิเศษ <input id="hrLockDateV604" type="date" min="${esc(cycle.start)}" max="${esc(cycle.end)}"></label><button type="button" class="ghost-btn" data-v604-add-lock-date>+ เพิ่มวันที่</button></div><div style="margin-top:8px">${tags}</div><p class="hint" style="margin-top:8px">คำว่า “ทุกคน” หมายถึงเจ้าหน้าที่ที่มียอดพอสร้างเวร HR 8 ชม. ในรอบนี้ หากยอดไม่พอหรือความจุวันนั้นไม่พอ ระบบจะหยุด Export และแจ้งชื่อแทนการเพิ่มยอดเอง</p></div>`;
+  /* V664: plan is local to the source month and this browser, matching the
+     existing HR-dummy locked-date setting. Old V604 dates remain readable. */
+  const HR_DATE_PLAN_V664='cnmi.staffplanner.hrDatePlanV664.';
+  function cleanPlanDates(month,dates){
+    const cycle=cycleRange(month);
+    return [...new Set((Array.isArray(dates)?dates:[]).map(dateKey).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)&&d>=cycle.start&&d<=cycle.end))].sort();
   }
+  function hrDatePlan(month){
+    const key=monthKey(month),cached=st().hrDatePlanV664ByMonth||{};
+    if(cached[key])return {...cached[key],dates:[...(cached[key].dates||[])]};
+    let saved=null;try{saved=JSON.parse(localStorage.getItem(HR_DATE_PLAN_V664+key)||'null');}catch(_){ }
+    const legacy=hrLockedDates(key);
+    const dates=cleanPlanDates(key,Array.isArray(saved?.dates)?saved.dates:legacy);
+    const mode=saved?.mode==='quota'?'quota':'all';
+    const quota=Math.max(1,Math.min(31,Math.floor(Number(saved?.quota||1))||1));
+    const plan={dates,mode,quota};
+    st().hrDatePlanV664ByMonth={...cached,[key]:plan};
+    return {...plan,dates:[...dates]};
+  }
+  function saveHrDatePlan(month,policy){
+    const key=monthKey(month),dates=cleanPlanDates(key,policy?.dates);
+    const plan={dates,mode:policy?.mode==='all'?'all':'quota',quota:Math.max(1,Math.min(31,Math.floor(Number(policy?.quota||1))||1))};
+    st().hrDatePlanV664ByMonth={...(st().hrDatePlanV664ByMonth||{}),[key]:plan};
+    saveHrLockedDates(key,dates); /* keep V604 API in sync, without changing OT rows */
+    try{localStorage.setItem(HR_DATE_PLAN_V664+key,JSON.stringify(plan));}catch(_){ }
+    st().hrDatePreviewV664=null;
+    return plan;
+  }
+  function hrDatePlanFromForm(month){
+    const current=hrDatePlan(month),mode=String(document.getElementById('hrDateModeV664')?.value||current.mode),raw=Number(document.getElementById('hrDateQuotaV664')?.value||current.quota);
+    return {...current,mode:mode==='all'?'all':'quota',quota:Number.isInteger(raw)?raw:0};
+  }
+  function hrDatePlanError(plan){
+    if(!plan.dates.length)return 'กรุณาเพิ่มวันที่พิเศษก่อน';
+    if(plan.mode==='quota'&&(!Number.isInteger(Number(plan.quota))||plan.quota<1||plan.quota>plan.dates.length))return `จำนวนวันต่อคนต้องอยู่ระหว่าง 1–${plan.dates.length} วัน`;
+    return '';
+  }
+  function hrLockedDatePanel(month){
+    const key=monthKey(month),cycle=cycleRange(key),plan=hrDatePlan(key),dates=plan.dates;
+    const tags=dates.length?dates.map(d=>`<span class="badge blue" style="display:inline-flex;align-items:center;gap:6px;margin:2px 4px 2px 0">${esc(fmtDate(d))}<button type="button" class="tiny-btn" style="padding:1px 6px" data-v604-remove-lock-date="${esc(d)}" title="เอาวันนี้ออก">×</button></span>`).join(''):'<span class="muted">ยังไม่ได้เลือกวันพิเศษ — ใช้การเฉลี่ยตามปกติ</span>';
+    const p=st().hrDatePreviewV664,preview=p&&p.month===key&&p.signature===JSON.stringify(plan)?p:null;
+    const previewHtml=preview?`<div class="notice compact" style="margin-top:12px"><b>ตัวอย่างก่อน Export</b> • ${esc(preview.summary)}${preview.warnings?.length?`<div style="color:#b45309;margin-top:6px">${preview.warnings.map(esc).join('<br>')}</div>`:''}<details style="margin-top:8px"><summary>ดูรายชื่อและจำนวนในแต่ละวัน</summary><div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>วันที่ HR dummy</th><th>รายชื่อ</th><th>จำนวน</th></tr></thead><tbody>${(preview.days||[]).map(r=>`<tr><td>${esc(fmtDate(r.date))}</td><td>${esc(r.names.join(', ')||'-')}</td><td>${r.names.length}</td></tr>`).join('')}</tbody></table></div></details><details style="margin-top:8px"><summary>ดูจำนวนวันต่อเจ้าหน้าที่แต่ละคน</summary><div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>เจ้าหน้าที่</th><th>จำนวนวันที่มีชื่อ</th></tr></thead><tbody>${(preview.staffCounts||[]).map(r=>`<tr><td>${esc(r.name)}</td><td>${r.count}</td></tr>`).join('')}</tbody></table></div></details></div>`:'';
+    return `<div class="card" data-v604-lock-panel data-v664-distribution-panel style="margin-bottom:12px"><div class="section-title"><div><h3>กระจายชื่อช่วงวันพิเศษใน HR dummy</h3><p class="hint">เลือกวันในรอบ ${esc(cycle.start)} ถึง ${esc(cycle.end)} • ใช้หน่วย OT 8 ชม. ที่มีอยู่เท่านั้น ไม่เพิ่มชั่วโมงหรือยอดเงินเบิกจริง</p></div></div>
+      <div class="toolbar compact-filter" style="align-items:end;gap:10px;flex-wrap:wrap">
+       <label>จากวันที่ <input type="date" id="hrDateFromV664" min="${esc(cycle.start)}" max="${esc(cycle.end)}" value="${esc(dates[0]||cycle.start)}"></label>
+       <label>ถึงวันที่ <input type="date" id="hrDateToV664" min="${esc(cycle.start)}" max="${esc(cycle.end)}" value="${esc(dates[dates.length-1]||cycle.start)}"></label>
+       <button type="button" class="ghost-btn" data-v664-add-date-range>+ เพิ่มช่วงวัน</button>
+       <label>หรือเลือกวันเดี่ยว <input id="hrLockDateV604" type="date" min="${esc(cycle.start)}" max="${esc(cycle.end)}"></label>
+       <button type="button" class="ghost-btn" data-v604-add-lock-date>+ เพิ่มวัน</button>
+      </div>
+      <div style="margin-top:8px">${tags} ${dates.length?'<button type="button" class="tiny-btn" data-v664-clear-dates>ล้างวันที่เลือก</button>':''}</div>
+      <div class="toolbar compact-filter" style="align-items:end;gap:10px;flex-wrap:wrap;margin-top:12px">
+       <label>เงื่อนไขรายชื่อ <select id="hrDateModeV664"><option value="quota" ${plan.mode==='quota'?'selected':''}>แต่ละคนมีชื่อจำนวนวันที่กำหนด</option><option value="all" ${plan.mode==='all'?'selected':''}>ทุกคนมีชื่อทุกวันที่เลือก (แบบเดิม)</option></select></label>
+       <label>วันที่มีชื่อต่อคน <input type="number" id="hrDateQuotaV664" min="1" max="${Math.max(1,dates.length)}" step="1" value="${esc(plan.quota)}" ${plan.mode==='all'?'disabled':''} style="max-width:110px"></label>
+       <button type="button" class="ghost-btn" data-v664-save-date-plan>บันทึกเงื่อนไข</button>
+       <button type="button" class="primary-btn" data-v664-preview-dummy ${dates.length?'':'disabled'}>ดูตัวอย่างก่อน Export</button>
+      </div>
+      <p class="hint" style="margin-top:8px">ตัวอย่าง: 13 คน เลือก 3 วัน กำหนดคนละ 2 วัน → 26 รายชื่อ แบ่งใกล้เคียงกัน (เช่น 9/9/8) คนหนึ่งไม่ซ้ำวัน • ระบบเคารพวันลาและความจุสูงสุด 6 คนต่อช่วงเวลา</p>
+      <p class="hint">"ทุกคน" หมายถึงเจ้าหน้าที่ที่มีหน่วย OT พร้อมเบิกจริง ระบบไม่สร้าง OT เพิ่มให้คนที่ชั่วโมงไม่พอ หากจัดตามเงื่อนไขไม่ได้จะหยุด Export พร้อมแจ้งเหตุผล การตั้งค่านี้บันทึกในเบราว์เซอร์ที่ใช้ Export</p>
+      ${previewHtml}</div>`;
+  }
+
   function nextMonth(v){const [y,m]=monthKey(v).split('-').map(Number),d=new Date(y,m,1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}`;}
   function previousMonth(v){const [y,m]=monthKey(v).split('-').map(Number),d=new Date(y,m-2,1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}`;}
   function cycleRange(v){const key=monthKey(v);return {start:`${key}-16`,end:`${nextMonth(key)}-15`};}
@@ -3178,27 +3235,65 @@ try {
     });
     const remainingTotal=()=>[...remaining.values()].reduce((sum,n)=>sum+Number(n||0),0);
 
-    /* V604: reserve one existing 8-hour unit per staff on each locked date before normal balancing.
-       This moves units only; it never increases desiredUnits / claimedUnits. Leave remains authoritative. */
-    const lockReport=[];
-    const locked=[...new Set((lockedDates||[]).map(dateKey).filter(d=>dateInfoMap.has(d)))].sort();
-    locked.forEach(lockDate=>{
-      const dateCells=cells.filter(c=>c.date===lockDate);
-      staffBase.forEach(t=>{
-        const staffId=String(t.staff_id),desired=desiredMap.get(staffId)||0,left=remaining.get(staffId)||0;
-        if(desired<=0)return;
-        if(hasLeave(t.staff_id,lockDate,leaves)){lockReport.push({date:lockDate,staff_id:t.staff_id,status:'leave',message:'ยกเว้นเพราะมีวันลา'});return;}
-        if(left<=0){lockReport.push({date:lockDate,staff_id:t.staff_id,status:'insufficient',message:'ยอดเวร 8 ชม. ไม่พอสำหรับทุกวันที่ล็อก'});return;}
-        const used=staffDaySlots(t.staff_id,lockDate);
-        const candidates=dateCells.filter(cell=>cell.assigned<6&&!used.has(cell.slot)&&used.size<2).map(cell=>({cell,score:[cell.assigned,cell.slot]}));
-        if(!candidates.length){lockReport.push({date:lockDate,staff_id:t.staff_id,status:'capacity',message:'ช่วงเวลาในวันนี้เต็ม (สูงสุด 6 คนต่อช่วง)'});return;}
-        candidates.sort((a,b)=>compareScore(a.score,b.score));
-        addRow(t,candidates[0].cell);
-        remaining.set(staffId,left-1);
-        assignedMap.set(staffId,(assignedMap.get(staffId)||0)+1);
-        lockReport.push({date:lockDate,staff_id:t.staff_id,status:'locked',message:'ล็อกชื่อสำเร็จ'});
+    /* V664: reserve existing HR 8-hour units, never manufacture units.
+       quota: each eligible staff appears on N DISTINCT selected dates.
+       all: old V604 requirement (one appearance on every selected date,
+       excluding actual leave days); both reserve only one slot per staff/day.
+       Block the ordinary pass from adding a third name on selected dates. */
+    const policy=Array.isArray(lockedDates)?{mode:'all',quota:lockedDates.length,dates:lockedDates}:lockedDates||{};
+    const locked=[...new Set((policy.dates||[]).map(dateKey).filter(d=>dateInfoMap.has(d)))].sort();
+    const lockMode=policy.mode==='quota'?'quota':'all';
+    const lockQuota=lockMode==='quota'?Math.floor(Number(policy.quota||0)):locked.length;
+    const selectedDateSet=new Set(locked),lockReport=[];
+    if(locked.length&&lockMode==='quota'&&(lockQuota<1||lockQuota>locked.length)){
+      lockReport.push({date:locked[0],staff_id:'',status:'insufficient',message:`จำนวนวันต่อคนต้องอยู่ระหว่าง 1–${locked.length} วัน`});
+    }else if(locked.length){
+      const bySelectedDate=new Map(locked.map(d=>[d,cells.filter(c=>c.date===d)]));
+      const constrained=staffBase.slice().sort((a,b)=>{
+        const aDays=locked.filter(d=>!hasLeave(a.staff_id,d,leaves)).length;
+        const bDays=locked.filter(d=>!hasLeave(b.staff_id,d,leaves)).length;
+        return aDays-bDays||Number(a.desiredUnits||0)-Number(b.desiredUnits||0)||staffNickSafe(a.staff_id).localeCompare(staffNickSafe(b.staff_id),'th');
       });
-    });
+      /* Legacy all-dates rules keep existing leave exemption. In quota mode,
+         days lost to leave must be made up on other selected days. */
+      const required=new Map();
+      constrained.forEach(t=>{
+        const id=String(t.staff_id),available=locked.filter(d=>!hasLeave(id,d,leaves));
+        const need=lockMode==='quota'?lockQuota:available.length;
+        required.set(id,need);
+        if(need>(desiredMap.get(id)||0))lockReport.push({date:locked[0],staff_id:id,status:'insufficient',message:`มี OT พร้อมเบิก ${desiredMap.get(id)||0} หน่วย แต่ต้องมีชื่อ ${need} วัน`});
+        else if(available.length<need)lockReport.push({date:locked[0],staff_id:id,status:'insufficient',message:`วันที่เลือกที่ไม่ตรงกับวันลาเหลือ ${available.length} วัน แต่กำหนด ${need} วัน`});
+        locked.filter(d=>hasLeave(id,d,leaves)).forEach(d=>lockReport.push({date:d,staff_id:id,status:'leave',message:'เว้นวันลาของเจ้าหน้าที่'}));
+      });
+      const countFor=(id)=>locked.reduce((sum,d)=>sum+(staffDaySlots(id,d).size>0?1:0),0);
+      const maxNeed=Math.max(0,...required.values());
+      for(let round=0;round<maxNeed;round++){
+        for(const t of constrained){
+          const id=String(t.staff_id),want=required.get(id)||0,left=remaining.get(id)||0;
+          if(countFor(id)>=want||left<=0)continue;
+          const candidates=[];
+          locked.forEach((date,di)=>{
+            if(hasLeave(id,date,leaves)||staffDaySlots(id,date).size>0)return;
+            const dayUsed=dateOccupancy.get(date)||0;
+            const eligible=bySelectedDate.get(date)||[];
+            eligible.filter(c=>c.assigned<6).forEach(cell=>{
+              candidates.push({cell,score:[dayUsed,cell.assigned,((di+constrained.indexOf(t)+round)%Math.max(1,locked.length)),cell.slot]});
+            });
+          });
+          if(!candidates.length)continue;
+          candidates.sort((a,b)=>compareScore(a.score,b.score));
+          addRow(t,candidates[0].cell);
+          remaining.set(id,left-1);assignedMap.set(id,(assignedMap.get(id)||0)+1);
+          lockReport.push({date:candidates[0].cell.date,staff_id:id,status:'locked',message:'มีชื่อในวันพิเศษตามโควตา'});
+        }
+      }
+      constrained.forEach(t=>{
+        const id=String(t.staff_id),have=countFor(id),want=required.get(id)||0;
+        if(have<want&&!lockReport.some(x=>String(x.staff_id)===id&&x.status==='insufficient')){
+          lockReport.push({date:locked[0],staff_id:id,status:'capacity',message:`จัดได้ ${have}/${want} วัน อาจมีวันลาหรือช่วงเวลาเต็ม (สูงสุด 6 คนต่อช่วง)`});
+        }
+      });
+    }
 
     /* Round-robin staff allocation prevents early staff from filling the first dates. */
     let round=0,progress=true;
@@ -3213,6 +3308,7 @@ try {
         if(left<=0)return;
         const candidates=[];
         cells.forEach(cell=>{
+          if(selectedDateSet.has(cell.date))return; /* keep per-person special-date quota exact */
           if(cell.assigned>=cell.target)return;
           if(hasLeave(t.staff_id,cell.date,leaves))return;
           const used=staffDaySlots(t.staff_id,cell.date);
@@ -3240,6 +3336,7 @@ try {
         if(left<=0)continue;
         const candidates=[];
         cells.forEach(cell=>{
+          if(selectedDateSet.has(cell.date))return;
           if(cell.assigned>=6||hasLeave(t.staff_id,cell.date,leaves))return;
           const used=staffDaySlots(t.staff_id,cell.date);
           if(used.has(cell.slot)||used.size>=2)return;
@@ -3271,7 +3368,7 @@ try {
       const values=Object.values(slots),spread=values.length?Math.max(...values)-Math.min(...values):0;
       return {date:info.date,target:info.target,total:dateOccupancy.get(info.date)||0,slots,spread,type:(weekend(info.date)||publicHoliday(info.date,holidays))?'holiday':'weekday'};
     });
-    return {rows,occupancy,dateOccupancy,leaveSkipped,balanceRows,lockedDates:locked,lockReport};
+    return {rows,occupancy,dateOccupancy,leaveSkipped,balanceRows,lockedDates:locked,lockMode,lockQuota,lockReport};
   }
 
   function sourceRowsForSheet(totals,month,cycle){
@@ -3383,6 +3480,30 @@ try {
     carryCache.clear();summaryCarryCache.clear();
   }
 
+  /* Read-only preview. Does not create an Export Batch or alter Supabase. */
+  async function previewHrDatePlanV664(){
+    if(!admin())return toast('เฉพาะ Admin เท่านั้น','error');
+    const month=monthKey(st().otSourceMonthV241||st().otMoneyMonthV241||st().monthKey),plan=hrDatePlan(month),error=hrDatePlanError(plan);
+    if(error)return toast(error,'error');
+    busy(true,'กำลังคำนวณตัวอย่างการกระจายชื่อ (ไม่ Export)');
+    try{
+      const data=await queryExportData(month),carry=await queryCarryIn(month);
+      const totals=applyAdjustmentUnits(applyCarryIn(buildTotals(data.rows),carry),data.adjustments||[]);
+      if(!totals.length)throw new Error('ไม่พบเจ้าหน้าที่ที่มีหน่วย HR พร้อมเบิก');
+      const allocation=allocate(totals,data.cycle,data.leaves,data.holidays,plan);
+      const errors=allocation.lockReport.filter(x=>x.status==='insufficient'||x.status==='capacity');
+      const extra=totals.filter(t=>t.unallocatedUnits>0);
+      const days=plan.dates.map(d=>({date:d,names:allocation.rows.filter(x=>x.date===d).map(x=>staffNickSafe(x.staff_id)).sort((a,b)=>a.localeCompare(b,'th'))}));
+      const staffCounts=totals.map(t=>({name:staffNickSafe(t.staff_id),count:allocation.rows.filter(x=>String(x.staff_id)===String(t.staff_id)&&plan.dates.includes(x.date)).length}));
+      const warnings=[...errors.slice(0,5).map(x=>`${staffNickSafe(x.staff_id)}: ${x.message}`),...extra.slice(0,3).map(x=>`${staffNickSafe(x.staff_id)} มี ${x.unallocatedUnits} หน่วยที่จัดต่อไม่ได้`)];
+      const summary=`${totals.length} คนที่มี OT พร้อมเบิก • ${plan.dates.length} วันที่เลือก • ${allocation.rows.filter(x=>plan.dates.includes(x.date)).length} รายชื่อ • ${plan.mode==='all'?'ทุกคนทุกวันที่ไม่ลา':`คนละ ${plan.quota} วัน`} • ${warnings.length?'ยังจัดไม่ครบ ห้าม Export':'จัดครบ'}`;
+      st().hrDatePreviewV664={month,signature:JSON.stringify(plan),summary,days,staffCounts,warnings};
+      try{renderPage();}catch(_){ }
+      toast(warnings.length?'ตัวอย่างยังจัดไม่ครบ ตรวจคำเตือนก่อน Export':'ตัวอย่างจัดชื่อครบแล้ว ตรวจตารางด้านล่างได้',warnings.length?'error':undefined);
+    }catch(e){st().hrDatePreviewV664=null;toast(`ดูตัวอย่างไม่สำเร็จ: ${e?.message||e}`,'error');}
+    finally{busy(false);}
+  }
+
   async function exportV318(){
     if(!admin())return toast('เฉพาะ Admin เท่านั้น','error');
     if(typeof XLSX==='undefined')return toast('ไม่พบไลบรารี Excel','error');
@@ -3394,10 +3515,15 @@ try {
       const regularTotals=applyCarryIn(buildTotals(data.rows),carryInMap);
       const totals=applyAdjustmentUnits(regularTotals,data.adjustments||[]);if(!totals.length)throw new Error('ไม่พบชั่วโมง OT ที่ใช้คำนวณได้');
       const missing=totals.filter(t=>!t.employeeCode).map(t=>staffNickSafe(t.staff_id));if(missing.length)throw new Error(`ยังไม่มีรหัสพนักงานของ: ${missing.join(', ')} กรุณาใส่ในข้อมูลเจ้าหน้าที่ก่อน Export`);
-      const lockedDates=hrLockedDates(data.source.month).filter(d=>d>=data.cycle.start&&d<=data.cycle.end);
-      const allocation=allocate(totals,data.cycle,data.leaves,data.holidays,lockedDates),sourceSheetRows=sourceRowsForSheet(totals,data.source.month,data.cycle),summaryRows=staffSummaryRows(totals);
+      const datePlan=hrDatePlan(data.source.month),lockedDates=datePlan.dates;
+      if(lockedDates.length){const planError=hrDatePlanError(datePlan);if(planError)throw new Error(planError);}
+      const allocation=allocate(totals,data.cycle,data.leaves,data.holidays,datePlan),sourceSheetRows=sourceRowsForSheet(totals,data.source.month,data.cycle),summaryRows=staffSummaryRows(totals);
       const lockFailures=(allocation.lockReport||[]).filter(x=>x.status==='insufficient'||x.status==='capacity');
-      if(lockFailures.length){const detail=lockFailures.slice(0,8).map(x=>`${staffNickSafe(x.staff_id)} ${x.date}: ${x.message}`).join(' • ');throw new Error(`ล็อกวันที่ให้ทุกคนมีชื่อไม่ครบ: ${detail}${lockFailures.length>8?` • และอีก ${lockFailures.length-8} รายการ`:''}`);}
+      if(lockFailures.length){const detail=lockFailures.slice(0,8).map(x=>`${staffNickSafe(x.staff_id)} ${x.date}: ${x.message}`).join(' • ');throw new Error(`จัดชื่อวันพิเศษไม่ครบ: ${detail}${lockFailures.length>8?` • และอีก ${lockFailures.length-8} รายการ`:''}`);}
+      if(lockedDates.length&&totals.some(t=>t.unallocatedUnits>0)){
+        const missing=totals.filter(t=>t.unallocatedUnits>0).slice(0,8).map(t=>`${staffNickSafe(t.staff_id)} ${t.unallocatedUnits} หน่วย`).join(' • ');
+        throw new Error(`วันพิเศษทำให้กระจายเวรที่เหลือไม่ครบ: ${missing} — กรุณาลดจำนวนวันพิเศษหรือเปลี่ยนช่วงวัน`);
+      }
       const leaveRows=allocation.leaveSkipped.map(x=>({'รหัสพนักงาน':employeeCode(x.staff_id),'ชื่อ':staffFullName(x.staff_id),'วันที่ลาในรอบ HR':x.date,'หมายเหตุ':'ระบบไม่สร้าง dummy shift ในวันนี้'}));
       const carryRows=totals.map(t=>({'รหัสพนักงาน':t.employeeCode,'ชื่อ':staffFullName(t.staff_id),'เดือน OT ปัจจุบัน':data.source.month,'เดือนยอดทบยกมา':t.carrySourceMonth||'','ยอดทบยกมา(ชม.)':t.carryIn,'OT เดือนนี้เทียบ HR':t.currentTotal,'รวมก่อนปรับย้อนหลัง':t.regularAvailable==null?t.total:t.regularAvailable,'ปรับย้อนหลังหน่วย HR 8ชม.':Number(t.adjustmentUnits||0),'โอทีทั้งหมดหลังปรับ':t.total,'เบิก HR รอบนี้':t.claimed,'ทบเดือนหน้า(ชม.)':t.carry,'หมายเหตุ':'V530: รายการปรับย้อนหลังแยกจาก OT จริง; หน่วย HR รองรับทศนิยมและรวมยอดก่อนตัดเป็นชุด 8 ชม.'}));
       const adjustmentRows=(data.adjustments||[]).map(a=>({'รหัสพนักงาน':employeeCode(a.staff_id),'ชื่อ':staffFullName(a.staff_id),'ประเภท':a.adjustment_type==='overclaim'?'ลด OT เบิกเกิน':'OT ตกเบิกย้อนหลัง','เดือนต้นทาง':a.source_month,'เดือนที่นำมาปรับ':a.apply_month,'ยอดเงินปรับ':Number(a.amount_delta||0),'หน่วย HR 8 ชม.':Number(a.hr_unit_delta||0),'ฐาน HR':Number(a.base_rate||baseRate(a.staff_id)),'เหตุผล':a.reason||'','รายละเอียด':a.note||'','สถานะก่อน Export':a.status||'pending'}));
@@ -3462,7 +3588,17 @@ try {
     try{const tpl=document.createElement('template');tpl.innerHTML=String(base||'');const content=tpl.content.querySelector('.v241-ot-content');if(content)content.innerHTML=html;const holder=document.createElement('div');holder.appendChild(tpl.content.cloneNode(true));return holder.innerHTML;}catch(_){return base;}
   }
   if(previousRenderOtPage){
-    const wrapped=function renderOtPageV318(){let base=String(previousRenderOtPage.apply(this,arguments)||'');const menu=String(st().otMenuV369||'');const active=menu==='export'?'export':menu==='history'?'history':(st().otSubtabV241||'mine');if(active==='history')return replaceContent(base,historyHtml());if(active==='export'){base=base.replace(/data-export-hr-v241/g,'data-export-hr-v318').replace('นำ OT จริงของเดือน 1-สิ้นเดือน ไปกระจายเป็น HR dummy ในรอบ 16-15','สร้างไฟล์แบบ Manual: รวมยอดทบเดือนก่อนอัตโนมัติ เบิกชุดละ 8 ชม. และส่งเศษต่อเดือนหน้า');const panel=hrLockedDatePanel(monthKey(st().otSourceMonthV241||st().otMoneyMonthV241||st().monthKey));base=base.replace(/(<button[^>]*data-export-hr-v318[^>]*>)/i,panel+'$1');}return base;};
+    const wrapped=function renderOtPageV318(){let base=String(previousRenderOtPage.apply(this,arguments)||'');const active=st().otSubtabV241||'mine';if(active==='history')return replaceContent(base,historyHtml());if(active==='export'){
+      base=base.replace(/data-export-hr-v241/g,'data-export-hr-v318').replace('นำ OT จริงของเดือน 1-สิ้นเดือน ไปกระจายเป็น HR dummy ในรอบ 16-15','สร้างไฟล์แบบ Manual: รวมยอดทบเดือนก่อนอัตโนมัติ เบิกชุดละ 8 ชม. และส่งเศษต่อเดือนหน้า');
+      const panel=hrLockedDatePanel(monthKey(st().otSourceMonthV241||st().otMoneyMonthV241||st().monthKey));
+      /* V664: insert a full-width card AFTER the export title/actions, not
+         inside its flex header (V604's old inline placement was cramped). */
+      const buttonAt=base.indexOf('data-export-hr-v318');
+      const buttonEnd=buttonAt>=0?base.indexOf('</button>',buttonAt):-1;
+      const headerEnd=buttonEnd>=0?base.indexOf('</div>',buttonEnd):-1;
+      if(headerEnd>=0)base=base.slice(0,headerEnd+6)+panel+base.slice(headerEnd+6);
+      else base=base.replace(/(<button[^>]*data-export-hr-v318[^>]*>)/i,panel+'$1');
+    }return base;};
     try{window.renderOtPage=renderOtPage=wrapped;}catch(_){window.renderOtPage=wrapped;}
   }
 
@@ -3475,8 +3611,20 @@ try {
   }
 
   document.addEventListener('click',async e=>{
-    const addLock=e.target?.closest?.('[data-v604-add-lock-date]');if(addLock){e.preventDefault();e.stopPropagation();const input=document.getElementById('hrLockDateV604'),date=dateKey(input?.value),month=monthKey(st().otSourceMonthV241||st().otMoneyMonthV241||st().monthKey),cycle=cycleRange(month);if(!date)return toast('กรุณาเลือกวันที่ที่ต้องการล็อก','error');if(date<cycle.start||date>cycle.end)return toast(`วันที่ต้องอยู่ในรอบ HR ${cycle.start} ถึง ${cycle.end}`,'error');saveHrLockedDates(month,[...hrLockedDates(month),date]);try{renderPage();}catch(_){ }toast(`ล็อกวันที่ ${fmtDate(date)} แล้ว`);return;}
-    const removeLock=e.target?.closest?.('[data-v604-remove-lock-date]');if(removeLock){e.preventDefault();e.stopPropagation();const month=monthKey(st().otSourceMonthV241||st().otMoneyMonthV241||st().monthKey),date=dateKey(removeLock.getAttribute('data-v604-remove-lock-date'));saveHrLockedDates(month,hrLockedDates(month).filter(d=>d!==date));try{renderPage();}catch(_){ }return;}
+    const month=monthKey(st().otSourceMonthV241||st().otMoneyMonthV241||st().monthKey),cycle=cycleRange(month);
+    const addRange=e.target?.closest?.('[data-v664-add-date-range]');if(addRange){
+      e.preventDefault();e.stopPropagation();
+      const start=dateKey(document.getElementById('hrDateFromV664')?.value),end=dateKey(document.getElementById('hrDateToV664')?.value);
+      if(!start||!end||start>end||start<cycle.start||end>cycle.end)return toast('กรุณาเลือกช่วงวันที่ในรอบ HR ให้ถูกต้อง','error');
+      const next=hrDatePlanFromForm(month),range=datesBetween(start,end);
+      saveHrDatePlan(month,{...next,dates:[...next.dates,...range]});try{renderPage();}catch(_){ }toast(`เพิ่มช่วง ${fmtDate(start)}–${fmtDate(end)} แล้ว`);return;
+    }
+    const addLock=e.target?.closest?.('[data-v604-add-lock-date]');if(addLock){e.preventDefault();e.stopPropagation();const input=document.getElementById('hrLockDateV604'),date=dateKey(input?.value);if(!date)return toast('กรุณาเลือกวันที่พิเศษ','error');if(date<cycle.start||date>cycle.end)return toast(`วันที่ต้องอยู่ในรอบ HR ${cycle.start} ถึง ${cycle.end}`,'error');const next=hrDatePlanFromForm(month);saveHrDatePlan(month,{...next,dates:[...next.dates,date]});try{renderPage();}catch(_){ }toast(`เพิ่มวันที่ ${fmtDate(date)} แล้ว`);return;}
+    const removeLock=e.target?.closest?.('[data-v604-remove-lock-date]');if(removeLock){e.preventDefault();e.stopPropagation();const date=dateKey(removeLock.getAttribute('data-v604-remove-lock-date')),next=hrDatePlanFromForm(month);saveHrDatePlan(month,{...next,dates:next.dates.filter(d=>d!==date)});try{renderPage();}catch(_){ }return;}
+    const clearDates=e.target?.closest?.('[data-v664-clear-dates]');if(clearDates){e.preventDefault();e.stopPropagation();saveHrDatePlan(month,{dates:[],mode:'quota',quota:1});try{renderPage();}catch(_){ }toast('ล้างวันพิเศษของเดือนนี้แล้ว');return;}
+    const savePlan=e.target?.closest?.('[data-v664-save-date-plan]');if(savePlan){e.preventDefault();e.stopPropagation();const next=hrDatePlanFromForm(month);if(next.dates.length){const err=hrDatePlanError(next);if(err)return toast(err,'error');}saveHrDatePlan(month,next);try{renderPage();}catch(_){ }toast('บันทึกเงื่อนไขวันพิเศษแล้ว');return;}
+    const previewBtn=e.target?.closest?.('[data-v664-preview-dummy]');if(previewBtn){e.preventDefault();e.stopPropagation();const next=hrDatePlanFromForm(month),err=hrDatePlanError(next);if(err)return toast(err,'error');saveHrDatePlan(month,next);await previewHrDatePlanV664();return;}
+
     const exportBtn=e.target?.closest?.('[data-export-hr-v318]');if(exportBtn){e.preventDefault();e.stopPropagation();await exportV318();return;}
     const row=e.target?.closest?.('[data-v318-revert-row]');if(row){e.preventDefault();e.stopPropagation();await resetHistoryRows([row.getAttribute('data-v318-revert-row')]);return;}
     const selectedBatch=e.target?.closest?.('[data-v318-revert-selected-batch]');if(selectedBatch){e.preventDefault();e.stopPropagation();const id=selectedBatch.getAttribute('data-v318-revert-selected-batch'),ids=(st().hrHistoryRowsV318||[]).filter(x=>String(rowBatch(x))===String(id)).map(x=>x.id);await resetHistoryRows(ids);return;}
@@ -3495,6 +3643,7 @@ try {
 
   document.addEventListener('change',async e=>{
     const id=e.target?.id||'';
+    if(id==='hrDateModeV664'){const q=document.getElementById('hrDateQuotaV664');if(q)q.disabled=String(e.target.value)==='all';return;}
     if(id==='hrHistoryStaffV318'||id==='hrHistoryYearV318'||id==='hrHistoryMonthNumberV318'){
       if(id==='hrHistoryStaffV318')st().hrHistoryStaffV318=String(e.target.value||'');
       if(id==='hrHistoryYearV318')st().hrHistoryYearV318=String(e.target.value||'');
@@ -3509,7 +3658,7 @@ try {
     }
   },true);
 
-  window.cnmiV318={version:VERSION,exportHr:exportV318,loadHistory,queryCarryIn,queryCarryInSummary,getLockedDates:hrLockedDates,setLockedDates:saveHrLockedDates,clearHistoryCache(){historyCache.clear();},clearCarryCache(){carryCache.clear();summaryCarryCache.clear();},_test:{encodeCarryMarker,parseCarryMarker,applyCarryIn,selectedHistoryMonth,allocate}};
+  window.cnmiV318={version:VERSION,exportHr:exportV318,loadHistory,queryCarryIn,queryCarryInSummary,getLockedDates:(month)=>hrDatePlan(month).dates,setLockedDates:(month,dates)=>saveHrDatePlan(month,{dates,mode:'all',quota:1}),getDatePlan:hrDatePlan,setDatePlan:saveHrDatePlan,previewDatePlan:previewHrDatePlanV664,clearHistoryCache(){historyCache.clear();},clearCarryCache(){carryCache.clear();summaryCarryCache.clear();},_test:{encodeCarryMarker,parseCarryMarker,applyCarryIn,selectedHistoryMonth,allocate,hrDatePlan,saveHrDatePlan,cleanPlanDates}};
   console.info(`[${VERSION}] loaded`);
 })();
 
@@ -7121,40 +7270,21 @@ try {
     return out;
   }
   function claimedMoneyBreakdown(staffId, rows, carryIn, claimedHours){
-    const claimed = round2(Math.max(0, claimedHours || 0));
-    const segments = [];
-    const carry = round2(Math.max(0, carryIn || 0));
-    if (carry > 0) segments.push({ hours:carry, rate:staffRate(staffId), type:staffRateType(staffId), duty:'ยอดทบจากรอบก่อน', carry:true });
-    (rows || []).slice().sort((a,b) => normDate(a?.work_date).localeCompare(normDate(b?.work_date)) || String(a?.created_at || '').localeCompare(String(b?.created_at || ''))).forEach(row => {
-      rateSegmentsForRow(row).forEach(seg => segments.push(seg));
-    });
-    let remaining = claimed;
-    const buckets = new Map();
-    segments.forEach(seg => {
-      if (remaining <= 0) return;
-      const used = round2(Math.min(Math.max(0, seg.hours || 0), remaining));
-      if (used <= 0) return;
-      remaining = round2(Math.max(0, remaining - used));
-      const tangCh4 = isTang(staffId) && seg.type === 'MT' && /ช4/.test(seg.duty || '');
-      const label = tangCh4 ? 'MT (เฉพาะ ช4)' : seg.type;
-      const key = `${label}|${seg.rate}`;
-      const current = buckets.get(key) || { label, rate:seg.rate, hours:0, amount:0 };
-      current.hours = round2(current.hours + used);
-      current.amount = round2(current.amount + used * seg.rate);
-      buckets.set(key, current);
-    });
-    if (remaining > 0) {
-      const rate = staffRate(staffId), label = staffRateType(staffId), key = `${label}|${rate}`;
-      const current = buckets.get(key) || { label, rate, hours:0, amount:0 };
-      current.hours = round2(current.hours + remaining);
-      current.amount = round2(current.amount + remaining * rate);
-      buckets.set(key, current);
-      remaining = 0;
-    }
-    const items = Array.from(buckets.values());
-    const amount = round2(items.reduce((sum,item) => sum + item.amount, 0));
-    const formula = items.length ? items.map(item => `${item.label} ${hours(item.rate, 0)} บ./ชม. × ${hours(item.hours, 2)} ชม.`).join(' + ') : '-';
-    return { amount, items, formula, claimed };
+    /* V665: HR dummy converts each real-work segment to an HR-equivalent hour
+       using V190/V318 before claiming whole eight-hour units. The payable
+       amount must therefore use the person's HR BASE rate for ALL claimed
+       equivalent hours, just like Staff_Total/HR_OT. Applying each raw source
+       segment's different rate a second time double-counts a rate conversion
+       (and can produce false satang amounts for a whole-eight-hour claim). */
+    const claimed = Math.max(0, Math.round(Number(claimedHours || 0) * 100) / 100);
+    const rate = staffRate(staffId);
+    const label = staffRateType(staffId);
+    const amount = round2(claimed * rate);
+    return {
+      amount, claimed,
+      items: claimed ? [{ label, rate, hours:claimed, amount }] : [],
+      formula: `${label} ${hours(rate, 0)} บ./ชม. × ${hours(claimed, 2)} ชม. (ฐาน HR หลังแปลงชั่วโมง)`
+    };
   }
   function summaryHtml(staffId, rows, carryInfo){
     const current = sumCurrentHr(rows);
@@ -7206,6 +7336,7 @@ try {
     if (token !== detailHydrationToken || !document.body.contains(card)) return;
     const slot = card.querySelector('.v347-summary-slot');
     if (slot) slot.innerHTML = `${summaryHtml(sid, rows, carry)}${carry.unavailable ? '<div class="notice error-notice compact">ยังอ่านยอดทบจากรอบก่อนไม่สำเร็จ กรุณารีเฟรชอีกครั้ง</div>' : ''}`;
+    document.dispatchEvent(new CustomEvent('cnmi:v665-detail-ready'));
   }
   async function showAdminDetail(staffId){
     if (!isAdminSafe()) return;

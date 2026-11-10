@@ -1,13 +1,13 @@
 {
-  "version": "663",
-  "base_version": "662",
-  "title": "v663 Admin OT correction by Event ID, pause old HR confirmations, adjustment navigation fix",
+  "version": "665",
+  "base_version": "664",
+  "title": "Fix OT detail money formula to match HR 8-hour base-rate and highlight snapshot-vs-live differences",
   "changes": [
-    "Admin can start correction review which blocks staff HR confirmations for the month through a Supabase trigger",
-    "Preview activity OT by exact Event ID and cancel a verified group after v662 reopens old Export batches; audit before-images; no deletes",
-    "Old HR confirmation remains paused until a newly exported batch and a newly published HR revision are verified",
-    "Fix adjustment button navigation from locked Export history via real submenu handler",
-    "No automatic data mutations at installation; no changes to OT calculations/roster/login; SQL v663 is installed separately"
+    "Fix detail and monthly on-screen money: use claimed HR-equivalent hours x staff HR base rate (90 or 130), as Staff_Total and HR_OT do; prevent double-applying source segment rates",
+    "Add explicit read-only warning on Staff claim-detail whenever locked Export snapshot differs from current calculated claim; retain both figures instead of overwriting either",
+    "Keep previous v664 special-day quota, v663 OT event correction, v662 reopening, and all roster/physician features",
+    "Does not recalculate, delete or modify Supabase OT records, prior HR snapshots or carry-in history",
+    "The 8-hour discrepancies that arise from changed carry-in are not auto-resolved: admin must reconcile opening carry and source OT against the Export snapshot"
   ],
-  "requires_sql": "v663_SQL_Admin_OT_Bulk_Event_Correction_With_HR_Review_Hold.sql"
+  "requires_new_sql": false
 }
