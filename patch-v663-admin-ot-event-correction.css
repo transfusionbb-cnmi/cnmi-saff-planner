@@ -1,0 +1,31 @@
+#v663AdminPanel.v663-panel{border:1px solid #a9c7df;background:#f8fbff;border-radius:12px;margin:12px 0 18px;overflow:hidden}
+#v663AdminPanel>summary{padding:13px 15px;cursor:pointer;font-weight:750;color:#19496c}
+#v663AdminPanel[open]>summary{border-bottom:1px solid #d9e5ef}
+#v663AdminPanel .v663-small{color:#637c91;font-size:12px;font-weight:450}
+#v663AdminPanel .v663-content{padding:14px 16px;display:grid;gap:12px;font-size:13px}
+#v663AdminPanel p{color:#476074;line-height:1.5;margin:4px 0}
+#v663AdminPanel .v663-warn{background:#fff7e7;border:1px solid #f0d5a5;padding:12px;border-radius:10px;line-height:1.6}
+#v663AdminPanel label{display:grid;gap:6px;color:#294c68;font-weight:650}
+#v663AdminPanel textarea,#v663AdminPanel input{display:block;width:100%;min-width:0;padding:10px;border:1px solid #c4d7e5;border-radius:9px;background:#fff;color:#193952;font:inherit}
+#v663AdminPanel button{background:#fff;color:#1e5e89;border:1px solid #a9c9e0;border-radius:9px;padding:9px 12px;cursor:pointer;font:inherit;font-weight:650;max-width:100%}
+#v663AdminPanel button:disabled{opacity:.5;cursor:not-allowed}
+#v663AdminPanel button.v663-danger{background:#b91c1c;color:white;border-color:#b91c1c}
+#v663AdminPanel .v663-tools{display:flex;gap:9px;flex-wrap:wrap}
+#v663AdminPanel #v663OpenBox,#v663AdminPanel #v663Action,#v663AdminPanel .v663-finish{display:grid;gap:10px;padding:12px;border:1px solid #d9e5ef;background:white;border-radius:10px}
+#v663AdminPanel #v663OpenBox[hidden],#v663AdminPanel #v663Action[hidden]{display:none}
+#v663AdminPanel .v663-result{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px;border-radius:10px;background:#e7f1fa}
+#v663AdminPanel .v663-tablewrap{overflow:auto;max-height:380px;border:1px solid #dce7ef;border-radius:10px}
+#v663AdminPanel table{width:100%;min-width:610px;border-collapse:collapse;background:#fff}
+#v663AdminPanel th,#v663AdminPanel td{font-size:12px;text-align:left;padding:9px 8px;vertical-align:middle;border-bottom:1px solid #e2e8ee}
+#v663AdminPanel th{background:#eef5fa;position:sticky;top:0;z-index:1}
+#v663AdminPanel .v663-flag{color:#9a4e00;font-size:11px;margin-top:4px}
+#v663AdminPanel .v663-chip{display:inline-block;background:#fff4df;color:#965b00;border-radius:30px;padding:3px 7px}
+#v663AdminPanel .v663-chip.good{background:#e6f6ea;color:#196e3f}
+#v663AdminPanel .v663-hint{font-size:12px}
+#v663AdminPanel .v663-status{border-radius:9px;padding:10px;background:#e5f1fa;white-space:pre-wrap;line-height:1.5}
+#v663AdminPanel .v663-status[data-type="warning"]{background:#fff2d8;color:#8b5100}
+#v663AdminPanel .v663-status[data-type="error"]{background:#fff0f0;color:#a51d1d}
+#v663AdminPanel .v663-status[data-type="ok"]{background:#e9f7eb;color:#176438}
+#v663AdminPanel h4{font-size:14px;margin:0}
+#v663StaffHold.v663-staff-hold{padding:13px;border-radius:10px;background:#fff3dc;border:1px solid #eebd69;color:#784b05;font-weight:750;line-height:1.6;margin-bottom:12px}
+@media(max-width:700px){#v663AdminPanel .v663-content{padding:10px}#v663AdminPanel .v663-tools{display:grid}#v663AdminPanel button{width:100%}}

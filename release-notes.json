@@ -1,13 +1,13 @@
 {
-  "version": "662",
-  "base_version": "661",
-  "title": "v662 เปิดรอบแก้ไข Export OT ทั้งเดือน โดยคง Snapshot และ Audit",
+  "version": "663",
+  "base_version": "662",
+  "title": "v663 Admin OT correction by Event ID, pause old HR confirmations, adjustment navigation fix",
   "changes": [
-    "เพิ่มเมนูแบบพับได้ใน Admin > จัดการยอดเบิก HR / เบิกพิเศษ สำหรับตรวจและคืนสถานะ Exported ทั้ง Batch ของเดือนต้นทาง",
-    "ต้องติดตั้ง SQL v662 ใน Supabase ก่อน; RPC ตรวจ Admin ตาม session, ตรวจสถานะส่ง HR และ Snapshot เดือนถัดไป",
-    "ยืนยันด้วยเหตุผลและข้อความ REOPEN YYYY-MM; SQL คืนคำขอในธุรกรรมเดียวและบันทึกข้อมูลก่อนแก้ไขทั้งหมดใน audit",
-    "ไม่ลบ Snapshot เดิม ไม่ลบไฟล์ Export ไม่เปลี่ยน status อนุมัติของคำขอ",
-    "ยังต้องตรวจรายการซ้ำ/ขาด ยอดทบ และ Export ใหม่หลังคืนสถานะ",
-    "คงฟังก์ชันและสูตรของ v661 ไม่มีการแก้ Login ตารางเวร OT คำนวณ หรือแพทย์"
-  ]
+    "Admin can start correction review which blocks staff HR confirmations for the month through a Supabase trigger",
+    "Preview activity OT by exact Event ID and cancel a verified group after v662 reopens old Export batches; audit before-images; no deletes",
+    "Old HR confirmation remains paused until a newly exported batch and a newly published HR revision are verified",
+    "Fix adjustment button navigation from locked Export history via real submenu handler",
+    "No automatic data mutations at installation; no changes to OT calculations/roster/login; SQL v663 is installed separately"
+  ],
+  "requires_sql": "v663_SQL_Admin_OT_Bulk_Event_Correction_With_HR_Review_Hold.sql"
 }
