@@ -1,13 +1,13 @@
 {
-  "version": "669",
-  "base_version": "668",
-  "title": "Login selector for Mahidol local-part and Username without changing authentication",
+  "version": "670",
+  "base_version": "669",
+  "title": "Reset monthly position cumulative statistics without deleting assignments",
   "changes": [
-    "Show Mahidol email and Username choice on the existing login form.",
-    "Mahidol mode accepts only the local part, visually appends @mahidol.ac.th, and accepts pasted full Mahidol emails.",
-    "Username mode preserves existing username lookup; existing password handling and Supabase Auth remain unchanged.",
-    "Do not change Staff/Admin roles, OT, HR, schedules, or database state."
+    "Admin can begin position counting from the selected month for all displayed staff or an individual.",
+    "Past daily position assignments are retained; month statistics are unchanged, only as-of-month cumulative numbers restart at saved reset date.",
+    "Changes require confirmation and a reason, are secured by an admin-only RPC, and are recorded in audit.",
+    "Historic months still display correct as-of-month counts; roster, overtime and slot configurations remain unchanged."
   ],
-  "requires_new_sql": false,
-  "notes": "Update files to the repository root. Only this login UI and input normalization changed."
+  "requires_new_sql": true,
+  "notes": "Install SQL v670 in Supabase after backup before using reset. Use UPDATE ONLY only over v669; do not run reset until a staging test."
 }

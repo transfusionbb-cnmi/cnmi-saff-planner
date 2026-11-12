@@ -580,7 +580,7 @@ async function v651PublishCurrentPlan(key){
     const rows = positionRowsForMonth(key);
     const trainees = trainingIdentitiesForMonth(key);
     const schemaNotice = st()?.manualSlotSettingsErrorV273 ? `<div class="notice error-notice"><b>ช่องกำหนด Slot ยังบันทึกไม่ได้</b><br>ให้รันไฟล์ <code>supabase_v273_manual_management.sql</code> ใน Supabase ก่อน</div>` : '';
-    return `<div class="v273-manual-page"><div class="card v273-manual-toolbar"><div class="section-title"><div><h2>จัดตำแหน่งกลางวันแบบ Manual</h2><p>Admin กำหนด Slot เอง แล้วลากหรือพิมพ์ชื่อคนลงตำแหน่ง ระบบไม่ตรวจสิทธิ์รายบุคคล</p></div><span class="badge green">Autosave</span></div><div class="toolbar"><label>เดือน <input type="month" id="positionMonthInput" value="${esc(key)}"></label><button type="button" class="ghost-btn" data-v273-refresh-positions>รีเฟรชข้อมูลล่าสุด</button><button type="button" class="ghost-btn danger" data-clear-month-positions>ล้างข้อมูลเดือนนี้</button></div>${schemaNotice}<div class="v273-pool"><b>เจ้าหน้าที่</b>${positionStaff().map(person => { const color=staffColorSafe(person); return `<span class="v273-drag-chip" draggable="true" data-v273-drag-staff="${esc(person.id)}" style="--chip-bg:${esc(color)};--chip-fg:${esc(textColorSafe(color))}">${esc(staffName(person))}</span>`; }).join('')}</div><div class="v273-pool v273-trainee-pool"><b>น้องใหม่ / Intern</b>${trainees.length?trainees.map(item => `<span class="v273-drag-chip trainee" draggable="true" data-v273-drag-trainee="${esc(item.identity)}" data-trainee-type="${esc(item.type)}">${esc(item.label)} · ${esc(item.type==='intern'?'Intern':'น้องใหม่')}</span>`).join(''):'<span class="muted">เพิ่มรายชื่อที่เมนู “จัดการน้องใหม่ / Intern”</span>'}</div></div><div class="v273-workspace">${positionSpreadsheetHtml(rows,key,true)}${positionSummaryHtml(rows,key)}</div></div>`;
+    return `<div class="v273-manual-page"><div class="card v273-manual-toolbar"><div class="section-title"><div><h2>จัดตำแหน่งกลางวันแบบ Manual</h2><p>Admin กำหนด Slot เอง แล้วลากหรือพิมพ์ชื่อคนลงตำแหน่ง ระบบไม่ตรวจสิทธิ์รายบุคคล</p></div><span class="badge green">Autosave</span></div><div class="toolbar"><label>เดือน <input type="month" id="positionMonthInput" value="${esc(key)}"></label><button type="button" class="ghost-btn" data-v273-refresh-positions>รีเฟรชข้อมูลล่าสุด</button><button type="button" class="ghost-btn danger" data-clear-month-positions>ล้างการจัดตำแหน่งเดือนนี้ (ลบข้อมูล)</button></div>${schemaNotice}<div class="v273-pool"><b>เจ้าหน้าที่</b>${positionStaff().map(person => { const color=staffColorSafe(person); return `<span class="v273-drag-chip" draggable="true" data-v273-drag-staff="${esc(person.id)}" style="--chip-bg:${esc(color)};--chip-fg:${esc(textColorSafe(color))}">${esc(staffName(person))}</span>`; }).join('')}</div><div class="v273-pool v273-trainee-pool"><b>น้องใหม่ / Intern</b>${trainees.length?trainees.map(item => `<span class="v273-drag-chip trainee" draggable="true" data-v273-drag-trainee="${esc(item.identity)}" data-trainee-type="${esc(item.type)}">${esc(item.label)} · ${esc(item.type==='intern'?'Intern':'น้องใหม่')}</span>`).join(''):'<span class="muted">เพิ่มรายชื่อที่เมนู “จัดการน้องใหม่ / Intern”</span>'}</div></div><div class="v273-workspace">${positionSpreadsheetHtml(rows,key,true)}${positionSummaryHtml(rows,key)}</div></div>`;
   }
   assignGlobal('renderPositionMonthPage',renderPositionMonthPageV273);
 
@@ -1235,7 +1235,7 @@ async function v651PublishCurrentPlan(key){
     const key=S()?.positionMonthKey || S()?.monthKey || new Date().toISOString().slice(0,7);
     schedulePositionLoads(key);
     const rows=positionRows(key);
-    return `<div class="v274-page"><div class="card"><div class="section-title"><div><h2>จัดตารางตำแหน่งกลางวัน รายเดือน</h2><p class="hint">รายชื่ออยู่คอลัมน์แรก เลือกตำแหน่งลงช่องได้เอง และเลือกพี่เลี้ยงของน้องใหม่/Intern ในช่องวันที่โดยตรง</p></div><span class="badge green">Manual</span></div><div class="toolbar"><label>เดือน <input type="month" id="positionMonthInput" value="${esc(key)}"></label><button type="button" class="ghost-btn" data-v274-refresh-position>รีเฟรชข้อมูลล่าสุด</button><button type="button" class="ghost-btn danger" data-clear-month-positions>ล้างข้อมูลเดือนนี้</button></div></div>${positionMatrixHtml(key,rows,true)}${positionStatsHtml(key,rows)}</div>`;
+    return `<div class="v274-page"><div class="card"><div class="section-title"><div><h2>จัดตารางตำแหน่งกลางวัน รายเดือน</h2><p class="hint">รายชื่ออยู่คอลัมน์แรก เลือกตำแหน่งลงช่องได้เอง และเลือกพี่เลี้ยงของน้องใหม่/Intern ในช่องวันที่โดยตรง</p></div><span class="badge green">Manual</span></div><div class="toolbar"><label>เดือน <input type="month" id="positionMonthInput" value="${esc(key)}"></label><button type="button" class="ghost-btn" data-v274-refresh-position>รีเฟรชข้อมูลล่าสุด</button><button type="button" class="ghost-btn danger" data-clear-month-positions>ล้างการจัดตำแหน่งเดือนนี้ (ลบข้อมูล)</button></div></div>${positionMatrixHtml(key,rows,true)}${positionStatsHtml(key,rows)}</div>`;
   }
   function renderPositionMonthViewPageV274(){
     const key=S()?.positionMonthViewKey || S()?.monthKey || new Date().toISOString().slice(0,7);
@@ -1922,7 +1922,7 @@ async function v651PublishCurrentPlan(key){
   function renderAdminPosition(){
     if(!isAdminSafe()){try{return noPermission();}catch(_){return'<div class="card">ไม่มีสิทธิ์</div>';}}
     const key=S()?.positionMonthKey||S()?.monthKey||new Date().toISOString().slice(0,7);schedulePositionLoads(key);const rows=positionRows(key);
-    return `<div class="v275-page"><div class="card"><div class="section-title"><div><h2>จัดตารางตำแหน่งกลางวัน รายเดือน</h2><p class="hint">Admin กำหนดจำนวนคนเองในแถว คน/Slot และเลือกพี่เลี้ยงของน้องใหม่/Intern ในช่องวันที่แทนตำแหน่งงาน</p></div><span class="badge green">Manual</span></div><div class="toolbar"><label>เดือน <input type="month" id="positionMonthInput" value="${esc(key)}"></label><button class="ghost-btn" type="button" data-v275-refresh-position>รีเฟรชข้อมูลล่าสุด</button><button class="ghost-btn danger" type="button" data-clear-month-positions>ล้างข้อมูลเดือนนี้</button></div></div>${positionMatrix(key,rows,true)}${positionStatsForAdmin(key,rows)}</div>`;
+    return `<div class="v275-page"><div class="card"><div class="section-title"><div><h2>จัดตารางตำแหน่งกลางวัน รายเดือน</h2><p class="hint">Admin กำหนดจำนวนคนเองในแถว คน/Slot และเลือกพี่เลี้ยงของน้องใหม่/Intern ในช่องวันที่แทนตำแหน่งงาน</p></div><span class="badge green">Manual</span></div><div class="toolbar"><label>เดือน <input type="month" id="positionMonthInput" value="${esc(key)}"></label><button class="ghost-btn" type="button" data-v275-refresh-position>รีเฟรชข้อมูลล่าสุด</button><button class="ghost-btn danger" type="button" data-clear-month-positions>ล้างการจัดตำแหน่งเดือนนี้ (ลบข้อมูล)</button></div></div>${positionMatrix(key,rows,true)}${positionStatsForAdmin(key,rows)}</div>`;
   }
   function renderStaffPosition(){
     const key=S()?.positionMonthViewKey||S()?.monthKey||new Date().toISOString().slice(0,7);schedulePositionLoads(key);const rows=positionRows(key);
@@ -2967,19 +2967,88 @@ try {
   function positionTableHtml(title,subtitle,data,codes){
     return `<section class="card v278-position-stat-card"><div class="section-title"><div><h3>${esc(title)}</h3><p class="hint">${esc(subtitle)}</p></div></div><div class="v278-stat-scroll"><table class="v278-stat-table v278-position-detail-table"><thead><tr><th>เจ้าหน้าที่</th>${codes.map(code=>`<th title="${esc(code)}">${esc(code)}</th>`).join('')}<th>รวม</th></tr></thead><tbody>${data.map(row=>`<tr><td>${staffPillHtml(row.person)}</td>${codes.map(code=>`<td>${row.positions[code]||0}</td>`).join('')}<td><b>${row.total}</b></td></tr>`).join('')}</tbody></table></div></section>`;
   }
+  // V670: Statistics reset is a baseline date, NEVER a deletion of daily_positions.
+  function v670ResetMonth(person){
+    return String(person?.position_stats_reset_at||'').slice(0,7);
+  }
+  function v670LifetimeRowsForSelectedMonth(rows,people,key){
+    const staffById=new Map(people.map(p=>[normId(p.id),p]));
+    return rows.filter(row=>{
+      const workMonth=normDate(row.work_date).slice(0,7);
+      if(!workMonth || workMonth>key) return false; // as-of selected month, no future records
+      const person=staffById.get(normId(row.staff_id));
+      if(!person)return false;
+      const cutoff=v670ResetMonth(person);
+      return !cutoff || key<cutoff || workMonth>=cutoff;
+    });
+  }
+  function v670ResetPanel(key,people){
+    const status=people.filter(p=>v670ResetMonth(p) && v670ResetMonth(p)<=key);
+    const personOpts=people.map(p=>`<option value="${esc(p.id)}">${esc(staffName(p))} ${v670ResetMonth(p)?`(เริ่ม ${esc(v670ResetMonth(p))})`:''}</option>`).join('');
+    return `<details class="v670-position-reset card" data-v670-reset-panel>
+      <summary>เริ่มนับสถิติตำแหน่งใหม่ (ไม่ลบตารางย้อนหลัง)</summary>
+      <div class="v670-reset-body">
+        <p class="hint">ตั้งจุดเริ่มนับใหม่ตั้งแต่ <b>${esc(key)}</b> เหมือนรีเซ็ตยอดสะสมเวร: ตารางที่ 1–2 ของเดือนนี้คงเดิม ส่วนตารางที่ 3–4 จะนับจากเดือนที่เริ่มใหม่เป็นต้นไป ไม่ลบประวัติที่จัดตำแหน่งไว้ และไม่กระทบ OT หรือเวร</p>
+        <p class="hint">ขณะนี้มี ${status.length} คนที่ตั้งเริ่มนับใหม่แล้วภายในเดือนที่เลือก • ก่อนใช้งานต้องติดตั้ง SQL v670 ใน Supabase</p>
+        <div class="v670-reset-form">
+          <label>เลือกเจ้าหน้าที่ <select data-v670-reset-staff><option value="all">ทุกคนที่ใช้งานอยู่ (${people.length} คน)</option>${personOpts}</select></label>
+          <label>เหตุผลในการรีเซ็ต <input data-v670-reset-reason maxlength="240" placeholder="เช่น เริ่มรอบจัดตำแหน่งใหม่ประจำปี" autocomplete="off"></label>
+          <label>พิมพ์เพื่อยืนยัน <input data-v670-reset-confirm placeholder="RESET ${esc(key)} หรือ UNDO ${esc(key)}" autocomplete="off"></label>
+        </div>
+        <div class="v670-reset-buttons"><button type="button" class="ghost-btn warning" data-v670-position-stats-action="reset" data-v670-month="${esc(key)}">เริ่มนับสถิติใหม่ตั้งแต่เดือนนี้</button><button type="button" class="ghost-btn" data-v670-position-stats-action="undo" data-v670-month="${esc(key)}">ยกเลิกการรีเซ็ตเดือนนี้</button></div>
+        <small class="hint">กดแล้วจะมีข้อความยืนยันอีกครั้ง ระบบบันทึกผู้ดำเนินการ เหตุผล และค่าเดิมลง Audit ทุกครั้ง</small>
+      </div>
+    </details>`;
+  }
   function fourPositionStatsHtml(key){
-    const people=positionStaff(),monthRows=currentPositionRows(key),lifeRows=lifetimePositionCache.rows||[],codes=allPositionCodes(monthRows,lifeRows);
-    const monthData=aggregatePositions(monthRows,people),lifeData=aggregatePositions(lifeRows,people);
+    const people=positionStaff(),monthRows=currentPositionRows(key),allRows=lifetimePositionCache.rows||[];
+    const lifeRows=v670LifetimeRowsForSelectedMonth(allRows,people,key);
+    const codes=allPositionCodes(monthRows,allRows),monthData=aggregatePositions(monthRows,people),lifeData=aggregatePositions(lifeRows,people);
     const loading=!lifetimePositionCache.rows && !lifetimePositionCache.error;
     return `<div class="v278-admin-position-stats">
-      <div class="section-title v278-stats-heading"><div><h2>สถิติตำแหน่งสำหรับ Admin</h2><p class="hint">เดือน ${esc(key)} และยอดสะสมทั้งหมดที่มีในฐานข้อมูล</p></div>${loading?'<span class="badge blue">กำลังโหลดข้อมูลสะสม…</span>':lifetimePositionCache.error?`<span class="badge orange">โหลดสะสมไม่สำเร็จ</span>`:`<span class="badge green">ข้อมูลสะสม ${lifeRows.length} รายการ</span>`}</div>
+      <div class="section-title v278-stats-heading"><div><h2>สถิติตำแหน่งสำหรับ Admin</h2><p class="hint">เดือน ${esc(key)} • สถิติสะสมจนถึงเดือนที่เลือก (นับจากเดือนรีเซ็ตของแต่ละคน)</p></div>${loading?'<span class="badge blue">กำลังโหลดข้อมูลสะสม…</span>':lifetimePositionCache.error?`<span class="badge orange">โหลดสะสมไม่สำเร็จ</span>`:`<span class="badge green">ข้อมูลสะสมตามรอบ ${lifeRows.length} รายการ</span>`}</div>
+      ${v670ResetPanel(key,people)}
       <div class="v278-stat-grid">
         ${zoneTableHtml('ตารางที่ 1 — ห้องประจำเดือนนี้','แยก BB · Donor · ออกหน่วย',monthData)}
         ${positionTableHtml('ตารางที่ 2 — ตำแหน่งประจำเดือนนี้','แยกทุกตำแหน่งที่ใช้งาน',monthData,codes)}
-        ${zoneTableHtml('ตารางที่ 3 — ห้องสะสมทั้งหมด','แยก BB · Donor · ออกหน่วย ตั้งแต่มีข้อมูลในระบบ',lifeData)}
-        ${positionTableHtml('ตารางที่ 4 — ตำแหน่งสะสมทั้งหมด','แยกทุกตำแหน่ง ตั้งแต่มีข้อมูลในระบบ',lifeData,codes)}
+        ${zoneTableHtml('ตารางที่ 3 — ห้องสะสมถึงเดือนนี้','แยก BB · Donor · ออกหน่วย ตั้งแต่รอบรีเซ็ตล่าสุด',lifeData)}
+        ${positionTableHtml('ตารางที่ 4 — ตำแหน่งสะสมถึงเดือนนี้','แยกตำแหน่งสะสมตั้งแต่เริ่มนับใหม่',lifeData,codes)}
       </div>
     </div>`;
+  }
+  async function v670SavePositionReset(button){
+    if(!isAdminSafe()||S()?.page!=='positionMonth')return;
+    const panel=button.closest('[data-v670-reset-panel]');
+    if(!panel)return;
+    const month=button.dataset.v670Month;
+    const reset=button.dataset.v670PositionStatsAction==='reset';
+    const staff=panel.querySelector('[data-v670-reset-staff]')?.value||'all';
+    const reason=panel.querySelector('[data-v670-reset-reason]')?.value.trim()||'';
+    const confirmation=panel.querySelector('[data-v670-reset-confirm]')?.value.trim()||'';
+    const wanted=`${reset?'RESET':'UNDO'} ${month}`;
+    if(!/^20\d\d-(0[1-9]|1[0-2])$/.test(month))return toast('รูปแบบเดือนไม่ถูกต้อง','error');
+    if(reason.length<12)return toast('กรุณาใส่เหตุผลอย่างน้อย 12 ตัวอักษร','error');
+    if(confirmation!==wanted)return toast(`พิมพ์คำยืนยัน ${wanted} ให้ตรงก่อนดำเนินการ`,'error');
+    if(!DB())return toast('ยังไม่เชื่อมต่อฐานข้อมูล','error');
+    const people=positionStaff();
+    const selected=staff==='all'?`เจ้าหน้าที่ที่แสดงในตาราง ${people.length} คน`:(S()?.staff||[]).find(p=>normId(p.id)===staff)?.nickname||staff;
+    const staffIds=staff==='all'?people.map(p=>p.id):[staff];
+    if(!(await confirmDialog(`${reset?'เริ่มนับสถิติตำแหน่งใหม่':'ยกเลิกจุดเริ่มนับสถิติ'} สำหรับ ${selected} ตั้งแต่ ${month} ใช่หรือไม่?\nประวัติตารางตำแหน่งจะไม่ถูกลบ\nเวร, OT และการตั้งค่า Slot ไม่เปลี่ยน`, 'ยืนยันรีเซ็ตสถิติตำแหน่ง')))return;
+    button.disabled=true;
+    try{
+      const result=await DB().rpc('admin_set_position_stats_reset_v670',{
+        p_month_key:month,p_staff_ids:staffIds,p_reset:reset,p_reason:reason,p_confirmation:wanted
+      });
+      if(result.error)throw result.error;
+      const updated=result.data?.staff_ids||[];
+      const targetSet=new Set(updated.map(normId));
+      (S()?.staff||[]).forEach(person=>{
+        if(targetSet.has(normId(person.id)))person.position_stats_reset_at=reset?`${month}-01`:null;
+      });
+      toast(`บันทึกจุดเริ่มนับสถิติสำเร็จ ${updated.length} คน`);
+      refreshAdminPositionStats();
+    }catch(error){toast(`รีเซ็ตไม่สำเร็จ: ${friendly(error)} — ตรวจว่าได้ติดตั้ง SQL v670 แล้ว`,'error');}
+    finally{button.disabled=false;}
   }
   function replaceAdminPositionStats(){
     if(S()?.page!=='positionMonth' || !isAdminSafe()) return;
@@ -3168,6 +3237,12 @@ try {
     event.preventDefault();event.stopImmediatePropagation();
     setHolidayReset(btn.dataset.v278HolidayReset,btn.dataset.v278Month,btn.dataset.v278Action);
   },true);
+  document.addEventListener('click',event=>{
+    const button=event.target?.closest?.('[data-v670-position-stats-action]');
+    if(!button)return;
+    event.preventDefault();event.stopImmediatePropagation();
+    v670SavePositionReset(button);
+  },true);
   document.addEventListener('input',event=>{
     if(event.target?.matches?.('[data-v275-slot]')) setTimeout(applyTemplateDropdowns,450);
   },true);
@@ -3178,6 +3253,14 @@ try {
   const style=document.createElement('style');
   style.id='v278-slot-stats-holiday-style';
   style.textContent=`
+    .v670-position-reset{margin:0!important;border:1px solid #bfdbfe!important;background:#f8fbff!important;padding:12px 15px!important}
+    .v670-position-reset summary{cursor:pointer;font-weight:750;color:#075985}
+    .v670-reset-body{display:grid;gap:12px;margin-top:10px}
+    .v670-reset-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+    .v670-reset-form label{font-weight:650;font-size:12px;display:grid;gap:5px}
+    .v670-reset-form select,.v670-reset-form input{width:100%;min-width:0;padding:9px;border:1px solid #cbd5e1;border-radius:8px;background:#fff}
+    .v670-reset-buttons{display:flex;flex-wrap:wrap;gap:8px}
+    .v670-reset-buttons button{white-space:normal}
     .v278-admin-position-stats{display:grid;gap:12px;min-width:0}
     .v278-stats-heading{padding:4px 2px}
     .v278-stat-grid{display:grid;grid-template-columns:1fr;gap:12px;min-width:0}

@@ -2122,8 +2122,8 @@ try {
   function updateCardCopy(card,isLifetime){
     const title=card?.querySelector('.section-title h3');
     const hint=card?.querySelector('.section-title .hint');
-    if(title) title.textContent=isLifetime?'ตารางที่ 4 — ตำแหน่งสะสมทั้งหมด':'ตารางที่ 2 — ตำแหน่งประจำเดือนนี้';
-    if(hint) hint.textContent=isLifetime?'เฉพาะตำแหน่งปัจจุบัน · เรียงตามห้อง · ตำแหน่งเก่าที่เลิกใช้ยังเก็บประวัติไว้แต่ไม่แสดง':'เฉพาะตำแหน่งปัจจุบัน · เรียงตามห้อง';
+    if(title) title.textContent=isLifetime?'ตารางที่ 4 — ตำแหน่งสะสมถึงเดือนนี้':'ตารางที่ 2 — ตำแหน่งประจำเดือนนี้';
+    if(hint) hint.textContent=isLifetime?'เฉพาะตำแหน่งปัจจุบัน · นับตั้งแต่เดือนที่เริ่มรอบใหม่ (ข้อมูลย้อนหลังยังเก็บไว้)' :'เฉพาะตำแหน่งปัจจุบัน · เรียงตามห้อง';
   }
 
   function rebuildDetailTable(table,codes,isLifetime){
