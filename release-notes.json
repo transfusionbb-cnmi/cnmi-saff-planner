@@ -1,15 +1,13 @@
 {
-  "version": "668",
-  "base_version": "667",
-  "title": "OT Staff/Admin review clarity, locked snapshot fallback, preserve staff detail tables",
+  "version": "669",
+  "base_version": "668",
+  "title": "Login selector for Mahidol local-part and Username without changing authentication",
   "changes": [
-    "Recover original HR export amount from get_my_ot_export_snapshot_v533 only if the PDF-review source lacks Snapshot.",
-    "Label locked system Snapshot versus Admin manual proposed amount; show per-staff difference in Admin review.",
-    "Repair route-only visibility to prevent Staff summary and other OT pages overlapping, without hiding Staff detail records.",
-    "Keep daily OT details, real/HR hours, carry-in and confirmation/dispute actions unchanged.",
-    "Reduce transient discrepancy-warning flicker without intervals or observers."
+    "Show Mahidol email and Username choice on the existing login form.",
+    "Mahidol mode accepts only the local part, visually appends @mahidol.ac.th, and accepts pasted full Mahidol emails.",
+    "Username mode preserves existing username lookup; existing password handling and Supabase Auth remain unchanged.",
+    "Do not change Staff/Admin roles, OT, HR, schedules, or database state."
   ],
   "requires_new_sql": false,
-  "notes": "When marking a staff member as departed, set employment_end_date and Active=false (and roster disabled if appropriate), then Save. App update filters new input forms even if Active accidentally stays true.",
-  "summary": "OT Staff/Admin review clarity and locked export snapshot fallback; preserve detailed Staff daily OT and verification controls"
+  "notes": "Update files to the repository root. Only this login UI and input normalization changed."
 }
