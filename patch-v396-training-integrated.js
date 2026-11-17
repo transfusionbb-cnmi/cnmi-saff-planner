@@ -172,9 +172,19 @@
   window.renderActivitiesPage=renderActivitiesV396; try{(0,eval)('renderActivitiesPage=window.renderActivitiesPage');}catch(_){ }
 
   async function saveActivityV396(form) {
-    const fd=new FormData(form), participants=[...form.querySelectorAll('[name="participant_ids"]:checked')].map(x=>x.value);
+    const fd=new FormData(form);
+    // V675: serialize rounds at the actual DB-save boundary. Do not rely on
+    // the window submit-capture listener (other patches can intercept events).
+    const sessionApi=window.cnmiActivitySessionsV654;
+    const sessionDraft=typeof sessionApi?.prepare==='function'
+      ?sessionApi.prepare(form, fd.get('note')):null;
+    if(sessionDraft?.error)return showToast(sessionDraft.error);
+    const participants=Array.isArray(sessionDraft?.participants)
+      ?sessionDraft.participants
+      :[...form.querySelectorAll('[name="participant_ids"]:checked')].map(x=>x.value);
     const include=form.querySelector('[name="include_fm_cnhr_002"]')?.checked===true;
-    const organizer=String(fd.get('organizer')||'').trim(),trainingBatch=String(fd.get('training_batch')||'').trim(),cleanNote=cleanActivityNote(fd.get('note'));
+    const organizer=String(fd.get('organizer')||'').trim(),trainingBatch=String(fd.get('training_batch')||'').trim();
+    const cleanNote=cleanActivityNote(sessionDraft?sessionDraft.note:fd.get('note'));
     const storedNote=include?noteWithTrainingMeta(cleanNote,'',trainingBatch):cleanNote;
     const row={title:String(fd.get('title')||'').trim(),event_type:fd.get('event_type'),start_date:fd.get('start_date'),end_date:fd.get('end_date'),start_time:fd.get('start_time')||null,end_time:fd.get('end_time')||null,location:String(fd.get('location')||'').trim(),organizer:include?organizer:null,note:storedNote,owner_id:fd.get('owner_id')||actor(),participant_ids:participants,include_fm_cnhr_002:include,training_form_existing:include,updated_by:actor()};
     const required=[['title','รายละเอียดกิจกรรม'],['event_type','ประเภท'],['location','สถานที่'],['start_date','วันที่เริ่ม'],['end_date','วันที่สิ้นสุด'],['start_time','เวลาเริ่ม'],['end_time','เวลาสิ้นสุด'],['owner_id','ผู้รับผิดชอบ']].filter(([k])=>!row[k]).map(([,v])=>v);
@@ -207,6 +217,12 @@
         res=await persist(compatibleRow);
       }
       if(res.error)throw res.error;
+      // If a database rule or incompatible client discards round metadata,
+      // never announce a successful round save or generate wrong FM records.
+      if(Array.isArray(sessionDraft?.participants) &&
+         !/\[\[CNMI-ACTIVITY-ROUNDS-V654:/i.test(String(res.data?.note||''))){
+        throw new Error('บันทึกรายละเอียดแบ่งรอบไม่สำเร็จ กรุณาตรวจสอบข้อมูลกิจกรรมก่อนบันทึกอีกครั้ง');
+      }
       if (removedFiles.length) {
         const paths=removedFiles.map(x=>String(x.path||'').replace(/^staff-files\//,'').replace(/^\/+/, '')).filter(Boolean);
         if (paths.length) DB().storage.from('staff-files').remove(paths).catch(()=>{});
@@ -323,7 +339,35 @@
   }
 
   function dayDiff(start,end){const a=new Date(`${dateKey(start)}T00:00:00`),b=new Date(`${dateKey(end||start)}T00:00:00`);return Number.isFinite(a.getTime())&&Number.isFinite(b.getTime())?Math.max(1,Math.round((b-a)/86400000)+1):1;}
-  function durationLabel(a){const start=dateKey(a?.start_date),end=dateKey(a?.end_date)||start;if(start===end){const sh=String(a?.start_time||''),eh=String(a?.end_time||'');if(/^\d{2}:\d{2}/.test(sh)&&/^\d{2}:\d{2}/.test(eh)){const [h1,m1]=sh.split(':').map(Number),[h2,m2]=eh.split(':').map(Number),mins=(h2*60+m2)-(h1*60+m1);if(mins>0)return mins<=300?'0.5 วัน':'1 วัน';}if(a?.duration_label)return String(a.duration_label);return '1 วัน';}return `${dayDiff(start,end)} วัน`;}
+  function durationLabel(a,staffId){
+    // V675: FM-CNHR-002 is per employee, not based on the broad activity
+    // window. Two alternating 2-hour rounds => 0.5 day for each participant.
+    // If a person attends twice on the SAME date, combine minutes before
+    // assigning the daily 0.5/1-day unit (never double-count a single day).
+    const sessions=window.cnmiActivitySessionsV654?.parse?.(a);
+    if(Array.isArray(sessions) && staffId!=null){
+      const byDate=new Map();
+      for(const r of sessions){
+        if(!(r.staff_ids||[]).some(id=>idEq(id,staffId)))continue;
+        const toMinutes=value=>{const m=String(value||'').match(/^(\d{2}):(\d{2})/);return m?Number(m[1])*60+Number(m[2]):NaN;};
+        const minutes=toMinutes(r.end)-toMinutes(r.start);
+        if(Number.isFinite(minutes)&&minutes>0)byDate.set(r.date,(byDate.get(r.date)||0)+minutes);
+      }
+      const days=[...byDate.values()].reduce((sum,minutes)=>sum+(minutes<=300?0.5:1),0);
+      return days?`${Number(days.toFixed(1))} วัน`:'-';
+    }
+    const start=dateKey(a?.start_date),end=dateKey(a?.end_date)||start;
+    if(start===end){
+      const sh=String(a?.start_time||''),eh=String(a?.end_time||'');
+      if(/^\d{2}:\d{2}/.test(sh)&&/^\d{2}:\d{2}/.test(eh)){
+        const [h1,m1]=sh.split(':').map(Number),[h2,m2]=eh.split(':').map(Number),mins=(h2*60+m2)-(h1*60+m1);
+        if(mins>0)return mins<=300?'0.5 วัน':'1 วัน';
+      }
+      if(a?.duration_label)return String(a.duration_label);
+      return '1 วัน';
+    }
+    return `${dayDiff(start,end)} วัน`;
+  }
   function thaiYear(date){const d=new Date(`${dateKey(date)}T00:00:00`);return Number.isFinite(d.getTime())?d.getFullYear()+543:'';}
   function thaiDateLong(date){
     const key=dateKey(date);if(!key)return '-';
@@ -360,7 +404,7 @@
     const logoUrl=new URL('fm-cnhr-002-logo.png',window.location.href).href,pages=chunkRows(items||[],20),title=annualFormTitle(year);
     const sections=pages.map((page,pageIndex)=>{
       const offset=pageIndex*20,blank=Math.max(0,20-page.length);
-      const rows=page.map((x,i)=>`<tr><td class="center">${offset+i+1}</td><td>${esc(x.activity.title||'-')}</td><td class="center">${esc(activityBatchValue(x.activity)||'-')}</td><td>${esc(organizerText(x.activity))}</td><td class="center">${esc(dateLabel(x.activity.start_date))}</td><td class="center">${esc(dateLabel(x.activity.end_date||x.activity.start_date))}</td><td class="center">${esc(durationLabel(x.activity))}</td></tr>`).join('')+Array.from({length:blank},()=>'<tr class="blank"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+      const rows=page.map((x,i)=>`<tr><td class="center">${offset+i+1}</td><td>${esc(x.activity.title||'-')}</td><td class="center">${esc(activityBatchValue(x.activity)||'-')}</td><td>${esc(organizerText(x.activity))}</td><td class="center">${esc(dateLabel(x.activity.start_date))}</td><td class="center">${esc(dateLabel(x.activity.end_date||x.activity.start_date))}</td><td class="center">${esc(durationLabel(x.activity,x.record.staff_id))}</td></tr>`).join('')+Array.from({length:blank},()=>'<tr class="blank"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
       const supervisorLine=supervisorName?`(${esc(supervisorName)})`:'(<span class="signature-name-dots"></span>)';
       const signatureHtml=physicianProfile
         ? `<div class="signatures single-signature"><div class="signature-box">ลงชื่อ <span class="signature-dots"></span><br><span class="signature-name">(${esc(personName)})</span><br>บุคลากรผู้รับการฝึกอบรม</div></div>`
