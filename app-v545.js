@@ -1341,7 +1341,9 @@ async function loadAllData() {
     sb.from('ot_requests').select('*').gte('work_date', yearStart).lte('work_date', end).order('work_date', { ascending: false }),
     sb.from('roster_trade_requests').select('*').gte('created_at', `${start}T00:00:00`).order('created_at', { ascending: false }),
     isAdmin() ? sb.from('hr_checks').select('*').order('updated_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
-    sb.from('audit_logs').select('*').order('created_at', { ascending:false }).limit(250),
+    // v674: query only public Staff audit rows while viewing as Staff.
+    (isAdmin() ? sb.from('audit_logs').select('*') : sb.from('audit_logs').select('*').eq('cnmi_visibility_v673', 'public'))
+      .order('created_at', { ascending:false }).limit(250),
     sb.from('public_holidays').select('*').gte('holiday_date', start).lte('holiday_date', end).order('holiday_date'),
     sb.from('monthly_incharges').select('*').gte('month_key', start.slice(0,7)).lte('month_key', end.slice(0,7)).order('month_key', { ascending:false }),
     sb.from('daily_position_eligibility').select('*'),
@@ -7782,6 +7784,18 @@ function bindGlobalEvents() {
       if (next === 'admin' && prev !== 'admin') {
         await loadAllData();
         if (typeof loadProfileChangeRequests === 'function') await loadProfileChangeRequests();
+      }
+      if (next === 'staff' && prev !== 'staff') {
+        // Never retain Admin-mode rows in the Staff-view audit cache.
+        // Refresh just the public audit rows, rather than reloading all app data.
+        state.auditLogs = (state.auditLogs || []).filter(a =>
+          a?.cnmi_visibility_v673 === 'public' && a?.cnmi_actor_mode_v673 === 'staff');
+        const staffAudit = await sb.from('audit_logs').select('*')
+          .eq('cnmi_visibility_v673', 'public')
+          .eq('cnmi_actor_mode_v673', 'staff')
+          .order('created_at', { ascending:false }).limit(250);
+        if (staffAudit.error) throw staffAudit.error;
+        state.auditLogs = staffAudit.data || [];
       }
       renderPage();
       showToast(next === 'admin' ? 'เปิดโหมดผู้ดูแลระบบแล้ว' : 'เปิดโหมดผู้ใช้งานทั่วไปแล้ว');
