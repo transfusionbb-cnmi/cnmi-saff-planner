@@ -99,7 +99,23 @@ const previous=window.renderPage||(typeof renderPage==='function'?renderPage:nul
 document.addEventListener('click',async e=>{removeTodayCard();if(S().page!==PAGE)return;const nav=e.target.closest?.('[data-v627-nav]');if(nav){e.preventDefault();view=nav.dataset.v627Nav;chosen='';focusDuty='';swapFirst=null;setHashMonth();render();return;}const tab=e.target.closest?.('[data-v625-view]');if(tab){view=tab.dataset.v625View;chosen='';focusDuty='';swapFirst=null;setHashMonth();render();return;}const sh=e.target.closest?.('[data-v625-shift]');if(sh){const [y,m]=month.split('-').map(Number),d=new Date(y,m-1+Number(sh.dataset.v625Shift),1,12);month=`${d.getFullYear()}-${pad(d.getMonth()+1)}`;swapFirst=null;chosen='';setHashMonth();render();return;}if(e.target.closest?.('[data-v625-advanced]')){advanced=!advanced;render();return;}if(e.target.closest?.('[data-v625-swap]')){swapMode=!swapMode;swapFirst=null;chosen='';render();return;}const cell=e.target.closest?.('[data-v625-cell]');if(cell){const item={date:cell.dataset.v625Date,duty:cell.dataset.v625Duty};if(swapMode){if(!swapFirst){const m=api().baseForDate(item.date),id=effective(m,item.duty);if(!id){toastSafe('ช่องนี้ยังไม่ได้กำหนดแพทย์ จึงใช้เป็นต้นทางสลับเวรไม่ได้');return;}swapFirst=item;render();}else if(swapFirst.duty!==item.duty){toastSafe('เลือกอีกวันที่ในหน้าที่เดียวกัน เช่น Donor กับ Donor');}else if(swapFirst.date===item.date){swapFirst=null;render();}else await doSwap(item);return;}chosen=item.date;focusDuty=item.duty;render();return;}const day=e.target.closest?.('[data-v625-date]');if(day){chosen=day.dataset.v625Date;focusDuty='';render();return;}if(e.target.closest?.('[data-v625-close]')||e.target?.hasAttribute?.('data-v625-dismiss')){chosen='';focusDuty='';render();return;}},true);
 document.addEventListener('change',e=>{if(S().page===PAGE&&e.target?.id==='v625-month'&&/^\d{4}-\d{2}$/.test(e.target.value)){month=e.target.value;swapFirst=null;chosen='';setHashMonth();render();}},true);
 // Guarantee that the old redundant "เวรแพทย์วันนี้" card never returns on the read-only physician roster page.
-const observer=new MutationObserver(()=>{removeTodayCard();hideLegacyPhysicianForms();});observer.observe(document.documentElement,{subtree:true,childList:true});removeTodayCard();hideLegacyPhysicianForms();
+// V678: the old document-wide subtree observer ran on EVERY page mutation,
+// including large dashboard renders. Observe page swaps and sidebar changes only.
+let legacyQueued=false;
+function scheduleLegacyCleanup(){
+ if(legacyQueued)return;
+ legacyQueued=true;
+ requestAnimationFrame(()=>{legacyQueued=false;removeTodayCard();hideLegacyPhysicianForms();});
+}
+const legacyContent=document.getElementById('pageContent');
+if(legacyContent)new MutationObserver(muts=>{
+ if(muts.some(m=>m.addedNodes.length||m.removedNodes.length))scheduleLegacyCleanup();
+}).observe(legacyContent,{childList:true,subtree:false});
+const legacyNav=document.getElementById('mainNav');
+if(legacyNav)new MutationObserver(muts=>{
+ if(muts.some(m=>m.addedNodes.length||m.removedNodes.length))scheduleLegacyCleanup();
+}).observe(legacyNav,{childList:true,subtree:true});
+removeTodayCard();hideLegacyPhysicianForms();
 window.addEventListener('hashchange',()=>{if(S().page!==PAGE)return;const next=q().get('view');view=['month','calendar','doctor'].includes(next)?next:'calendar';const mo=q().get('month');if(/^\d{4}-\d{2}$/.test(mo||''))month=mo;chosen='';swapFirst=null;render();});
 window.cnmiPhysicianRosterV625={render};
 })();
