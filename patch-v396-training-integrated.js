@@ -173,9 +173,12 @@
 
   async function saveActivityV396(form) {
     const fd=new FormData(form);
-    // V675: serialize rounds at the actual DB-save boundary. Do not rely on
+    // V677: serialize rounds at the actual DB-save boundary. Do not rely on
     // the window submit-capture listener (other patches can intercept events).
     const sessionApi=window.cnmiActivitySessionsV654;
+    const isRoundTraining=form.querySelector('[data-v654-enabled]')?.checked===true;
+    if(isRoundTraining && typeof sessionApi?.prepare!=='function')
+      return showToast('ระบบบันทึกกิจกรรมแบ่งรอบยังไม่พร้อม กรุณารีเฟรชหน้าเว็บแล้วลองใหม่');
     const sessionDraft=typeof sessionApi?.prepare==='function'
       ?sessionApi.prepare(form, fd.get('note')):null;
     if(sessionDraft?.error)return showToast(sessionDraft.error);
@@ -217,17 +220,28 @@
         res=await persist(compatibleRow);
       }
       if(res.error)throw res.error;
-      // If a database rule or incompatible client discards round metadata,
-      // never announce a successful round save or generate wrong FM records.
-      if(Array.isArray(sessionDraft?.participants) &&
-         !/\[\[CNMI-ACTIVITY-ROUNDS-V654:/i.test(String(res.data?.note||''))){
-        throw new Error('บันทึกรายละเอียดแบ่งรอบไม่สำเร็จ กรุณาตรวจสอบข้อมูลกิจกรรมก่อนบันทึกอีกครั้ง');
+      // V677: check actual persisted database row before generating FM records.
+      // A successful update response alone is not proof that the sessions survived.
+      const activityId=res.data?.id||id;
+      let verifiedActivity=res.data;
+      if(isRoundTraining){
+        const readback=await DB().from('activity_events').select('*').eq('id',activityId).single();
+        if(readback.error || !readback.data)
+          throw new Error('บันทึกแล้วแต่ยังตรวจสอบข้อมูลแบ่งรอบจากฐานข้อมูลไม่ได้ กรุณาตรวจสอบสิทธิ์อ่านกิจกรรม: '+String(readback.error?.message||''));
+        verifiedActivity=readback.data;
+        const savedRounds=sessionApi?.parse?.(verifiedActivity);
+        const wantedRounds=sessionApi?.readRows?.(form);
+        const canonical=rounds=>JSON.stringify((rounds||[]).map(r=>({
+          date:String(r.date||''),start:String(r.start||'').slice(0,5),end:String(r.end||'').slice(0,5),
+          staff_ids:[...(r.staff_ids||[])].map(String).sort()
+        })));
+        if(!Array.isArray(savedRounds) || !Array.isArray(wantedRounds) || canonical(savedRounds)!==canonical(wantedRounds))
+          throw new Error('ข้อมูลแบ่งรอบที่อ่านกลับจากฐานข้อมูลไม่ตรงกับที่เลือก ระบบยังไม่บันทึกประวัติ FM กรุณาตรวจสอบข้อมูลกิจกรรม');
       }
       if (removedFiles.length) {
         const paths=removedFiles.map(x=>String(x.path||'').replace(/^staff-files\//,'').replace(/^\/+/, '')).filter(Boolean);
         if (paths.length) DB().storage.from('staff-files').remove(paths).catch(()=>{});
       }
-      const activityId=res.data?.id||id;
       const old=await DB().from(TABLE).select('*').eq('activity_id',activityId);
       if(old.error&&!/does not exist|relation/i.test(old.error.message||''))throw old.error;
       const oldRows=old.data||[];
@@ -236,7 +250,22 @@
         if(desired.length){const up=await DB().from(TABLE).upsert(desired,{onConflict:'activity_id,staff_id,form_type'});if(up.error)throw up.error;}
         for(const oldRow of oldRows.filter(x=>x.form_type==='existing'&&!participants.map(String).includes(String(x.staff_id)))) await DB().from(TABLE).update({is_included:false,updated_by:actor()}).eq('id',oldRow.id);
       }else for(const oldRow of oldRows.filter(x=>x.form_type==='existing')) await DB().from(TABLE).update({is_included:false,updated_by:actor()}).eq('id',oldRow.id);
-      S().editingActivityId=null; await loadAllData(); renderPage(); showToast(include?'บันทึกกิจกรรมและนำเข้า FM-CNHR-002 แล้ว':'บันทึกกิจกรรมแล้ว');
+      // V677: bypass the route loader's 25-second cached activity list after save.
+      S().editingActivityId=null;
+      await loadAllData({force:true});
+      if(verifiedActivity?.id){
+        const rows=Array.isArray(S().activities)?S().activities:[];
+        const index=rows.findIndex(x=>idEq(x.id,verifiedActivity.id));
+        if(index>=0)rows[index]=verifiedActivity;
+        else S().activities=[...rows,verifiedActivity];
+        const listRows=S().activityListRowsV398;
+        if(Array.isArray(listRows)){
+          const listIndex=listRows.findIndex(x=>idEq(x.id,verifiedActivity.id));
+          if(listIndex>=0)listRows[listIndex]=verifiedActivity;
+        }
+      }
+      renderPage();
+      showToast(isRoundTraining?`บันทึกกิจกรรมแบ่งรอบสำเร็จ ${sessionApi.readRows(form).length} รอบ (ตรวจสอบข้อมูลในฐานข้อมูลแล้ว)`:(include?'บันทึกกิจกรรมและนำเข้า FM-CNHR-002 แล้ว':'บันทึกกิจกรรมแล้ว'));
     }catch(e){showToast(e?.message||String(e));}
   }
 
