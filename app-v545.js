@@ -984,7 +984,23 @@ async function init() {
       flowType: 'implicit'
     },
     global: {
-      fetch: window.CNMI_NO_CACHE_FETCH_V199 || window.fetch,
+      // v673: stamp the real current Staff/Admin UI mode on each PostgREST write.
+      // The database audit trigger checks this request header; RLS protects reading.
+      fetch: (input, init) => {
+        const originalFetch = window.CNMI_NO_CACHE_FETCH_V199 || window.fetch;
+        const url = String(typeof input === 'string' ? input : (input?.url || ''));
+        const method = String(init?.method || input?.method || 'GET').toUpperCase();
+        if (!url.startsWith(CFG.SUPABASE_URL + '/rest/v1/') || !['POST','PATCH','PUT','DELETE'].includes(method)) {
+          return originalFetch(input, init);
+        }
+        const role = String(state?.profile?.role || '').toLowerCase();
+        const mode = role === 'admin'
+          ? ((typeof window.getViewAsMode === 'function' && window.getViewAsMode() === 'staff') ? 'staff' : 'admin')
+          : 'staff';
+        const headers = new Headers(init?.headers || input?.headers || {});
+        headers.set('x-cnmi-audit-mode', mode);
+        return originalFetch(input, { ...(init || {}), headers });
+      },
       headers: CNMI_NO_CACHE_HEADERS_V199
     }
   });
