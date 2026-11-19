@@ -42,7 +42,15 @@ try {
   function outingIds(date){ try { return new Set((outingParticipants(norm(date)) || []).map(String)); } catch (_) { return new Set(); } }
   function compareStaffSafe(a,b){ try { return compareStaffOrder(a,b); } catch (_) { return String(staffName(a)).localeCompare(String(staffName(b)), 'th'); } }
   function orderStaff(rows){ try { return orderedStaff(rows || []); } catch (_) { return (rows || []).slice().sort(compareStaffSafe); } }
-  function displayZone(z, code=''){ const raw = String(z || '').trim(); const c = String(code || '').trim(); if (raw === 'ออกหน่วย') return 'ออกหน่วย'; if (raw === 'Manual' || /^BB-Manual/i.test(c) || /manual/i.test(c)) return 'Blood Bank'; if (raw === 'Donor Room' || /^DR-/i.test(c)) return 'Donor Room'; if (raw === 'Blood Bank' || /^BB-/i.test(c)) return 'Blood Bank'; return raw || 'Blood Bank'; }
+  function displayZone(z, code=''){
+    const raw = String(z || '').trim(), c = String(code || '').trim();
+    // Compatibility: the original zone still drives the scheduling pool.
+    if(raw==='ออกหน่วย') return 'ออกหน่วย';
+    // NAT always belongs to Blood Bank, regardless of a legacy imported zone.
+    if(/(?:^|[-_\s])NAT(?:$|[-_\s\d])/i.test(c)) return 'Blood Bank';
+    if(raw==='Donor Room'||/^DR-/i.test(c)) return 'Donor Room';
+    return 'Blood Bank';
+  }
   function monthRange(key){
     try { const r = getMonthRange(key); return { y:r.y, m:r.m, last:r.last || new Date(r.y, r.m, 0).getDate(), start:r.start || `${r.y}-${pad2(r.m)}-01`, end:r.end || `${r.y}-${pad2(r.m)}-${pad2(r.last || new Date(r.y, r.m, 0).getDate())}` }; }
     catch (_) { const [yy,mm] = String(key || today().slice(0,7)).split('-').map(Number); const y = yy || new Date().getFullYear(); const m = mm || new Date().getMonth()+1; const last = new Date(y, m, 0).getDate(); return { y, m, last, start:`${y}-${pad2(m)}-01`, end:`${y}-${pad2(m)}-${pad2(last)}` }; }
@@ -758,7 +766,7 @@ try {
   const CFG_PREFIX = '__CNMI_SLOT_TEMPLATE_V224__';
   const LS_KEY = 'cnmi_slot_template_v224_cache';
   const DAY_SETS = [8,9,10,11,12,13,14];
-  const ZONES = ['Blood Bank','Donor Room','ออกหน่วย'];
+  const ZONES = ['Specimen & Issue','Blood Bank','Component Prep','Donor Room','ออกหน่วย'];
   const ROOM_COLUMNS = ['Blood Bank','Donor Room','ออกหน่วย'];
   const oldV224 = window.cnmiV224 ? { ...window.cnmiV224 } : {};
 
@@ -804,7 +812,15 @@ try {
   function writeLocal(configs){ try { localStorage.setItem(LS_KEY, JSON.stringify(configs || {})); } catch (_) {} }
   function clone(x){ try { return JSON.parse(JSON.stringify(x || null)); } catch (_) { return x; } }
   function stateSlot(){ if (!state.slotTemplateV224) state.slotTemplateV224 = { kind:'day', setNo:14, configs:null, loaded:false, loading:false }; return state.slotTemplateV224; }
-  function displayZone(z, code=''){ const raw = String(z || '').trim(); const c = String(code || '').trim(); if (raw === 'ออกหน่วย') return 'ออกหน่วย'; if (raw === 'Manual' || /^BB-Manual/i.test(c) || /manual/i.test(c)) return 'Blood Bank'; if (raw === 'Donor Room' || /^DR-/i.test(c)) return 'Donor Room'; if (raw === 'Blood Bank' || /^BB-/i.test(c)) return 'Blood Bank'; return raw || 'Blood Bank'; }
+  function displayZone(z, code=''){
+    const raw = String(z || '').trim(), c = String(code || '').trim();
+    // Compatibility: the original zone still drives the scheduling pool.
+    if(raw==='ออกหน่วย') return 'ออกหน่วย';
+    // NAT always belongs to Blood Bank, regardless of a legacy imported zone.
+    if(/(?:^|[-_\s])NAT(?:$|[-_\s\d])/i.test(c)) return 'Blood Bank';
+    if(raw==='Donor Room'||/^DR-/i.test(c)) return 'Donor Room';
+    return 'Blood Bank';
+  }
 
   function fallbackOuting(){
     const base = [
@@ -967,14 +983,30 @@ try {
     const rows = selectedRows();
     const editing = idx == null ? null : rows[Number(idx)];
     const isOut = selectedKind() === 'outing';
-    const row = editing ? { ...editing, zone:displayZone(editing.zone, editing.code) } : { code:'', zone:isOut?'ออกหน่วย':'Blood Bank', break_time:isOut?'ออกหน่วย':'12:00', main_rule:'', job_desc:'', eligibility_code:'' };
+    const roomForEdit = (slot) => {
+      if(!slot) return isOut?'ออกหน่วย':'Blood Bank';
+      const explicit=String(slot.room_group||'').trim();
+      const code=String(slot.code||slot.position_code||'').trim();
+      if(/(?:^|[-_\s])NAT(?:$|[-_\s\d])/i.test(code)) return 'Blood Bank';
+      if(ZONES.includes(explicit)) return explicit;
+      const k=code.toLowerCase().replace(/[^a-z0-9ก-๙]+/g,'');
+      if(String(slot.zone||'')==='ออกหน่วย') return 'ออกหน่วย';
+      if(/^DR-/i.test(code)||slot.zone==='Donor Room') return 'Donor Room';
+      if(/(?:^|[-_\s])NAT(?:$|[-_\s\d])/i.test(code)) return 'Blood Bank';
+      if(k==='bbmanual3'||k==='bbmanual4') return 'Component Prep';
+      if(k==='bbmanual1'||k==='bbmanual2') return 'Blood Bank';
+      if(['bbapprove','bbreport','bbreport1','bbreport2','bbstockissue','bbsupport'].includes(k)) return 'Specimen & Issue';
+      if(slot.zone==='Component Prep'||slot.zone==='Specimen & Issue') return slot.zone;
+      return 'Blood Bank';
+    };
+    const row = editing ? { ...editing, zone:roomForEdit(editing) } : { code:'', zone:isOut?'ออกหน่วย':'Blood Bank', break_time:isOut?'ออกหน่วย':'12:00', main_rule:'', job_desc:'', eligibility_code:'' };
     if (copy && row.code) row.code = `${row.code} copy`;
     const zoneOptions = ZONES.map(z => `<option value="${esc(z)}" ${row.zone===z?'selected':''}>${esc(z)}</option>`).join('');
     showModal(`<div class="v226-slot-modal"><h2>${editing && !copy ? 'แก้ไข Slot' : 'เพิ่ม Slot'}</h2><p class="hint">${isOut?'วันที่ออกหน่วย: เลือกโซนได้ทั้ง ออกหน่วย / Blood Bank / Donor Room โดย Manual ให้นับรวมเป็น Blood Bank':`${selectedSet()} คน`}</p>
       <form id="slotTemplateFormV226" class="form-grid compact-form" action="javascript:void(0)">
         <input type="hidden" name="idx" value="${idx == null || copy ? '' : esc(idx)}">
         <label>Code ตำแหน่ง <input name="code" value="${esc(row.code || '')}" required placeholder="เช่น BB-Report 1"></label>
-        <label>โซน <select name="zone">${zoneOptions}</select></label>
+        <label>ห้อง/กลุ่มงาน <select name="zone">${zoneOptions}</select></label>
         <label>ผู้ปฏิบัติหลัก <input name="main_rule" value="${esc(row.main_rule || '')}" required placeholder="เช่น MT เท่านั้น / Clerk หรือ แตง"></label>
         <label>เวลาพัก <input name="break_time" value="${esc(row.break_time || '')}" required placeholder="11:00 / 12:00 / ออกหน่วย"></label>
         <label class="wide">รายละเอียดหน้าที่ <textarea name="job_desc" rows="5" required>${esc(row.job_desc || '')}</textarea></label>
@@ -988,9 +1020,11 @@ try {
     const idx = idxRaw === '' ? null : Number(idxRaw);
     const code = String(fd.get('code') || '').trim();
     const rawZone = String(fd.get('zone') || '').trim() || (selectedKind()==='outing' ? 'ออกหน่วย' : 'Blood Bank');
+    // Persist the real room in the JSON Slot template; keep legacy zone for scheduling.
+    const roomGroup = ZONES.includes(rawZone) ? rawZone : 'Blood Bank';
     const zone = displayZone(rawZone, code);
     const isOutingZone = zone === 'ออกหน่วย';
-    const row = { code, zone, main_rule:String(fd.get('main_rule') || '').trim(), break_time:String(fd.get('break_time') || '').trim() || (isOutingZone ? 'ออกหน่วย' : '-'), job_desc:String(fd.get('job_desc') || '').trim(), eligibility_code:String(fd.get('eligibility_code') || '').trim() || (isOutingZone ? `OUTING:${code}` : code), is_outing:selectedKind()==='outing', is_active:true };
+    const row = { code, zone, room_group:roomGroup, main_rule:String(fd.get('main_rule') || '').trim(), break_time:String(fd.get('break_time') || '').trim() || (isOutingZone ? 'ออกหน่วย' : '-'), job_desc:String(fd.get('job_desc') || '').trim(), eligibility_code:String(fd.get('eligibility_code') || '').trim() || (isOutingZone ? `OUTING:${code}` : code), is_outing:selectedKind()==='outing', is_active:true };
     if (!row.code || !row.main_rule || !row.job_desc) return toast('กรุณากรอก Code, ผู้ปฏิบัติหลัก และรายละเอียดหน้าที่ให้ครบ', 'error');
     const rows = selectedRows().slice();
     const dup = rows.some((r,i) => String(r.code || '').trim() === row.code && i !== idx);

@@ -6274,7 +6274,7 @@ try {
   const CFG_PREFIX = '__CNMI_SLOT_TEMPLATE_V224__';
   const LS_KEY = 'cnmi_slot_template_v224_cache';
   const DAY_SETS = [8,9,10,11,12,13,14];
-  const ZONES = ['Blood Bank','Manual','Donor','Donor Room','ออกหน่วย'];
+  const ZONES = ['Specimen & Issue','Blood Bank','Component Prep','Donor Room','ออกหน่วย'];
 
   const esc = (v) => {
     try { return escapeHtml(v == null ? '' : String(v)); }
@@ -6400,6 +6400,7 @@ try {
       return {
         code,
         zone: rawZone || (isOut ? 'ออกหน่วย' : 'Blood Bank'),
+        room_group:String(r?.room_group || '').trim(),
         break_time:String(r?.break_time || '').trim() || (rawZone === 'ออกหน่วย' ? 'ออกหน่วย' : '-'),
         main_rule:String(r?.main_rule || '').trim() || '',
         job_desc:String(r?.job_desc || r?.detail || '').trim() || '',
@@ -6586,7 +6587,22 @@ try {
     const rows = selectedRows();
     const editing = idx == null ? null : rows[Number(idx)];
     const isOut = selectedKind() === 'outing';
-    const row = editing ? { ...editing } : { code:'', zone:isOut?'ออกหน่วย':'Blood Bank', break_time:isOut?'ออกหน่วย':'12:00', main_rule:'', job_desc:'', eligibility_code:'' };
+    const pickRoom=(r)=>{
+      if(!r)return isOut?'ออกหน่วย':'Blood Bank';
+      const stored=String(r.room_group||'').trim();
+      const code=String(r.code||'').trim();
+      if(/(?:^|[-_\s])NAT(?:$|[-_\s\d])/i.test(code))return 'Blood Bank';
+      if(ZONES.includes(stored))return stored;
+      const k=code.toLowerCase().replace(/[^a-z0-9ก-๙]+/g,'');
+      if(r.zone==='ออกหน่วย')return 'ออกหน่วย';
+      if(/^DR-/i.test(code)||r.zone==='Donor Room')return 'Donor Room';
+      if(/(?:^|[-_\s])NAT(?:$|[-_\s\d])/i.test(code))return 'Blood Bank';
+      if(k==='bbmanual3'||k==='bbmanual4')return 'Component Prep';
+      if(['bbapprove','bbreport','bbreport1','bbreport2','bbstockissue','bbsupport'].includes(k))return 'Specimen & Issue';
+      if(r.zone==='Specimen & Issue'||r.zone==='Component Prep')return r.zone;
+      return 'Blood Bank';
+    };
+    const row = editing ? { ...editing, zone:pickRoom(editing) } : { code:'', zone:isOut?'ออกหน่วย':'Blood Bank', break_time:isOut?'ออกหน่วย':'12:00', main_rule:'', job_desc:'', eligibility_code:'' };
     if (copy && row.code) row.code = `${row.code} copy`;
     const zoneOptions = ZONES.map(z => `<option value="${esc(z)}" ${row.zone===z?'selected':''}>${esc(z)}</option>`).join('');
     const title = editing && !copy ? 'แก้ไข Slot' : 'เพิ่ม Slot';
@@ -6594,7 +6610,7 @@ try {
       <form id="slotTemplateFormV224" class="form-grid compact-form" action="javascript:void(0)">
         <input type="hidden" name="idx" value="${idx == null || copy ? '' : esc(idx)}">
         <label>Code ตำแหน่ง <input name="code" value="${esc(row.code || '')}" required placeholder="เช่น BB-Report 1"></label>
-        <label>โซน <select name="zone">${zoneOptions}</select><input type="hidden" name="zone_hidden" value="${esc(row.zone || (isOut?'ออกหน่วย':'Blood Bank'))}"></label>
+        <label>ห้อง/กลุ่มงาน <select name="zone">${zoneOptions}</select><input type="hidden" name="zone_hidden" value="${esc(row.zone || (isOut?'ออกหน่วย':'Blood Bank'))}"></label>
         <label>ผู้ปฏิบัติหลัก <input name="main_rule" value="${esc(row.main_rule || '')}" required placeholder="เช่น MT เท่านั้น / Clerk หรือ แตง"></label>
         <label>เวลาพัก <input name="break_time" value="${esc(row.break_time || '')}" required placeholder="11:00 / 12:00 / ออกหน่วย"></label>
         <label class="wide">รายละเอียดหน้าที่ <textarea name="job_desc" rows="5" required>${esc(row.job_desc || '')}</textarea></label>
@@ -6608,10 +6624,12 @@ try {
     const idx = idxRaw === '' ? null : Number(idxRaw);
     const isOut = selectedKind() === 'outing';
     const code = String(fd.get('code') || '').trim();
-    const zone = String(fd.get('zone') || fd.get('zone_hidden') || '').trim() || (isOut ? 'ออกหน่วย' : 'Blood Bank');
+    const chosenRoom = String(fd.get('zone') || fd.get('zone_hidden') || '').trim() || (isOut ? 'ออกหน่วย' : 'Blood Bank');
+    const zone = chosenRoom==='ออกหน่วย'?'ออกหน่วย':chosenRoom==='Donor Room'?'Donor Room':'Blood Bank';
     const row = {
       code,
       zone,
+      room_group:chosenRoom,
       main_rule:String(fd.get('main_rule') || '').trim(),
       break_time:String(fd.get('break_time') || '').trim() || (zone === 'ออกหน่วย' ? 'ออกหน่วย' : '-'),
       job_desc:String(fd.get('job_desc') || '').trim(),

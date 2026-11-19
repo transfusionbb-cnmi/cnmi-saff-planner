@@ -2970,11 +2970,27 @@ try {
   function roomGroup(code){
     const raw=txt(code),k=norm(raw);
     if(!raw) return 'other';
+    if(/(?:^|[-_\s])NAT(?:$|[-_\s\d])/i.test(raw)) return 'blood-bank';
+    // Preferred: Admin's explicitly saved real-room choice in Slot template JSON.
+    // Only normal-day set matching the current staff count is consulted.
+    try{
+      const cfg=window.cnmiV224?.currentConfigs?.();
+      const n=Number(window.cnmiV231?.getBaseSlotCount231?.()||S()?.baseSlotCountV231||13);
+      const rows=cfg?.day?.[n]||cfg?.day?.[String(n)]||[];
+      const match=Array.isArray(rows)?rows.find(r=>norm(r?.code||r?.position_code)===k):null;
+      const explicit=txt(match?.room_group||match?.zone);
+      const mapped={'Specimen & Issue':'specimen-issue','Component Prep':'component-prep','Donor Room':'donor-room'};
+      if(mapped[explicit]) return mapped[explicit];
+      // The legacy 'Blood Bank' value is ambiguous for older BB slots. The
+      // explicit room_group field removes that ambiguity when newly saved.
+      if(txt(match?.room_group)==='Blood Bank') return 'blood-bank';
+    }catch(_){ }
+    if(/(?:^|[-_\s])NAT(?:$|[-_\s\d])/i.test(raw)) return 'blood-bank';
     if(/^dr-/i.test(raw)) return 'donor-room';
     if(k==='bbmanual1'||k==='bbmanual2') return 'blood-bank';
     if(k==='bbmanual3'||k==='bbmanual4') return 'component-prep';
     if(k==='bbreport'||k==='bbreport1'||k==='bbreport2'||k==='bbapprove'||k==='bbstockissue'||k==='bbsupport') return 'specimen-issue';
-    return 'other';
+    return /^bb-/i.test(raw)?'specimen-issue':'other';
   }
 
   // Publish a single authoritative helper for later patches/debugging.

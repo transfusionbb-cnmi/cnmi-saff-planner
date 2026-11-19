@@ -14,7 +14,7 @@
   const CFG_PREFIX = '__CNMI_SLOT_TEMPLATE_V224__';
   const LS_KEY = 'cnmi_slot_template_v224_cache';
   const DAY_SETS = [8,9,10,11,12,13,14];
-  const ZONES = ['Blood Bank','Donor Room','ออกหน่วย'];
+  const ZONES = ['Specimen & Issue','Blood Bank','Component Prep','Donor Room','ออกหน่วย'];
   const ROOM_COLUMNS = ['Blood Bank','Donor Room','ออกหน่วย'];
   const oldV224 = window.cnmiV224 ? { ...window.cnmiV224 } : {};
 
@@ -60,7 +60,13 @@
   function writeLocal(configs){ try { localStorage.setItem(LS_KEY, JSON.stringify(configs || {})); } catch (_) {} }
   function clone(x){ try { return JSON.parse(JSON.stringify(x || null)); } catch (_) { return x; } }
   function stateSlot(){ if (!state.slotTemplateV224) state.slotTemplateV224 = { kind:'day', setNo:14, configs:null, loaded:false, loading:false }; return state.slotTemplateV224; }
-  function displayZone(z, code=''){ const raw = String(z || '').trim(); const c = String(code || '').trim(); if (raw === 'ออกหน่วย') return 'ออกหน่วย'; if (raw === 'Manual' || /^BB-Manual/i.test(c) || /manual/i.test(c)) return 'Blood Bank'; if (raw === 'Donor Room' || /^DR-/i.test(c)) return 'Donor Room'; if (raw === 'Blood Bank' || /^BB-/i.test(c)) return 'Blood Bank'; return raw || 'Blood Bank'; }
+  function displayZone(z, code=''){
+    const raw=String(z||'').trim(), c=String(code||'').trim();
+    if(raw==='ออกหน่วย')return 'ออกหน่วย';
+    if(/(?:^|[-_\s])NAT(?:$|[-_\s\d])/i.test(c))return 'Blood Bank';
+    if(raw==='Donor Room'||/^DR-/i.test(c))return 'Donor Room';
+    return 'Blood Bank';
+  }
 
   function fallbackOuting(){
     const base = [
