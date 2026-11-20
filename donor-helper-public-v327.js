@@ -20,6 +20,7 @@
   let currentMonth = defaultMonth();
   let loading = false;
   let rememberedProfiles = [];
+  const openingByMonthV684 = Object.create(null);
   const IS_LINE_BROWSER = /(?:^|[\s;])Line\/|LineBrowser|LIFF/i.test(String(navigator.userAgent || ''));
 
   const $ = id => document.getElementById(id);
@@ -135,9 +136,24 @@
     d.setMonth(d.getMonth()-1,21);
     return dateKey(d);
   }
-  function openAtFor(workDate){ return `${openDateFor(workDate)}T10:00:00+07:00`; }
+  // V684: server-stored opening time per WORK month. If no override, use previous 21st at 10:00 Bangkok.
+  function openingOverrideFor(workDate){
+    const month=String(workDate||'').slice(0,7);
+    const record=openingByMonthV684;
+    const item=record[month];
+    return item && item.custom && item.opens_at && !Number.isNaN(Date.parse(item.opens_at)) ? item.opens_at : null;
+  }
+  function openAtFor(workDate){ return openingOverrideFor(workDate) || `${openDateFor(workDate)}T10:00:00+07:00`; }
   function isSignupOpenFor(workDate){ const t=Date.parse(openAtFor(workDate)); return Number.isFinite(t) && Date.now()>=t; }
-  function openLabelFor(workDate){ return `${thaiDate(openDateFor(workDate))} เวลา 10:00 น.`; }
+  function openLabelFor(workDate){
+    const d=new Date(openAtFor(workDate));
+    return Number.isFinite(d.getTime())?d.toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' น.':'ไม่ทราบเวลาเปิดรับ';
+  }
+  function openLocalPartsFor(workDate){
+    const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(openAtFor(workDate)));
+    const obj=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+    return {date:`${obj.year}-${obj.month}-${obj.day}`,time:`${obj.hour}:${obj.minute}`};
+  }
   function slotKey(date,type,no){ return `${date}|${type}|${no}`; }
   function slotLabel(type,no){ return type==='clerk' ? 'Clerk' : `คนเจาะ ${no}`; }
   function statusText(status){ return ({confirmed:'ยืนยันแล้ว',cancel_requested:'ขอยกเลิก — รอหัวหน้าหน่วยอนุมัติ',cancelled:'ยกเลิกแล้ว',completed:'มาปฏิบัติงานแล้ว',no_show:'ไม่มาตามนัด (No Show)'})[status]||status||'-'; }
@@ -261,6 +277,8 @@
   function render(){
     const dates=weekendDates(currentMonth), map=activeMap(), blocked=blockedMap();
     const openDates=dates.filter(date=>!blocked.has(date));
+    const rule=document.querySelector('.rules-box');
+    if(rule){const label=rule.querySelector('[data-v684-opening-label]');if(label)label.textContent=`เปิดลงชื่อสำหรับ ${monthLabel(currentMonth)}: ${openLabelFor(`${currentMonth}-01`)} (เวลาไทย)`;}
     let filled=0;
     openDates.forEach(date=>[['phlebotomist',1],['phlebotomist',2],['clerk',1]].forEach(([type,no])=>{if(map.has(slotKey(date,type,no)))filled++;}));
     $('summaryBadges').innerHTML=`<span class="badge blue">${esc(monthLabel(currentMonth))}</span><span class="badge green">ลงชื่อแล้ว ${filled}/${openDates.length*3} ช่อง</span>${blocked.size?`<span class="badge red">ปิดวันหยุด ${blocked.size} วัน</span>`:''}`;
@@ -284,8 +302,17 @@
     if(!client||loading)return;
     loading=true;setError('');$('loadingMessage').classList.remove('hidden');$('scheduleGrid').innerHTML='';
     try{
-      const result=await client.rpc('get_donor_helper_month_public_v327',{p_month:currentMonth});
+      const [result,openingResult]=await Promise.all([
+        client.rpc('get_donor_helper_month_public_v327',{p_month:currentMonth}),
+        client.rpc('cnmi_get_donor_helper_open_v684',{p_month:currentMonth})
+      ]);
       if(result.error)throw result.error;
+      if(openingResult.error){
+        delete openingByMonthV684[currentMonth];
+        console.warn('[V684] Monthly opening settings RPC unavailable; default schedule used',openingResult.error);
+      }else{
+        openingByMonthV684[currentMonth]=typeof openingResult.data==='string'?JSON.parse(openingResult.data):openingResult.data;
+      }
       const payload=typeof result.data==='string'?JSON.parse(result.data||'{}'):(result.data||{});
       rows=Array.isArray(payload.rows)?payload.rows:[];
       blockedDates=Array.isArray(payload.blocked_dates)?payload.blocked_dates:[];
@@ -295,6 +322,13 @@
       console.warn(`[${VERSION}] load failed`,error);rows=[];blockedDates=[];contactInfo=null;render();setError(messageFromError(error));
     }finally{loading=false;$('loadingMessage').classList.add('hidden');}
   }
+  // Existing pages kept open at the deadline should enable booking without a full reload.
+  let lastOpenStateV684='';
+  window.setInterval(()=>{
+    if(loading)return;
+    const key=currentMonth+'|'+isSignupOpenFor(`${currentMonth}-01`);
+    if(key!==lastOpenStateV684){const previous=lastOpenStateV684;lastOpenStateV684=key;if(previous)render();}
+  },15000);
   function showSignup(payload){
     if(blockLineSignup())return;
     const [date,type,noRaw]=String(payload).split('|');const no=Number(noRaw);
@@ -402,6 +436,26 @@
       if(e.target.id==='cancelForm'){e.preventDefault();submitCancel(e.target);}
     });
   }
+  // If next month's opening was exceptionally moved earlier, select that month automatically.
+  async function chooseOpeningMonthV684(){
+    const now=bangkokDateParts();
+    const next=new Date(now.year,now.month,1,12);
+    const nextMonth=`${next.getFullYear()}-${pad(next.getMonth()+1)}`;
+    if(currentMonth===nextMonth)return;
+    try{
+      const res=await client.rpc('cnmi_get_donor_helper_open_v684',{p_month:nextMonth});
+      if(res.error)return;
+      const setting=typeof res.data==='string'?JSON.parse(res.data):res.data;
+      if(!setting?.custom)return;
+      openingByMonthV684[nextMonth]=setting;
+      const openingMs=Date.parse(setting.opens_at);
+      // Within three days before a custom opening, lead visitors to the forthcoming month.
+      if(Number.isFinite(openingMs) && Date.now()>=openingMs-3*86400000){
+        currentMonth=nextMonth;
+        $('helperMonth').value=nextMonth;
+      }
+    }catch(error){console.warn('[V684] Optional next-month lookup failed',error);}
+  }
   function init(){
     bind();
     showLineBrowserWarning();
@@ -413,7 +467,7 @@
     client=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
     rememberedProfiles=loadLocalProfiles();
     loadRememberedProfiles();
-    loadMonth();
+    chooseOpeningMonthV684().finally(()=>loadMonth());
   }
   document.addEventListener('DOMContentLoaded',init);
 })();

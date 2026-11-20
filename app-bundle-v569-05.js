@@ -5122,9 +5122,24 @@ try {
   function openDateFor(workDate){
     const d=new Date(`${String(workDate).slice(0,7)}-01T12:00:00`); d.setMonth(d.getMonth()-1,21); return dateKey(d);
   }
-  function openAtFor(workDate){ return `${openDateFor(workDate)}T10:00:00+07:00`; }
+  // V684: server-stored opening time per WORK month. If no override, use previous 21st at 10:00 Bangkok.
+  function openingOverrideFor(workDate){
+    const month=String(workDate||'').slice(0,7);
+    const record=(S()?.donorHelperOpeningByMonthV684 || {});
+    const item=record[month];
+    return item && item.custom && item.opens_at && !Number.isNaN(Date.parse(item.opens_at)) ? item.opens_at : null;
+  }
+  function openAtFor(workDate){ return openingOverrideFor(workDate) || `${openDateFor(workDate)}T10:00:00+07:00`; }
   function isSignupOpenFor(workDate){ const t=Date.parse(openAtFor(workDate)); return Number.isFinite(t) && Date.now()>=t; }
-  function openLabelFor(workDate){ return `${thaiDate(openDateFor(workDate))} เวลา 10:00 น.`; }
+  function openLabelFor(workDate){
+    const d=new Date(openAtFor(workDate));
+    return Number.isFinite(d.getTime())?d.toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' น.':'ไม่ทราบเวลาเปิดรับ';
+  }
+  function openLocalPartsFor(workDate){
+    const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(openAtFor(workDate)));
+    const obj=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+    return {date:`${obj.year}-${obj.month}-${obj.day}`,time:`${obj.hour}:${obj.minute}`};
+  }
   function thaiDate(value){
     try { if (typeof formatThaiDate === 'function') return formatThaiDate(value); } catch (_) {}
     const d=new Date(`${dateKey(value)}T12:00:00`); return Number.isNaN(d.getTime())?String(value||'-'):d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'});
@@ -5187,6 +5202,8 @@ try {
     initial.donorHelperLoadedMonthV327=initial.donorHelperLoadedMonthV327||'';
     initial.donorHelperLoadingV327=false;
     initial.donorHelperErrorV327='';
+    initial.donorHelperOpeningByMonthV684=initial.donorHelperOpeningByMonthV684||{};
+    initial.donorHelperOpeningSqlMissingV684=false;
   }
 
   async function loadMonth(month,options={}){
@@ -5196,8 +5213,21 @@ try {
     if(st.donorHelperLoadingV327)return;
     st.donorHelperLoadingV327=true;st.donorHelperErrorV327='';if(st.page===PAGE_ID)rerender();
     try{
-      const result=await client.rpc('get_donor_helper_month_internal_v327',{p_month:key});
+      // Retrieve schedule BEFORE releasing the loaded month to the UI.
+      // Never persist settings only in this browser; all clients must agree.
+      const [result, openingResult]=await Promise.all([
+        client.rpc('get_donor_helper_month_internal_v327',{p_month:key}),
+        client.rpc('cnmi_get_donor_helper_open_v684',{p_month:key})
+      ]);
       if(result.error)throw result.error;
+      if(openingResult.error){
+        st.donorHelperOpeningSqlMissingV684=true;
+        delete st.donorHelperOpeningByMonthV684[key];
+        console.warn('[V684] Install STEP_1_Install_Donor_Helper_Monthly_Open_v684.sql',openingResult.error);
+      }else{
+        st.donorHelperOpeningSqlMissingV684=false;
+        st.donorHelperOpeningByMonthV684[key]=parsePayload(openingResult.data);
+      }
       const payload=parsePayload(result.data);
       st.donorHelperPayloadV327={
         rows:Array.isArray(payload.rows)?payload.rows:[],
@@ -5308,12 +5338,23 @@ try {
     const openDates=dates.filter(date=>!blocked.has(date));
     const filled=openDates.reduce((sum,date)=>sum+[['phlebotomist',1],['phlebotomist',2],['clerk',1]].filter(([type,no])=>map.has(slotKey(date,type,no))).length,0);
     const profile=payload().my_profile||{};
+    const openingIsCustom=!!st?.donorHelperOpeningByMonthV684?.[month]?.custom;
+    const openingParts=openLocalPartsFor(`${month}-01`);
+    const openingLabel=openLabelFor(`${month}-01`);
+    const openingEditor=admin()?`<div class="card" id="donorHelperOpeningEditorV684" style="margin-bottom:14px;padding:16px">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><b>ตั้งเวลาเปิดลงชื่อรายเดือน (Admin)</b><span class="badge ${openingIsCustom?'orange':'blue'}">${openingIsCustom?'กำหนดเฉพาะเดือนนี้':'ใช้ค่าเริ่มต้น'}</span></div>
+      <p style="margin:8px 0">เดือนที่เปิดรับ: <b>${esc(monthLabel(month))}</b> • เปิดลงชื่อ <b>${esc(openingLabel)}</b></p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end"><label>วันที่เปิด <input type="date" id="donorHelperOpenDateV684" value="${esc(openingParts.date)}"></label><label>เวลา (ไทย) <input type="time" id="donorHelperOpenTimeV684" value="${esc(openingParts.time)}"></label><button class="primary-btn" type="button" data-v684-save-opening>บันทึกเวลาเปิดรับสมัคร</button><button class="ghost-btn" type="button" data-v684-reset-opening>กลับไปใช้วันที่ 21 เวลา 10:00 น.</button></div>
+      <p class="muted" style="margin:8px 0 0">ตั้งค่านี้เฉพาะเดือนที่เลือก คนในหน่วยและคนนอกหน่วยใช้เวลาเดียวกัน • ค่าเริ่มต้นคือวันที่ 21 ของเดือนก่อนหน้า เวลา 10:00 น. • หากเปลี่ยนหลังประกาศ โปรดแจ้งเจ้าหน้าที่ด้วย</p>
+      ${st?.donorHelperOpeningSqlMissingV684?'<div class="notice donor-helper-error"><b>ยังไม่ได้ติดตั้ง SQL v684</b> กรุณาติดตั้ง STEP_1_Install_Donor_Helper_Monthly_Open_v684.sql ใน Supabase ก่อนตั้งเวลา</div>':''}
+    </div>`:'';
     return `<div class="donor-helper-page-v324 donor-helper-page-v327">
-      <div class="card donor-helper-hero"><div><span class="donor-helper-kicker">ห้องบริจาคโลหิต • 09:00–17:00 น.</span><h3>ตารางผู้มาช่วย ${esc(monthLabel(month))}</h3><p>คนเจาะ 2 คน • Clerk 1 คน • เปิดลงชื่อ 10:00 น. วันที่ 21</p></div><div class="donor-helper-hero-actions"><a class="primary-btn donor-helper-link-btn" href="${esc(publicUrl())}" target="_blank" rel="noopener">หน้าลงชื่อคนนอกหน่วย</a><button class="ghost-btn" type="button" data-v327-copy-link>คัดลอกลิงก์</button></div></div>
+      <div class="card donor-helper-hero"><div><span class="donor-helper-kicker">ห้องบริจาคโลหิต • 09:00–17:00 น.</span><h3>ตารางผู้มาช่วย ${esc(monthLabel(month))}</h3><p>คนเจาะ 2 คน • Clerk 1 คน • เปิดลงชื่อ ${esc(openingLabel)}</p></div><div class="donor-helper-hero-actions"><a class="primary-btn donor-helper-link-btn" href="${esc(publicUrl())}" target="_blank" rel="noopener">หน้าลงชื่อคนนอกหน่วย</a><button class="ghost-btn" type="button" data-v327-copy-link>คัดลอกลิงก์</button></div></div>
       <div class="notice soft-notice donor-helper-ot-note"><b>คนในหน่วย:</b> ใช้ “ลงชื่อของฉัน” • OT ขอที่ส่วนที่ 2 • ยกเลิกแจ้ง ${esc(payload().contact?.incharge_label||'อินชาร์จ/หัวหน้าหน่วย')} <button class="tiny-btn" type="button" data-v327-go-ot>ไปส่วน OT</button></div>
       ${profile.full_name?`<div class="card donor-helper-my-profile"><div><span class="muted">ข้อมูลของฉัน</span><b>${esc(profile.full_name)}</b></div><div><span class="muted">โทร</span><b>${esc(profile.phone?formatPhone(profile.phone):'ยังไม่มีเบอร์')}</b></div></div>`:''}
       ${myBookingsHtml()}
       <div class="card donor-helper-toolbar"><label>เลือกเดือน <input id="donorHelperMonthInputV327" type="month" value="${esc(month)}"></label><div class="donor-helper-counts"><span class="badge blue">ลงชื่อแล้ว ${filled}/${openDates.length*3} ช่อง</span><span class="badge black">เปิดรับ ${openDates.length} วัน</span>${blocked.size?`<span class="badge orange">ปิดวันหยุด ${blocked.size} วัน</span>`:''}</div><button class="ghost-btn" type="button" data-v327-refresh>รีเฟรชรายชื่อ</button></div>
+      ${openingEditor}
       ${st?.donorHelperErrorV327?`<div class="notice donor-helper-error"><b>ยังเปิดตารางไม่ได้</b><br>${esc(st.donorHelperErrorV327)}</div>`:''}
       ${st?.donorHelperLoadingV327?'<div class="card donor-helper-loading">กำลังโหลดรายชื่อและตรวจตารางเวร…</div>':''}
       <div class="donor-helper-weekend-grid">${dates.map(date=>{
@@ -5390,9 +5431,30 @@ try {
     const target=event.target;if(target?.name==='phone')target.value=formatPhone(target.value);
   },true);
 
+  async function saveOpeningV684(reset=false){
+    if(!admin())return toast('การตั้งเวลาเปิดรับสมัครใช้สิทธิ์ Admin เท่านั้น','error');
+    const st=S(),month=st?.donorHelperMonthV327||monthNow(),client=DB();
+    if(!client)return toast('ยังไม่ได้เชื่อมต่อฐานข้อมูล','error');
+    const day=document.getElementById('donorHelperOpenDateV684')?.value;
+    const time=document.getElementById('donorHelperOpenTimeV684')?.value;
+    if(!reset&&(!/^\d{4}-\d{2}-\d{2}$/.test(day||'')||!/^\d{2}:\d{2}$/.test(time||'')))return toast('กรุณาเลือกวันที่และเวลาให้ครบ','error');
+    if(!reset&&!window.confirm(`ยืนยันเปิดรับสมัครเดือน ${month} วันที่ ${day} เวลา ${time} น. (เวลาไทย) หรือไม่?`))return;
+    if(reset&&!window.confirm(`คืนค่าเดือน ${month} เป็นวันที่ 21 ของเดือนก่อนหน้า เวลา 10:00 น. หรือไม่?`))return;
+    try{
+      const result=await client.rpc('cnmi_set_donor_helper_open_v684',{p_work_month:month,p_open_local:reset?null:`${day}T${time}`});
+      if(result.error)throw result.error;
+      st.donorHelperOpeningByMonthV684[month]=parsePayload(result.data);
+      st.donorHelperLoadedMonthV327='';
+      await loadMonth(month,{force:true});
+      toast(reset?'คืนเวลาเริ่มต้นของเดือนนี้แล้ว':'บันทึกเวลาเปิดรับสมัครเดือนนี้เรียบร้อยแล้ว');
+    }catch(error){toast(/cnmi_set_donor_helper_open_v684|schema cache|Could not find the function/i.test(String(error?.message||''))?'กรุณาติดตั้ง SQL v684 ใน Supabase ก่อน':errorText(error),'error');}
+  }
+
   document.addEventListener('click',event=>{
-    const target=event.target?.closest?.('[data-v327-self-book],[data-v327-self-cancel],[data-v327-admin-add],[data-v327-edit],[data-v327-edit-reason],[data-v327-status],[data-v327-refresh],[data-v327-copy-link],[data-v327-go-ot],[data-v327-close]');
+    const target=event.target?.closest?.('[data-v327-self-book],[data-v327-self-cancel],[data-v327-admin-add],[data-v327-edit],[data-v327-edit-reason],[data-v327-status],[data-v327-refresh],[data-v327-copy-link],[data-v327-go-ot],[data-v327-close],[data-v684-save-opening],[data-v684-reset-opening]');
     if(!target)return;event.preventDefault();event.stopPropagation();
+    if(target.hasAttribute('data-v684-save-opening'))return void saveOpeningV684(false);
+    if(target.hasAttribute('data-v684-reset-opening'))return void saveOpeningV684(true);
     if(target.hasAttribute('data-v327-self-book'))return showSelfModal(target.getAttribute('data-v327-self-book'));
     if(target.hasAttribute('data-v327-self-cancel'))return showCancelModal(target.getAttribute('data-v327-self-cancel'));
     if(target.hasAttribute('data-v327-admin-add'))return showAdminAdd(target.getAttribute('data-v327-admin-add'));
@@ -5442,6 +5504,14 @@ try {
     }catch(error){toast(errorText(error),'error');if(button)button.disabled=false;}
   },true);
 
+  // Refresh just the relevant section when the scheduled opening time passes.
+  let lastOpeningStateV684='';
+  window.setInterval(()=>{
+    const st=S(); if(st?.page!==PAGE_ID||st.donorHelperLoadingV327)return;
+    const month=st.donorHelperMonthV327||monthNow();
+    const key=month+'|'+isSignupOpenFor(`${month}-01`);
+    if(lastOpeningStateV684!==key){const previous=lastOpeningStateV684;lastOpeningStateV684=key;if(previous)rerender();}
+  },15000);
   window.cnmiDonorHelperV327={version:VERSION,loadMonth,publicUrl};
   console.info(`[${VERSION}] loaded`);
 })();
